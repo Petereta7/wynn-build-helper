@@ -85,6 +85,7 @@ def main():
   n = int(sys.argv[2]) if len(sys.argv) > 2 else 5
   results = [case(sd) for sd in range(first, first + n)]
   print(f"{sum(results)}/{len(results)} cases: the search found the true best build")
+  sys.exit(0 if all(results) else 1)
 
 if __name__ == "__main__":
   main()
