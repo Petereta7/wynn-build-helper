@@ -118,6 +118,8 @@ def check_release_files():
     with open(os.path.join(ROOT, "versions.json"), encoding="utf-8") as fh:
         vers = json.load(fh)["versions"]
     import updater
+    check("updater only offers checked versions (stable)", updater.BRANCH == "stable" and updater.configured(),
+          f"(reads {updater.OWNER}/{updater.REPO}@{updater.BRANCH})")
     names = [v["version"] for v in vers]
     ordered = names == sorted(names, key=updater._vtuple, reverse=True) and len(set(names)) == len(names)
     check("version.json = newest entry in versions.json", names and names[0] == ver["version"] and ordered,

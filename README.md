@@ -46,7 +46,7 @@ The build appears on the right. When the search finishes, every item flies into 
 
 ## Updates
 
-The app checks for a new version when it opens (you can turn this off, or check by hand, in **Settings**). If there is one, a bar at the top shows what's new with an **Install update** button. Nothing is installed until you click it. The update comes only from this app's GitHub page, and it never changes your `api_key.txt`, your settings or your saved builds. The files it replaces are kept in `_previous_version` until the next update. The app restarts with the new version.
+The app checks for a new version when it opens (you can turn this off, or check by hand, in **Settings**). If there is one, a bar at the top shows what's new with an **Install update** button. Nothing is installed until you click it. The update comes only from this app's GitHub page, and only once it has passed every automatic check (the tests run on Windows, Mac and Linux, including a full build for every class; a version that fails is never offered). It never changes your `api_key.txt`, your settings or your saved builds. The files it replaces are kept in `_previous_version` until the next update. The app restarts with the new version.
 
 From a terminal: `python updater.py` checks and asks before installing.
 

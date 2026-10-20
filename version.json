@@ -1,4 +1,4 @@
 {
-  "version": "1.3.1",
-  "notes": "Ability buffs now checked for every class: each of the 53 toggles (Archer 8, Warrior 9, Mage 5, Assassin 16, Shaman 15) is tested at fully on and part on, and buffs that don't scale evenly are now worked out exactly instead of estimated. The report lists which buffs the build counts, and shows small gains as e.g. +0.2% instead of +0%."
+  "version": "1.3.2",
+  "notes": "Automatic checks: every update is now tested on Windows, Mac and Linux before it's offered, including the app itself, the updater (your key, settings and history stay untouched), and a full build for every class that must be legal and never worse than before. A version that fails any check never reaches the update bar."
 }

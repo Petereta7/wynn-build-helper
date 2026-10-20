@@ -2,7 +2,8 @@
 Updates for Wynn Build Helper, straight from its GitHub repository.
 
 The app checks the repository's version.json when it opens. If there's a newer version it asks you first,
-then downloads that version from the same repository and copies it over this folder. It never touches:
+then downloads that version from the same repository and copies it over this folder. Only versions that passed
+every automatic check are offered (they're published to the "stable" branch). It never touches:
 
   * api_key.txt (your Claude API key)
   * wynn_app_config.json (your settings)
@@ -31,7 +32,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 # ---- where updates come from (the only place they're ever downloaded from)
 OWNER = "Petereta7"         # GitHub user name
 REPO = "wynn-build-helper"
-BRANCH = "main"
+# Updates come from "stable": GitHub copies a version there only after every automatic check has passed on
+# Windows, Mac and Linux (see .github/workflows/checks.yml), so a version that fails a check is never offered.
+BRANCH = "stable"
 
 VERSION_FILE = os.path.join(HERE, "version.json")
 # Never overwritten or removed by an update (paths relative to the app folder, "/" separated).
