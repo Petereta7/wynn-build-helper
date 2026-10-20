@@ -313,6 +313,139 @@ label.deep input[type=checkbox] { width: auto; flex: 0 0 auto; margin-top: 3px; 
   .forge > .fx { display: none; }
   .reel .strip.spinning, .reel .strip.landing { filter: none; }
 }
+/* ---------- results: before/after bars, equipment screen, skill points, tree map, history ---------- */
+.cmp { margin: 18px 0 4px; padding: 16px 18px; border: 1px solid var(--line); border-radius: var(--r-md); background: rgba(0, 0, 0, .22); }
+.cmp-head { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+.cmp-head .t { font-family: var(--display); font-size: 19px; color: var(--set); }
+.cmp-head .base { color: var(--muted); font-size: 13px; }
+.cmp-head .base b { color: var(--text); font-weight: 600; }
+.brow { display: grid; grid-template-columns: 150px 1fr 190px; gap: 12px; align-items: center; padding: 6px 0; }
+.brow.goal .bl { color: var(--unique); font-weight: 700; }
+.brow .bl { color: var(--muted); font-size: 14px; }
+.brow .bv { font-variant-numeric: tabular-nums; font-size: 14px; text-align: right; white-space: nowrap; }
+.brow .bv i { font-style: normal; font-weight: 700; }
+.brow .bv .up { color: var(--set); } .brow .bv .down { color: #ff7b7b; } .brow .bv .same { color: var(--faint); }
+.btrack { position: relative; height: 12px; border-radius: 6px; background: rgba(255, 255, 255, .06); overflow: visible; }
+.btrack .zero { position: absolute; top: -3px; bottom: -3px; width: 1px; background: rgba(255, 255, 255, .25); }
+.btrack .before, .btrack .after { position: absolute; top: 0; bottom: 0; border-radius: 6px; }
+.btrack .before { background: rgba(255, 255, 255, .22); }
+.btrack .after { background: linear-gradient(90deg, var(--bc1, #3cff8a), var(--bc2, #55ffff)); box-shadow: 0 0 12px -2px var(--bc2, #55ffff); opacity: .9;
+  transition: left 1.1s cubic-bezier(.2, .9, .25, 1), width 1.1s cubic-bezier(.2, .9, .25, 1); }
+.btrack .after.down { --bc1: #ff9a6b; --bc2: #ff5f6d; }
+.btrack .floor { position: absolute; top: -6px; bottom: -6px; width: 2px; background: #ffd36b; box-shadow: 0 0 6px #ffb84d; }
+.btrack .floor::after { content: attr(data-l); position: absolute; top: -16px; left: 50%; transform: translateX(-50%); font-size: 10.5px; color: #ffd36b; white-space: nowrap; }
+.panel { margin-top: 18px; padding: 18px 20px; }
+.panel h3 { font-family: var(--display); font-size: 20px; margin: 0 0 12px; color: var(--legendary); display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap; }
+.panel h3 small { font-family: var(--body); font-size: 13px; color: var(--muted); font-weight: 400; }
+.equip { display: grid; grid-template-columns: 1fr 1.15fr 1fr; gap: 12px; align-items: start; }
+.equip .colm { display: flex; flex-direction: column; gap: 10px; }
+.icard { --rc: #8a90b8; position: relative; overflow: hidden; border: 1px solid var(--rc); border-color: color-mix(in srgb, var(--rc) 60%, var(--line)); border-radius: var(--r-md);
+  background: linear-gradient(180deg, rgba(40, 10, 60, .55), rgba(16, 6, 26, .75)); padding: 9px 12px; cursor: default; outline: none;
+  box-shadow: inset 0 0 18px -12px var(--rc); transition: transform .15s, box-shadow .2s; animation: cardpop .45s cubic-bezier(.2, 1.4, .4, 1) both; }
+.icard:hover, .icard:focus-visible { transform: translateY(-2px); box-shadow: 0 6px 18px -8px var(--rc), inset 0 0 22px -10px var(--rc); }
+.icard .s { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--faint); }
+.icard .n { font-family: var(--display); font-size: 17px; line-height: 1.25; }
+.icard .m { color: var(--muted); font-size: 12.5px; }
+.icard .pw { display: inline-flex; gap: 3px; margin-left: 6px; vertical-align: middle; }
+.icard .pw span { width: 9px; height: 9px; border-radius: 2px; border: 1px solid rgba(255, 255, 255, .35); }
+.icard.empty { --rc: #3a3f63; border-style: dashed; background: rgba(0, 0, 0, .2); }
+.icard.empty .n { color: var(--faint); font-style: italic; }
+.icard .ribbon { position: absolute; top: 8px; right: -1px; background: var(--set); color: #08200d; font-size: 10.5px; font-weight: 800; letter-spacing: .06em; padding: 1px 7px 1px 8px; border-radius: 4px 0 0 4px; box-shadow: 0 0 10px rgba(85, 255, 85, .5); }
+.icard.weapon { padding: 14px 16px; }
+.icard.weapon .n { font-size: 22px; }
+@keyframes cardpop { from { opacity: 0; transform: translateY(10px) scale(.96); } }
+.skills { margin-top: 12px; display: flex; flex-direction: column; gap: 7px; }
+.skrow { display: grid; grid-template-columns: 92px 1fr 44px; gap: 8px; align-items: center; font-size: 13px; }
+.skrow .sl { color: var(--muted); }
+.skrow .sv { text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; }
+.sktrack { height: 10px; border-radius: 5px; background: rgba(255, 255, 255, .06); display: flex; overflow: hidden; }
+.sktrack span { height: 100%; transition: width 1s cubic-bezier(.2, .9, .25, 1); width: 0; }
+.sktrack .gear { background-image: repeating-linear-gradient(135deg, rgba(255, 255, 255, .35) 0 3px, transparent 3px 6px); }
+.sklegend { color: var(--faint); font-size: 12px; display: flex; gap: 14px; flex-wrap: wrap; }
+.sklegend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+.ttabs { display: flex; gap: 6px; }
+.ttabs button { font-size: 13px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); background: transparent; color: var(--muted); cursor: pointer; }
+.ttabs button[aria-pressed=true] { color: var(--text); border-color: var(--legendary); }
+.tlegend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12.5px; color: var(--muted); margin-bottom: 10px; }
+.tlegend i { display: inline-block; width: 11px; height: 11px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+.tmap-wrap { max-height: 600px; overflow: auto; border: 1px solid var(--line); border-radius: var(--r-md); background: radial-gradient(ellipse at top, rgba(85, 255, 255, .05), transparent 60%), rgba(0, 0, 0, .25); padding: 14px 0; }
+.tmap { position: relative; margin: 0 auto; }
+.tmap svg { position: absolute; inset: 0; overflow: visible; }
+.tmap svg line { stroke: rgba(255, 255, 255, .12); stroke-width: 2; }
+.tmap svg line.lit { stroke: var(--lc, #55ffff); stroke-width: 3; filter: drop-shadow(0 0 3px var(--lc, #55ffff)); }
+.tnode { --ac: #8a90b8; position: absolute; width: 28px; height: 28px; margin: -14px 0 0 -14px; border-radius: 7px; border: 2px solid var(--ac); background: rgba(10, 10, 20, .9);
+  opacity: .38; outline: none; display: grid; place-items: center; font-size: 11px; font-weight: 800; color: #0b0b14; cursor: default; transition: transform .15s, opacity .3s; }
+.tnode.on { opacity: 1; background: var(--ac); box-shadow: 0 0 12px -1px var(--ac); animation: nodein .5s cubic-bezier(.2, 1.5, .4, 1) both; }
+.tnode.ult { border-radius: 50%; border-width: 3px; }
+.tnode.ult.on { box-shadow: 0 0 18px 2px #ffd36b; border-color: #ffd36b; }
+.tnode:hover, .tnode:focus-visible { transform: scale(1.25); opacity: 1; z-index: 2; }
+.tnode .tg { position: absolute; right: -7px; top: -7px; width: 13px; height: 13px; border-radius: 50%; background: #20223a; border: 1px solid var(--faint); font-size: 8px; color: var(--muted); display: grid; place-items: center; }
+.tnode .tg.on { background: var(--set); border-color: var(--set); color: #08200d; box-shadow: 0 0 6px var(--set); }
+@keyframes nodein { from { transform: scale(.3); opacity: 0; } }
+#tip { position: fixed; z-index: 50; max-width: 340px; pointer-events: none; padding: 10px 12px; border-radius: 6px; font-size: 13px; line-height: 1.45;
+  background: rgba(16, 0, 28, .96); border: 2px solid #28007a; box-shadow: 0 0 0 1px #12002b, 0 10px 30px rgba(0, 0, 0, .55); color: #e8e8e8; display: none; white-space: normal; }
+#tip.on { display: block; }
+#tip .tn { font-family: var(--display); font-size: 16px; font-weight: 700; }
+#tip .tl { color: #aaaaaa; }
+#tip .ok { color: #55ff55; } #tip .bad { color: #ff5555; } #tip .gold { color: #ffaa00; } #tip .aqua { color: #55ffff; } #tip .gray { color: #8a8a8a; }
+#tip hr { border: 0; border-top: 1px solid rgba(255, 255, 255, .1); margin: 6px 0; }
+#tip .desc { white-space: pre-line; color: #cfcfe0; }
+.hist-list { display: flex; flex-direction: column; gap: 8px; padding: 14px; overflow: auto; }
+.hcard { border: 1px solid var(--line); border-radius: var(--r-md); padding: 10px 12px; background: rgba(0, 0, 0, .2); display: flex; flex-direction: column; gap: 4px; }
+.hcard .ht { display: flex; justify-content: space-between; gap: 8px; }
+.hcard .ht b { font-family: var(--display); font-weight: 600; }
+.hcard .hd { color: var(--faint); font-size: 12px; white-space: nowrap; }
+.hcard .hn { color: var(--unique); font-size: 13.5px; }
+.hcard .hi { color: var(--muted); font-size: 12.5px; line-height: 1.5; }
+.hcard .hb { display: flex; gap: 8px; margin-top: 4px; }
+.hcard .hb button { font-size: 12.5px; padding: 3px 10px; }
+.hist-empty { color: var(--muted); padding: 18px 14px; font-size: 14px; line-height: 1.55; }
+@media (max-width: 600px) {
+  .bar .data { display: none; }
+  .brand { white-space: nowrap; font-size: 19px; }
+}
+@media (max-width: 900px) {
+  .equip { grid-template-columns: 1fr; }
+  .brow { grid-template-columns: 1fr; gap: 4px; }
+  .brow .bv { text-align: left; }
+}
+@media (prefers-reduced-motion: reduce) { .icard, .tnode.on, .btrack .after, .sktrack span { animation: none !important; transition: none !important; } }
+/* ---------- the final assembly: items gather into a core, detonate, and land on the equipment screen ---------- */
+#reveal { position: fixed; inset: 0; z-index: 40; cursor: pointer; background: radial-gradient(ellipse at var(--cx, 50%) var(--cy, 50%), rgba(20, 0, 40, .35), rgba(4, 2, 12, .82) 70%);
+  animation: rvin .35s ease-out both; }
+#reveal.out { animation: rvout .45s ease-in forwards; }
+@keyframes rvin { from { opacity: 0; } }
+@keyframes rvout { to { opacity: 0; } }
+#reveal canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+#reveal .skip { position: absolute; right: 18px; bottom: 16px; color: rgba(255, 255, 255, .55); font-size: 13px; letter-spacing: .04em; }
+#reveal .rchip { position: absolute; left: 0; top: 0; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--rc); background: rgba(16, 4, 28, .92);
+  font-family: var(--display); font-size: 17px; white-space: nowrap; color: var(--rc); box-shadow: 0 0 18px -2px var(--rc); will-change: transform, opacity; }
+#reveal .core { --cc: #55ffff; position: absolute; width: 90px; height: 90px; margin: -45px 0 0 -45px; border-radius: 50%; will-change: transform;
+  background: radial-gradient(circle, #fff 0 16%, var(--cc) 34%, rgba(0, 0, 0, 0) 70%); box-shadow: 0 0 40px 10px var(--cc), 0 0 90px 30px rgba(255, 255, 255, .12);
+  transition: box-shadow .3s; }
+#reveal .core::before, #reveal .core::after { content: ""; position: absolute; inset: -22px; border-radius: 50%; border: 2px solid transparent;
+  border-top-color: var(--cc); border-left-color: rgba(255, 255, 255, .6); animation: spinr 1.1s linear infinite; }
+#reveal .core::after { inset: -40px; border-top-color: transparent; border-right-color: var(--cc); border-bottom-color: rgba(255, 255, 255, .35); animation-duration: 1.7s; animation-direction: reverse; }
+#reveal .core.pulse { animation: corepulse .32s ease-out; }
+#reveal .core.charge { animation: corecharge .7s ease-in forwards; }
+#reveal .core.implode { animation: coreimplode .16s ease-in forwards; }
+@keyframes spinr { to { transform: rotate(360deg); } }
+@keyframes corepulse { 40% { transform: scale(1.35); } }
+@keyframes corecharge { 0% { transform: scale(1); } 20% { transform: scale(1.25) translate(2px, -1px); } 40% { transform: scale(1.35) translate(-2px, 1px); }
+  60% { transform: scale(1.5) translate(2px, 2px); } 80% { transform: scale(1.62) translate(-2px, -1px); } 100% { transform: scale(1.75); } }
+@keyframes coreimplode { to { transform: scale(.15); opacity: .9; } }
+#reveal .wave { position: absolute; width: 40px; height: 40px; margin: -20px 0 0 -20px; border-radius: 50%; border: 6px solid #fff; box-shadow: 0 0 30px #fff, inset 0 0 30px var(--cc, #55ffff);
+  animation: wave .9s cubic-bezier(.1, .7, .3, 1) forwards; }
+#reveal .wave.w2 { border-width: 3px; animation-duration: 1.25s; animation-delay: .08s; border-color: var(--cc, #55ffff); }
+@keyframes wave { from { transform: scale(.2); opacity: 1; } to { transform: scale(38); opacity: 0; } }
+#reveal .whiteout { position: absolute; inset: 0; background: radial-gradient(circle at var(--cx, 50%) var(--cy, 50%), #fff, rgba(255, 255, 255, .85) 30%, rgba(255, 255, 255, 0) 75%);
+  animation: fadeout .7s ease-out forwards; }
+.icard.hidden-for-reveal { visibility: hidden; }
+.icard.shine::after { content: ""; position: absolute; top: 0; bottom: 0; width: 40%; left: -50%; pointer-events: none; border-radius: inherit;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, .45), transparent); animation: sweep .9s ease-out forwards; }
+.icard.weapon.crowned { animation: crowned 1.6s ease-out; }
+@keyframes crowned { 20% { box-shadow: 0 0 40px 6px var(--rc), inset 0 0 30px -6px var(--rc); transform: scale(1.04); } }
+#main.quake { animation: shake .55s cubic-bezier(.36, .07, .19, .97); }
 </style>
 </head>
 <body>
@@ -335,6 +468,7 @@ label.deep input[type=checkbox] { width: auto; flex: 0 0 auto; margin-top: 3px; 
     <div class="tabs" role="tablist">
       <button class="tab" role="tab" aria-selected="true" data-pane="talk">Talk</button>
       <button class="tab" role="tab" aria-selected="false" data-pane="form">Fill in</button>
+      <button class="tab" role="tab" aria-selected="false" data-pane="history">History</button>
     </div>
 
     <section class="pane on" id="talk" role="tabpanel">
@@ -350,11 +484,15 @@ label.deep input[type=checkbox] { width: auto; flex: 0 0 auto; margin-top: 3px; 
       </form>
     </section>
 
+    <section class="pane" id="history" role="tabpanel">
+      <div class="hist-list" id="histList"></div>
+    </section>
+
     <section class="pane" id="form" role="tabpanel">
       <form class="form" id="buildForm">
         <div class="row">
           <div class="field"><label for="f-class">Class</label><select id="f-class"></select></div>
-          <div class="field"><label for="f-level">Combat level</label><input id="f-level" type="number" min="1" max="121" value="47"></div>
+          <div class="field"><label for="f-level">Combat level</label><input id="f-level" type="number" min="1" max="121" placeholder="e.g. 60"></div>
         </div>
         <div class="field"><label for="f-goal">What matters most</label><select id="f-goal"></select></div>
         <div class="field" id="focusField" hidden><label for="f-focus">Which ability</label>
@@ -510,12 +648,12 @@ async function sendChat(text) {
     wait.remove();
     addMsg("bot", r.reply || "", r.error ? "err" : "");
     if (r.needs_key) $("#keynote").hidden = false;
-    if (r.reports && r.reports.length) { await forgeFinish(); showReport(r.reports[r.reports.length - 1]); }
-    else { forgeStop(); if (LAST_REPORT) showReport(LAST_REPORT); else showEmpty(); }   // no new build: bring the last one back
+    if (r.reports && r.reports.length) { await forgeFinish(); showReport(r.reports[r.reports.length - 1], (r.summaries || [])[r.reports.length - 1]); }
+    else { forgeStop(); if (LAST_REPORT) showReport(LAST_REPORT, LAST_SUMMARY); else showEmpty(); }   // no new build: bring the last one back
     if (r.args) fillForm(r.args);
   } catch (e) {
     wait.remove(); forgeStop();
-    if (LAST_REPORT) showReport(LAST_REPORT); else showEmpty();
+    if (LAST_REPORT) showReport(LAST_REPORT, LAST_SUMMARY); else showEmpty();
     addMsg("bot", "The app stopped responding. Close it and open it again.", "err");
   }
   chatWatch = false;
@@ -895,14 +1033,17 @@ function forgeFinish() {
       const st = fo.querySelector(".stamp");
       if (st) { burstAt(st, "#ffd36b", 70, 2.1); burstAt(st, "#55ffff", 30, 1.6); burstAt(st, "#ff55ff", 30, 1.6); }
     }, t);
-    setTimeout(() => { forgeStop(); RISE_NEXT = true; resolve(); }, t + 1250);
+    setTimeout(() => {
+      REVEAL_FROM = [...document.querySelectorAll("#fReels .reel")].map((el) => el.getBoundingClientRect());
+      forgeStop(); RISE_NEXT = true; resolve();
+    }, t + 1250);
   });
 }
 function autosize() { const t = $("#input"); t.style.height = "auto"; t.style.height = Math.min(160, t.scrollHeight) + "px"; }
 $("#input").addEventListener("input", autosize);
 $("#input").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendChat($("#input").value); } });
 $("#compose").addEventListener("submit", (e) => { e.preventDefault(); sendChat($("#input").value); });
-$("#newChat").addEventListener("click", async () => { if (busy) return; await api("/api/chat/reset", {}); greet(); LAST_REPORT = null; forgeStop(); showEmpty(); });
+$("#newChat").addEventListener("click", async () => { if (busy) return; await api("/api/chat/reset", {}); greet(); LAST_REPORT = null; LAST_SUMMARY = null; forgeStop(); showEmpty(); });
 
 /* ---------- form ---------- */
 function renderGear() {
@@ -964,6 +1105,7 @@ function fillForm(a) {
 }
 $("#buildForm").addEventListener("submit", async (e) => {
   e.preventDefault();
+  if (!$("#f-link").value.trim() && (!$("#f-class").value || !$("#f-level").value)) { toast("Pick your class and level, or paste a Wynnbuilder link"); return; }
   soundUnlock();
   if (busy) return;
   setBusy(true);
@@ -971,7 +1113,7 @@ $("#buildForm").addEventListener("submit", async (e) => {
   showBusy(deep ? "Deep search: several minutes." : "Usually about a minute.");
   try {
     const r = await api("/api/analyze", formParams());
-    if (r.ok) { await forgeFinish(); showReport(r.text); } else { forgeStop(); showError(r.text); }
+    if (r.ok) { await forgeFinish(); showReport(r.text, r.summary); } else { forgeStop(); showError(r.text); }
   } catch (e2) { forgeStop(); showError("The app stopped responding. Close it and open it again."); }
   setBusy(false);
 });
@@ -1002,10 +1144,355 @@ function splitSections(text) {
 }
 const pick = (re, text) => { const m = text.match(re); return m ? m : null; };
 const OPEN = ["Best whole build", "Skill points", "Powders", "Ability tree", "What it does", "Survivability", "Level-by-level plan"];
-function showReport(text) {
-  LAST_REPORT = text;
+/* ---------- results visuals: before/after bars, equipment screen, skill points, tree map ---------- */
+const SKILL_INFO = [["Strength", "#00aa00"], ["Dexterity", "#ffff55"], ["Intelligence", "#55ffff"], ["Defense", "#ff5555"], ["Agility", "#ffffff"]];
+const ARCH_COLS = ["#c66bff", "#ffb347", "#4fd1c5"];
+const POWDER_COL = { Earth: "#00aa00", Thunder: "#ffff55", Water: "#55ffff", Fire: "#ff5555", Air: "#ffffff" };
+let LAST_SUMMARY = null;
+function numFmt(k, v) { return k === "spd" ? `${v >= 0 ? "+" : ""}${Math.round(v)}%` : fmtBig(v); }
+
+/* ---- tooltips (items and abilities) ---- */
+function ensureTip() { let t = $("#tip"); if (!t) { t = document.createElement("div"); t.id = "tip"; t.setAttribute("role", "tooltip"); document.body.appendChild(t); } return t; }
+function placeTip(t, x, y) {
+  const w = t.offsetWidth, h = t.offsetHeight, W = window.innerWidth, H = window.innerHeight;
+  let left = x + 16, top = y + 14;
+  if (left + w > W - 8) left = Math.max(8, x - w - 16);
+  if (top + h > H - 8) top = Math.max(8, H - h - 8);
+  t.style.left = left + "px"; t.style.top = top + "px";
+}
+function bindTips(root, getHTML) {
+  const t = ensureTip();
+  root.querySelectorAll("[data-tipk]").forEach((el) => {
+    const show = (x, y) => { t.innerHTML = getHTML(el.dataset.tipk); t.classList.add("on"); placeTip(t, x, y); };
+    el.addEventListener("mouseenter", (e) => show(e.clientX, e.clientY));
+    el.addEventListener("mousemove", (e) => placeTip(t, e.clientX, e.clientY));
+    el.addEventListener("mouseleave", () => t.classList.remove("on"));
+    el.addEventListener("focus", () => { const r = el.getBoundingClientRect(); show(r.right, r.top); });
+    el.addEventListener("blur", () => t.classList.remove("on"));
+    el.addEventListener("click", () => { const r = el.getBoundingClientRect(); if (t.classList.contains("on")) t.classList.remove("on"); else show(r.right, r.top); });
+  });
+}
+function statLine(label, v) {
+  const pct = / %$/.test(label), name = label.replace(/ %$/, "");
+  const sign = v > 0 ? "+" : "";
+  return `<div class="${v < 0 ? "bad" : "ok"}">${sign}${v}${pct ? "%" : ""} <span class="tl">${esc(name)}</span></div>`;
+}
+function itemTip(c) {
+  if (!c) return '<div class="gray">Nothing in this slot.</div>';
+  const col = TIER_COL[c.tier] || TIER_COL.Normal;
+  let h = `<div class="tn" style="color:${col}">${esc(c.name)}</div>`;
+  if (c.atk_spd) h += `<div class="tl">${esc(c.atk_spd.replace(/\b\w/g, (m) => m.toUpperCase()))} Attack Speed</div>`;
+  if (c.damage && c.damage.length) h += c.damage.map(([e, lo, hi]) => `<div><span style="color:${POWDER_COL[e] || "#e8e8e8"}">${esc(e)}</span> <span class="tl">damage</span> ${lo}–${hi}</div>`).join("");
+  h += "<hr>";
+  h += `<div class="tl">Combat Lv. Min: ${c.level}</div>`;
+  c.reqs.forEach((r, i) => { if (r > 0) h += `<div class="tl">${SKILL_INFO[i][0]} Min: ${r}</div>`; });
+  const bon = c.bonus.map((b, i) => b ? `<div class="${b > 0 ? "ok" : "bad"}">${b > 0 ? "+" : ""}${b} <span class="tl">${SKILL_INFO[i][0]}</span></div>` : "").join("");
+  if (bon) h += "<hr>" + bon;
+  if (c.stats.length) h += "<hr>" + c.stats.map(([k, v]) => statLine(k, v)).join("");
+  if (c.slots) h += `<hr><div class="tl">[${c.powders.length}/${c.slots}] Powder Slots${c.powders.length ? ": " + c.powders.map((p) => `<span style="color:${POWDER_COL[p.split(" ")[1]] || "#fff"}">${esc(p)}</span>`).join(", ") : ""}</div>`;
+  c.major_ids.forEach(([m, d]) => { h += `<hr><div class="aqua">+${esc(m.replace(/_/g, " "))}:</div><div class="desc">${esc(d)}</div>`; });
+  if (c.set) h += `<hr><div class="ok">${esc(c.set)} Set</div>`;
+  h += `<hr><div style="color:${col}">${esc(c.tier)} Item</div>`;
+  if (c.notes && c.notes.length) h += `<div class="gray">${esc(c.notes.join("; "))}</div>`;
+  return h;
+}
+
+/* ---- before -> after bars ---- */
+function compareHTML(S) {
+  const B = S.baseline, A = S.best.numbers, Bn = B.numbers;
+  const rows = [["goal", S.label]];
+  if (S.goal !== "melee") rows.push(["melee", "Main attack DPS"]);
+  rows.push(["spell", "Spell damage/s"], ["ehp", "Effective HP"], ["hp", "Health"], ["spd", "Walk speed"], ["mr", "Mana regen"]);
+  const floorKey = { hp: "hp", ehp: "ehp", spd: "spd", mr: "mr" };
+  const out = rows.filter(([k]) => k === "goal" || Math.abs(A[k] || 0) > 0.001 || Math.abs(Bn[k] || 0) > 0.001).map(([k, label]) => {
+    const a = A[k] || 0, b = Bn[k] || 0, fl = S.floors && floorKey[k] !== undefined ? S.floors[floorKey[k]] : undefined;
+    const vals = [0, a, b].concat(fl !== undefined ? [fl] : []);
+    const lo = Math.min(...vals), hi = Math.max(...vals) * 1.08 + 1e-9 - (Math.max(...vals) <= 0 ? lo * 0.08 : 0);
+    const pos = (v) => ((v - lo) / ((hi - lo) || 1)) * 100;
+    const z = pos(0);
+    const seg = (v) => ({ left: Math.min(z, pos(v)), width: Math.abs(pos(v) - z) });
+    const sb = seg(b), sa = seg(a);
+    const diff = a - b, rel = b ? (diff / Math.abs(b)) * 100 : null;
+    const tag = Math.abs(diff) < 1e-6 ? '<span class="same">same</span>'
+      : `<span class="${diff > 0 ? "up" : "down"}">${diff > 0 ? "+" : "−"}${k !== "spd" && rel !== null && B.kind !== "zero" ? Math.abs(rel).toFixed(Math.abs(rel) >= 10 ? 0 : 1) + "%" : numFmt(k, Math.abs(diff)).replace(/^\+/, "")}</span>`;
+    const worse = diff < -1e-6;
+    return `<div class="brow${k === "goal" ? " goal" : ""}"><div class="bl">${esc(label)}</div>
+      <div class="btrack"><span class="zero" style="left:${z}%"></span><span class="before" style="left:${sb.left}%;width:${sb.width}%"></span>
+        <span class="after${worse ? " down" : ""}" style="left:${sb.left}%;width:${sb.width}%" data-left="${sa.left}" data-width="${sa.width}"></span>
+        ${fl !== undefined ? `<span class="floor" style="left:${pos(fl)}%" data-l="min ${esc(numFmt(k, fl))}"></span>` : ""}</div>
+      <div class="bv">${B.kind === "zero" ? "" : `${numFmt(k, b)} → `}<i>${numFmt(k, a)}</i> ${B.kind === "zero" ? "" : tag}</div></div>`;
+  }).join("");
+  return `<div class="cmp"><div class="cmp-head"><span class="t">Best whole build</span><span class="base">compared with <b>${esc(B.label)}</b></span></div>${out}</div>`;
+}
+function animateBars(root) {
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    root.querySelectorAll(".btrack .after").forEach((el) => { el.style.left = el.dataset.left + "%"; el.style.width = el.dataset.width + "%"; });
+    root.querySelectorAll(".sktrack span[data-w]").forEach((el) => { el.style.width = el.dataset.w + "%"; });
+  }));
+}
+
+/* ---- equipment screen and skill points ---- */
+function equipHTML(pack, baseItems, title, sub) {
+  const card = (c, i, cls = "") => {
+    const slot = SLOTS[i];
+    if (!c) return `<div class="icard empty ${cls}" tabindex="0" data-tipk="${i}" style="animation-delay:${i * 45}ms"><div class="s">${slot}</div><div class="n">(empty)</div></div>`;
+    const isNew = baseItems && baseItems[i] !== c.name;
+    const pw = c.slots ? `<span class="pw">${Array.from({ length: c.slots }, (_, k) => { const p = c.powders[k]; const col = p ? POWDER_COL[p.split(" ")[1]] : null; return `<span style="${col ? `background:${col};border-color:${col}` : ""}"></span>`; }).join("")}</span>` : "";
+    return `<div class="icard ${cls}" tabindex="0" data-tipk="${i}" style="--rc:${TIER_COL[c.tier] || TIER_COL.Normal};animation-delay:${i * 45}ms">
+      ${isNew ? '<span class="ribbon">NEW</span>' : ""}<div class="s">${slot}</div>
+      <div class="n" style="color:${TIER_COL[c.tier] || TIER_COL.Normal}">${esc(c.name)}</div>
+      <div class="m">Lv ${c.level} ${esc(c.tier)} ${esc(c.type)}${pw}</div></div>`;
+  };
+  const it = pack.items;
+  const sp = pack.sp, tot = sp.assigned.map((a, i) => a + sp.extra[i] + sp.gear[i]);
+  const mx = Math.max(60, ...tot);
+  const skills = SKILL_INFO.map(([name, col], i) => {
+    const as = sp.assigned[i] + sp.extra[i], g = sp.gear[i];
+    return `<div class="skrow"><span class="sl">${name}</span><div class="sktrack">
+      <span data-w="${(Math.max(0, as) / mx) * 100}" style="background:${col}"></span>
+      <span class="gear" data-w="${(Math.max(0, g) / mx) * 100}" style="background-color:${col}99"></span></div>
+      <span class="sv" title="${as} assigned, ${g >= 0 ? "+" : ""}${g} from gear">${tot[i]}</span></div>`;
+  }).join("");
+  return `<section class="tip panel" id="equipPanel"><h3>${esc(title)} <small>${esc(sub)}</small></h3>
+    <div class="equip">
+      <div class="colm">${[0, 1, 2, 3].map((i) => card(it[i], i)).join("")}</div>
+      <div class="colm">${card(it[8], 8, "weapon")}
+        <div class="skills">${skills}
+          <div class="sklegend"><span><i style="background:#9aa0c8"></i>points you assign</span><span><i style="background-image:repeating-linear-gradient(135deg,#9aa0c8 0 3px,transparent 3px 6px)"></i>from gear</span></div></div></div>
+      <div class="colm">${[4, 5, 6, 7].map((i) => card(it[i], i)).join("")}</div>
+    </div></section>`;
+}
+
+/* ---- ability tree map ---- */
+function treeHTML(T, order, togglesOn, tabs) {
+  const CELL = 38, COLS = 9;
+  const nodes = T.nodes, maxRow = Math.max(...nodes.map((n) => n.row));
+  const W = COLS * CELL, H = (maxRow + 1) * CELL;
+  const idx = {}; order.forEach((id, k) => { idx[id] = k + 1; });
+  const archCol = (a) => (a ? ARCH_COLS[T.archetypes.indexOf(a) % ARCH_COLS.length] : "#8a90b8");
+  const byId = {}; nodes.forEach((n) => { byId[n.id] = n; });
+  const cx = (n) => n.col * CELL + CELL / 2, cy = (n) => n.row * CELL + CELL / 2;
+  const lines = [];
+  nodes.forEach((n) => (n.parents || []).forEach((p) => {
+    const q = byId[p]; if (!q) return;
+    const lit = idx[n.id] && idx[p];
+    lines.push(`<line x1="${cx(q)}" y1="${cy(q)}" x2="${cx(n)}" y2="${cy(n)}"${lit ? ` class="lit" style="--lc:${archCol(n.arch)}"` : ""}/>`);
+  }));
+  const togOn = new Set(togglesOn || []);
+  const nodeHTML = nodes.map((n) => {
+    const k = idx[n.id];
+    return `<div class="tnode${k ? " on" : ""}${n.ult ? " ult" : ""}" tabindex="0" data-tipk="${n.id}" style="left:${cx(n)}px;top:${cy(n)}px;--ac:${archCol(n.arch)};${k ? `animation-delay:${Math.min(k * 25, 900)}ms` : ""}">${k || ""}
+      ${n.toggle ? `<span class="tg${k && togOn.has(n.toggle) ? " on" : ""}" title="toggle">⏻</span>` : ""}</div>`;
+  }).join("");
+  const legend = T.archetypes.map((a) => `<span><i style="background:${archCol(a)}"></i>${esc(a)}</span>`).join("") +
+    '<span><i style="background:#8a90b8"></i>no archetype</span><span>numbers = click order</span><span><span class="tg on" style="position:static;display:inline-grid;width:13px;height:13px;border-radius:50%;font-size:8px;place-items:center">⏻</span> toggle on</span>';
+  return `<section class="tip panel" id="treePanel"><h3>Ability tree <small>${order.length} abilities, in click order</small>${tabs || ""}</h3>
+    <div class="tlegend">${legend}</div>
+    <div class="tmap-wrap"><div class="tmap" style="width:${W}px;height:${H}px"><svg width="${W}" height="${H}" aria-hidden="true">${lines.join("")}</svg>${nodeHTML}</div></div></section>`;
+}
+function nodeTip(T, order, togglesOn, id) {
+  const n = T.nodes.find((x) => String(x.id) === String(id)); if (!n) return "";
+  const k = order.indexOf(n.id) + 1;
+  let h = `<div class="tn" style="color:${n.ult ? "#ffaa00" : "#55ffff"}">${esc(n.name)}</div>`;
+  h += `<div class="tl">${n.cost} AP${n.arch ? ` · ${esc(n.arch)}` : ""}${n.ult ? " · ultimate, level 90+" : ""}</div>`;
+  h += k ? `<div class="ok">Click #${k}</div>` : '<div class="gray">Not in this tree</div>';
+  if (n.toggle) h += `<div class="${k && (togglesOn || []).includes(n.toggle) ? "ok" : "gray"}">Toggle "${esc(n.toggle)}": ${k && (togglesOn || []).includes(n.toggle) ? "counted as on" : "off"}</div>`;
+  if (n.desc) h += `<hr><div class="desc">${esc(n.desc)}</div>`;
+  return h;
+}
+function mountTree(S, which) {
+  const pack = which === "current" ? S.current : (S.best || S.current);
+  const both = S.best && S.current && JSON.stringify(S.best.order) !== JSON.stringify(S.current.order);
+  const tabs = both ? `<span class="ttabs"><button type="button" data-tree="best" aria-pressed="${which !== "current"}">Best build's tree</button><button type="button" data-tree="current" aria-pressed="${which === "current"}">For your current gear</button></span>` : "";
+  const box = $("#treeSlot"); if (!box) return;
+  box.innerHTML = treeHTML(S.tree, pack.order, S.toggles_on, tabs);
+  bindTips(box, (id) => nodeTip(S.tree, pack.order, S.toggles_on, id));
+  box.querySelectorAll("[data-tree]").forEach((b) => b.addEventListener("click", () => mountTree(S, b.dataset.tree)));
+}
+function visualsHTML(S) {
+  const pack = S.best || S.current;
+  const baseItems = S.best && S.baseline && S.baseline.items ? S.baseline.items : null;
+  const title = S.best ? "Your best whole build" : "Your build";
+  const sub = S.best ? (baseItems ? `"NEW" marks pieces that differ from ${S.baseline.kind === "gear" ? "your gear" : "your last build"}. Hover any piece for its stats.` : "Hover any piece for its stats.") : "Hover any piece for its stats.";
+  return equipHTML(pack, baseItems, title, sub) + '<div id="treeSlot"></div>';
+}
+function mountVisuals(S, bars = true) {
+  const pack = S.best || S.current;
+  const eq = $("#equipPanel"); if (eq) bindTips(eq, (i) => itemTip(pack.items[+i]));
+  mountTree(S, "best");
+  if (bars) animateBars($("#main"));
+}
+/* ---------- the final assembly ---------- */
+let REVEAL_FROM = null;                 // where the reels were when the Forge finished (screen positions)
+function sndWhoosh() {
+  if (!SND.on || !SND.ctx) return;
+  const ctx = SND.ctx, t = ctx.currentTime, len = Math.floor(ctx.sampleRate * 0.5);
+  const buf = ctx.createBuffer(1, len, ctx.sampleRate), d = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.sin(Math.PI * i / len);
+  const src = ctx.createBufferSource(), bp = ctx.createBiquadFilter(), g = ctx.createGain();
+  bp.type = "bandpass"; bp.Q.value = 2.5; bp.frequency.setValueAtTime(400, t); bp.frequency.exponentialRampToValueAtTime(2600, t + 0.45);
+  g.gain.value = 0.08; src.buffer = buf; src.connect(bp); bp.connect(g); g.connect(ctx.destination); src.start(t);
+}
+function sndPing(i) {
+  if (!SND.on || !SND.ctx) return;
+  const ctx = SND.ctx, t = ctx.currentTime, scale = [0, 2, 4, 7, 9, 12, 14, 16, 19];
+  const f = 523.25 * Math.pow(2, scale[i % scale.length] / 12);
+  [1, 2.01].forEach((m, k) => {
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = k ? "triangle" : "sine"; o.frequency.value = f * m;
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(k ? 0.03 : 0.11, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.7);
+    o.connect(g); g.connect(ctx.destination); o.start(t); o.stop(t + 0.75);
+  });
+}
+function sndCharge() {
+  if (!SND.on || !SND.ctx) return;
+  const ctx = SND.ctx, t = ctx.currentTime;
+  const o = ctx.createOscillator(), o2 = ctx.createOscillator(), g = ctx.createGain();
+  o.type = "sawtooth"; o2.type = "sine";
+  o.frequency.setValueAtTime(90, t); o.frequency.exponentialRampToValueAtTime(420, t + 0.75);
+  o2.frequency.setValueAtTime(180, t); o2.frequency.exponentialRampToValueAtTime(840, t + 0.75);
+  const lp = ctx.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.setValueAtTime(400, t); lp.frequency.exponentialRampToValueAtTime(3000, t + 0.75);
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.09, t + 0.6); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.85);
+  o.connect(lp); o2.connect(lp); lp.connect(g); g.connect(ctx.destination); o.start(t); o2.start(t); o.stop(t + 0.9); o2.stop(t + 0.9);
+}
+function sndBoom() {
+  if (!SND.on || !SND.ctx) return;
+  const ctx = SND.ctx, t = ctx.currentTime;
+  const o = ctx.createOscillator(), g = ctx.createGain();
+  o.type = "sine"; o.frequency.setValueAtTime(120, t); o.frequency.exponentialRampToValueAtTime(32, t + 0.9);
+  g.gain.setValueAtTime(0.5, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 1.2);
+  o.connect(g); g.connect(ctx.destination); o.start(t); o.stop(t + 1.25);
+  const len = Math.floor(ctx.sampleRate * 0.8), buf = ctx.createBuffer(1, len, ctx.sampleRate), d = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.2);
+  const n = ctx.createBufferSource(), lp = ctx.createBiquadFilter(), ng = ctx.createGain();
+  lp.type = "lowpass"; lp.frequency.setValueAtTime(5000, t); lp.frequency.exponentialRampToValueAtTime(200, t + 0.8);
+  ng.gain.value = 0.35; n.buffer = buf; n.connect(lp); lp.connect(ng); ng.connect(ctx.destination); n.start(t);
+  setTimeout(() => clang(true), 120);
+}
+
+function runReveal(S) {
+  return new Promise((resolve) => {
+    const cards = [];
+    document.querySelectorAll("#equipPanel .icard").forEach((c) => { cards[+c.dataset.tipk] = c; });
+    const items = S.best.items;
+    const panel = $("#equipPanel");
+    if (!panel || cards.filter(Boolean).length !== 9) return resolve();
+    panel.scrollIntoView({ block: "center" });
+    cards.forEach((c) => c.classList.add("hidden-for-reveal"));
+    const pr = panel.getBoundingClientRect();
+    const C = { x: pr.left + pr.width / 2, y: pr.top + Math.min(pr.height / 2, 220) };
+    const ov = document.createElement("div"); ov.id = "reveal"; ov.setAttribute("aria-hidden", "true");
+    ov.style.setProperty("--cx", C.x + "px"); ov.style.setProperty("--cy", C.y + "px");
+    ov.innerHTML = '<canvas></canvas><div class="core"></div><span class="skip">Click or press Esc to skip</span>';
+    document.body.appendChild(ov);
+    const cv = ov.querySelector("canvas"), core = ov.querySelector(".core");
+    core.style.left = C.x + "px"; core.style.top = C.y + "px"; core.style.opacity = "0";
+    const P = [];                                    // particles
+    const timers = [];
+    let done = false, raf = 0;
+    const at = (ms, fn) => timers.push(setTimeout(fn, ms));
+    const burst = (x, y, cols, n, power, life = 1) => {
+      for (let k = 0; k < n; k++) {
+        const a = Math.random() * 6.283, sp = (1 + Math.random() * 5) * power;
+        P.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life, decay: 0.008 + Math.random() * 0.018, col: cols[k % cols.length], w: 1 + Math.random() * 2.2, g: 0.06 });
+      }
+    };
+    // the fliers: one per item, from its reel (or the edge of the screen) to the core along a curve
+    const W = window.innerWidth, H = window.innerHeight;
+    const fliers = items.map((it, i) => {
+      const col = it ? (TIER_COL[it.tier] || TIER_COL.Normal) : "#6b6f94";
+      const r = REVEAL_FROM && REVEAL_FROM[i];
+      const sx = r ? r.left + r.width / 2 : (i % 2 ? W + 60 : -60), sy = r ? r.top + r.height / 2 : (60 + (i * H) / 10);
+      const mx = (sx + C.x) / 2, my = (sy + C.y) / 2, dx = C.x - sx, dy = C.y - sy;
+      const bend = (i % 2 ? 1 : -1) * (0.35 + Math.random() * 0.25);
+      const el = document.createElement("div"); el.className = "rchip"; el.style.setProperty("--rc", col);
+      el.textContent = it ? it.name : "(empty)"; el.style.opacity = "0"; ov.appendChild(el);
+      return { el, col, sx, sy, cx: mx - dy * bend, cy: my + dx * bend, t0: 250 + i * 190, dur: 720, landed: false };
+    });
+    const start = performance.now();
+    let absorbed = 0, coreCol = "#55ffff";
+    function frame(now) {
+      if (done) return;
+      const t = now - start;
+      const dpr = window.devicePixelRatio || 1;
+      if (cv.width !== Math.round(W * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
+      const g = cv.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, H); g.globalCompositeOperation = "lighter";
+      for (const f of fliers) {
+        const k = (t - f.t0) / f.dur;
+        if (k < 0) continue;
+        if (k >= 1) {
+          if (!f.landed) {
+            f.landed = true; f.el.remove(); absorbed++;
+            coreCol = f.col; core.style.setProperty("--cc", f.col);
+            core.classList.remove("pulse"); void core.offsetWidth; core.classList.add("pulse");
+            burst(C.x, C.y, [f.col, "#ffffff"], 26, 1.1, 0.8); sndPing(absorbed - 1);
+          }
+          continue;
+        }
+        if (!f.started) { f.started = true; f.el.style.opacity = "1"; sndWhoosh(); }
+        const e = k * k * (3 - 2 * k), u = 1 - e;
+        const x = u * u * f.sx + 2 * u * e * f.cx + e * e * C.x, y = u * u * f.sy + 2 * u * e * f.cy + e * e * C.y;
+        const s = 1 - 0.75 * e, rot = (1 - u) * 260 * (f.cx > C.x ? 1 : -1);
+        f.el.style.transform = `translate(${x}px,${y}px) translate(-50%,-50%) scale(${s}) rotate(${rot * 0.15}deg)`;
+        for (let q = 0; q < 3; q++) P.push({ x: x + (Math.random() - .5) * 10, y: y + (Math.random() - .5) * 10, vx: (Math.random() - .5) * 0.8, vy: (Math.random() - .5) * 0.8, life: 0.8, decay: 0.03, col: f.col, w: 1.5 + Math.random() * 2, g: 0 });
+      }
+      for (let k = P.length - 1; k >= 0; k--) {
+        const p = P[k], px = p.x, py = p.y;
+        p.vy += p.g; p.vx *= 0.985; p.x += p.vx; p.y += p.vy; p.life -= p.decay;
+        if (p.life <= 0) { P.splice(k, 1); continue; }
+        g.globalAlpha = Math.min(1, p.life); g.strokeStyle = p.col; g.lineWidth = p.w;
+        g.beginPath(); g.moveTo(px - p.vx * 2, py - p.vy * 2); g.lineTo(p.x, p.y); g.stroke();
+      }
+      g.globalAlpha = 1;
+      raf = requestAnimationFrame(frame);
+    }
+    raf = requestAnimationFrame(frame);
+    at(120, () => { core.style.transition = "opacity .4s"; core.style.opacity = "1"; });
+    const tAll = 250 + 8 * 190 + 720;               // when the last item is absorbed
+    at(tAll + 120, () => { core.classList.add("charge"); sndCharge(); });
+    at(tAll + 820, () => { core.classList.remove("charge"); core.classList.add("implode"); });
+    at(tAll + 980, () => {                          // detonation
+      sndBoom();
+      core.remove();
+      ov.insertAdjacentHTML("beforeend", `<div class="whiteout"></div><div class="wave" style="left:${C.x}px;top:${C.y}px;--cc:${coreCol}"></div><div class="wave w2" style="left:${C.x}px;top:${C.y}px;--cc:${coreCol}"></div>`);
+      const cols = items.filter(Boolean).map((it) => TIER_COL[it.tier] || TIER_COL.Normal).concat(["#ffffff", "#ffd36b"]);
+      burst(C.x, C.y, cols, 260, 2.6, 1.2);
+      const m = $("#main"); m.classList.remove("quake"); void m.offsetWidth; m.classList.add("quake");
+      // the pieces fly out to their places
+      cards.forEach((c, i) => {
+        const r = c.getBoundingClientRect();
+        const cl = c.cloneNode(true); cl.classList.remove("hidden-for-reveal");
+        Object.assign(cl.style, { position: "fixed", left: r.left + "px", top: r.top + "px", width: r.width + "px", height: r.height + "px", margin: "0", zIndex: 45, animation: "none" });
+        ov.appendChild(cl);
+        const dx = C.x - (r.left + r.width / 2), dy = C.y - (r.top + r.height / 2);
+        cl.animate([
+          { transform: `translate(${dx}px,${dy}px) scale(.15) rotate(${i % 2 ? 25 : -25}deg)`, opacity: 0 },
+          { offset: 0.65, transform: "translate(0,0) scale(1.08) rotate(0deg)", opacity: 1 },
+          { transform: "none", opacity: 1 }], { duration: 760, delay: i * 45, easing: "cubic-bezier(.2,.9,.3,1)", fill: "both" });
+      });
+    });
+    const finish = () => {
+      if (done) return;
+      done = true; cancelAnimationFrame(raf); timers.forEach(clearTimeout);
+      document.removeEventListener("keydown", onKey);
+      cards.forEach((c, i) => { c.classList.remove("hidden-for-reveal"); c.style.animation = "none"; setTimeout(() => { c.classList.add("shine"); }, i * 40); setTimeout(() => c.classList.remove("shine"), 1100 + i * 40); });
+      const wpn = cards[8]; if (wpn) wpn.classList.add("crowned");
+      ov.classList.add("out");
+      setTimeout(() => ov.remove(), 460);
+      setTimeout(() => { $("#main").scrollTo({ top: 0, behavior: "smooth" }); resolve(); }, 700);
+    };
+    const onKey = (e) => { if (e.key === "Escape") finish(); };
+    document.addEventListener("keydown", onKey);
+    ov.addEventListener("click", finish);
+    at(tAll + 980 + 1250, finish);
+  });
+}
+
+function showReport(text, S) {
+  LAST_REPORT = text; LAST_SUMMARY = S || null;
   const rise = RISE_NEXT && !REDUCED; RISE_NEXT = false;
-  requestAnimationFrame(() => { const m = $("#main"); if (rise) { m.classList.remove("rise"); void m.offsetWidth; m.classList.add("rise"); setTimeout(() => m.classList.remove("rise"), 1200); } });
+  const reveal = rise && S && S.best;
+  requestAnimationFrame(() => { const m = $("#main"); if (rise && !reveal) { m.classList.remove("rise"); void m.offsetWidth; m.classList.add("rise"); setTimeout(() => m.classList.remove("rise"), 1200); } });
   const { head, secs } = splitSections(text);
   const title = pick(/·\s*(\w+), level (\d+), goal: (\w+)/, head.join("\n"));
   const goalWords = { ability: "one ability's damage", spells: "spell damage", burst: "burst damage", melee: "highest DPS", survival: "survival", balanced: "damage and survival", healing: "healing" };
@@ -1018,7 +1505,7 @@ function showReport(text) {
   const put = pick(/Put in:\s+(.+)/, text);
   const link = pick(/https:\/\/wynnbuilder\.github\.io\/builder\/#\S+/, text.split("Best whole build")[0]) || pick(/https:\/\/wynnbuilder\.github\.io\/builder\/#\S+/, text);
   const wbLink = pick(/Whole build in Wynnbuilder: (\S+)/, text);
-  const wbGain = pick(/\+(\d+)% for your goal compared with what you wear now/, text);
+  const wbGain = pick(/\+(\d+)% for your goal compared with (?:what you wear now|wearing nothing)/, text);
   const wbFoc = foc ? pick(new RegExp(foc[1].replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + ": ([\\d,.]+) -> ([\\d,.]+)"), text) : null;
   const wbNums = pick(/Spell damage\/s ([\d,.]+) -> ([\d,.]+)\s+Main attack\/s ([\d,.]+) -> ([\d,.]+)\s+Effective HP ([\d,.]+) -> ([\d,.]+)/, text);
   const wbHp = pick(/Health ([\d,.]+) -> ([\d,.]+)\s+Walk speed ([+-]\d+%) -> ([+-]\d+%)/, text);
@@ -1052,13 +1539,15 @@ function showReport(text) {
   const headNotes = head.slice(1).map((l) => l.trim()).filter(Boolean);
   const heroTitle = title ? `Level ${title[2]} ${title[1]}` : "Your build";
   const heroSub = title ? `Built for ${goalWords[title[3]] || title[3]}` : "";
+  const vis = !!(S && S.best);
   let html = `<section class="tip hero">
     <h2>${esc(heroTitle)}</h2><p class="sub">${esc(heroSub)}</p>
-    ${stats.length ? `<div class="stats">${stats.join("")}</div>` : ""}
-    ${put ? `<div class="sp-line">Skill points to assign: ${esc(put[1].trim())}</div>` : ""}
+    ${!vis && stats.length ? `<div class="stats">${stats.join("")}</div>` : ""}
+    ${!vis && put ? `<div class="sp-line">Skill points to assign: ${esc(put[1].trim())}</div>` : ""}
     ${floorMiss ? `<p class="floor-warn">No build meets every minimum you set. The closest one still misses: ${esc(floorMiss[1])}</p>` : ""}
     ${!floorMiss && floorOk ? `<p class="floor-ok">Best whole build keeps your minimums: ${esc(floorOk[1])}.</p>` : ""}
-    ${(wbGain || floorFixed || floorMiss) && wbNums ? `<div class="upgrade">
+    ${vis ? compareHTML(S) : ""}
+    ${!vis && (wbGain || floorFixed || floorMiss) && wbNums ? `<div class="upgrade">
       <div class="up-title">${wbGain ? `Best whole build: +${wbGain[1]}% for your goal` : floorFixed ? "Best whole build: meets all your minimums" : "Closest build to your minimums"}</div>
       ${wbFoc ? `<div class="up-row"><span>${esc(foc[1])}</span><b>${wbFoc[1]} → <i class="dmg">${wbFoc[2]}</i></b></div>` : ""}
       <div class="up-row"><span>Spell damage/s</span><b>${wbNums[1]} → <i class="dmg">${wbNums[2]}</i></b></div>
@@ -1070,10 +1559,11 @@ function showReport(text) {
     </div>` : ""}
     <div class="actions">
       ${wbLink ? `<a class="btn" href="${esc(wbLink[1])}" target="_blank" rel="noopener">Open whole build in Wynnbuilder</a>` : ""}
-      ${link ? `<a class="${wbLink ? "btn-quiet" : "btn"}" href="${esc(link[0])}" target="_blank" rel="noopener">${wbLink ? "Open current build" : "Open in Wynnbuilder"}</a>
-      <button class="btn-quiet" data-copy="${esc(link[0])}">Copy link</button>` : ""}
+      ${link && !(S && S.no_gear && wbLink) ? `<a class="${wbLink ? "btn-quiet" : "btn"}" href="${esc(link[0])}" target="_blank" rel="noopener">${wbLink ? "Open your current gear" : "Open in Wynnbuilder"}</a>` : ""}
+      ${wbLink || link ? `<button class="btn-quiet" data-copy="${esc(wbLink ? wbLink[1] : link[0])}">Copy ${wbLink ? "whole build " : ""}link</button>` : ""}
       <button class="btn-quiet" id="copyReport">Copy full report</button>
     </div></section>`;
+  if (S) html += visualsHTML(S);
   if (headNotes.length) html += `<div class="notes">${headNotes.map((n) => `<p>${esc(n)}</p>`).join("")}</div>`;
   html += `<div class="sections">` + visible.map((s) => {
     const body = s.lines.join("\n").replace(/^\n+|\n+$/g, "");
@@ -1086,6 +1576,58 @@ function showReport(text) {
   $("#main").scrollTop = 0;
   const cr = $("#copyReport"); if (cr) cr.addEventListener("click", () => { navigator.clipboard.writeText(text); toast("Report copied"); });
   document.querySelectorAll("[data-copy]").forEach((b) => b.addEventListener("click", () => { navigator.clipboard.writeText(b.dataset.copy); toast("Link copied"); }));
+  if (S) {
+    if (reveal && !REDUCED) { mountVisuals(S, false); runReveal(S).then(() => animateBars($("#main"))); }
+    else mountVisuals(S, true);
+  }
+  REVEAL_FROM = null;
+  refreshHistory();
+}
+/* ---------- history: every build you make, kept on this computer only ---------- */
+async function refreshHistory() {
+  let list = [];
+  try { list = await fetch("/api/history").then((r) => r.json()); } catch (e) { return; }
+  const box = $("#histList"); if (!box) return;
+  if (!list.length) {
+    box.innerHTML = '<div class="hist-empty"><b>No builds yet.</b><br>Every build you make is saved here, on this computer only. Your next build is compared with your last one for the same class and goal.</div>';
+    return;
+  }
+  box.innerHTML = list.map((h) => {
+    const n = h.numbers || {};
+    const items = (h.items || []).filter(Boolean).map(([nm, t]) => `<span class="t-${esc(t)}">${esc(nm)}</span>`).join(", ");
+    const goalNum = n.goal != null ? `${esc(h.focus || h.label)}: ${fmtBig(n.goal)}` : "";
+    return `<div class="hcard"><div class="ht"><b>Level ${h.level} ${esc(h.class_title)}</b><span class="hd">${esc(h.date)}</span></div>
+      <div class="hn">${goalNum}</div><div class="hi">${items}</div>
+      <div class="hb"><button class="btn-quiet" data-view="${esc(h.id)}">View</button><button class="btn-quiet" data-del="${esc(h.id)}">Delete</button></div></div>`;
+  }).join("") + '<button class="btn-quiet" id="histClear" type="button" style="align-self:flex-start;margin-top:6px">Clear history</button>';
+  box.querySelectorAll("[data-view]").forEach((b) => b.addEventListener("click", () => showSaved(b.dataset.view)));
+  box.querySelectorAll("[data-del]").forEach((b) => b.addEventListener("click", async () => { await api("/api/history/delete", { id: b.dataset.del }); refreshHistory(); }));
+  const c = $("#histClear"); if (c) c.addEventListener("click", async () => { if (confirm("Delete every saved build?")) { await api("/api/history/clear", {}); refreshHistory(); } });
+}
+async function showSaved(id) {
+  if (busy) { toast("Wait for the current build to finish"); return; }
+  let h;
+  try { h = await fetch("/api/history/" + encodeURIComponent(id)).then((r) => r.json()); } catch (e) { return; }
+  if (!h || h.error) { toast("That build isn't saved any more"); refreshHistory(); return; }
+  forgeStop();
+  const n = h.numbers || {};
+  const chips = [[h.focus || h.label, n.goal, "dmg"], ["main attack DPS", n.melee, "melee"], ["spell damage/s", n.spell, "dmg"], ["effective HP", n.ehp, "ehp"],
+                 ["health", n.hp, "ehp"], ["walk speed", n.spd, "spd"]].filter(([, v], i) => i === 0 || Math.abs(v || 0) > 0.001)
+    .map(([k, v, c]) => `<div class="stat ${c}"><div class="v">${k === "walk speed" ? numFmt("spd", v || 0) : fmtBig(v || 0)}</div><div class="k">${esc(k)}</div></div>`).join("");
+  const floors = h.floors && Object.keys(h.floors).length ? `<p class="floor-ok">Minimums it kept: ${Object.entries(h.floors).map(([k, v]) => `${esc({ hp: "health", ehp: "effective HP", spd: "walk speed", mr: "mana regen", hpr: "health regen" }[k] || k)} ${v}`).join(", ")}</p>` : "";
+  $("#main").innerHTML = `<section class="tip hero"><h2>Level ${h.level} ${esc(h.class_title)}</h2>
+    <p class="sub">Saved build from ${esc(h.date)}, built for ${esc(h.focus || h.label)}</p>${floors}
+    <div class="stats">${chips}</div>
+    <div class="actions">${h.link ? `<a class="btn" href="${esc(h.link)}" target="_blank" rel="noopener">Open in Wynnbuilder</a><button class="btn-quiet" data-copy="${esc(h.link)}">Copy link</button>` : ""}
+      <button class="btn-quiet" id="savedBack" type="button">Back to the latest build</button></div></section>` +
+    equipHTML({ items: h.items, sp: h.sp }, null, "Gear", "Hover any piece for its stats.") +
+    (h.tree ? treeHTML(h.tree, h.order || [], h.toggles_on || [], "") : "");
+  $("#main").scrollTop = 0;
+  bindTips($("#equipPanel"), (i) => itemTip(h.items[+i]));
+  if (h.tree) bindTips($("#treePanel"), (nid) => nodeTip(h.tree, h.order || [], h.toggles_on || [], nid));
+  animateBars($("#main"));
+  document.querySelectorAll("[data-copy]").forEach((b) => b.addEventListener("click", () => { navigator.clipboard.writeText(b.dataset.copy); toast("Link copied"); }));
+  $("#savedBack").addEventListener("click", () => { if (LAST_REPORT) showReport(LAST_REPORT, LAST_SUMMARY); else showEmpty(); });
 }
 function showError(text) {
   $("#main").innerHTML = `<section class="tip hero"><h2>That didn't work</h2><pre style="white-space:pre-wrap;font:14px/1.5 var(--mono);margin:0;color:var(--warn)">${esc(text.trim())}</pre></section>`;
@@ -1142,8 +1684,8 @@ async function loadAbilities() {
 }
 async function init() {
   await loadMeta();
-  $("#f-class").innerHTML = META.classes.map((c) => `<option value="${c}">${c[0].toUpperCase() + c.slice(1)}</option>`).join("");
-  $("#f-class").value = "mage";
+  $("#f-class").innerHTML = '<option value="" selected disabled>Choose your class</option>' +
+    META.classes.map((c) => `<option value="${c}">${c[0].toUpperCase() + c.slice(1)}</option>`).join("");
   const goalLabels = { ability: "One ability's damage (e.g. puppets)", spells: "Spell damage", burst: "Biggest combo", melee: "Highest DPS (like Wynnbuilder)", survival: "Survival", balanced: "Damage and survival", healing: "Healing others" };
   $("#f-goal").innerHTML = Object.keys(META.goals).map((g) => `<option value="${g}">${goalLabels[g] || g}</option>`).join("");
   const buffNames = { totem: "Totem", fortitude: "Fortitude", chantlunatic: "Chant of the Lunatic", warscream: "War Scream", emboldeningcry: "Emboldening Cry", hauntingfanatic: "Haunting (Fanatic)", hauntinglunatic: "Haunting (Lunatic)", eldritchcall: "Eldritch Call", judgement: "Judgement", chantfanatic: "Chant of the Fanatic", weathering: "Weathering", acidrain: "Acid Rain" };
@@ -1152,7 +1694,7 @@ async function init() {
   $("#f-goal").addEventListener("change", syncFocus);
   $("#f-class").addEventListener("change", loadAbilities);
   loadAbilities();
-  greet(); showEmpty();
+  greet(); showEmpty(); refreshHistory();
   setInterval(() => fetch("/api/ping").catch(() => {}), 20000);
   if (META.updates_configured && META.auto_update !== false) checkUpdate(false);
 }

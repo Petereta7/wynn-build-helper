@@ -10,3 +10,5 @@ __pycache__/
 # Test downloads and scratch
 tests/crossval/work/
 tests/crossval/wynnbuilder/
+wynn_data/build_history.json
+wynn_data/*.tmp

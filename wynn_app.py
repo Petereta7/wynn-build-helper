@@ -34,10 +34,10 @@ import wynn_helper as wh  # noqa: E402
 CONFIG_PATH = os.path.join(HERE, "wynn_app_config.json")
 UI_PATH = os.path.join(HERE, "app", "index.html")
 API_URL = os.environ.get("WYNN_CLAUDE_URL", "https://api.anthropic.com/v1/messages")
-DEFAULT_MODEL = "claude-sonnet-5-5"
-MODELS = {"claude-sonnet-5-5": "Claude Sonnet 5.5 (recommended)",
-          "claude-haiku-5-5": "Claude Haiku 5.5 (cheapest)",
-          "claude-opus-5-5": "Claude Opus 5.5 (smartest, costs more)"}
+DEFAULT_MODEL = "claude-opus-5-5"
+MODELS = {"claude-opus-5-5": "Claude Opus 5.5 (smartest, the default)",
+          "claude-sonnet-5-5": "Claude Sonnet 5.5 (cheaper, nearly as good)",
+          "claude-haiku-5-5": "Claude Haiku 5.5 (cheapest)"}
 
 import wynn_search as ws  # noqa: E402
 import updater  # noqa: E402
@@ -202,11 +202,16 @@ def run_report(params: dict) -> dict:
     STATE["progress"] = None
     text = buf.getvalue()
     used = {k: v for k, v in params.items() if v not in (None, "", [], False)}
+    summary = None
     if ok:
         STATE["last_args"], STATE["last_report"] = used, text
+        try:
+            summary = build_summary()
+        except Exception:
+            traceback.print_exc()
     if load_config().get("popup", True):
         notify_done(ok, args, text)
-    return {"ok": ok, "text": text, "args": used}
+    return {"ok": ok, "text": text, "args": used, "summary": summary}
 
 
 GOAL_SHORT = {"spells": "spell damage", "burst": "burst combo", "melee": "highest DPS", "survival": "survival",
@@ -231,7 +236,7 @@ def notify_done(ok: bool, args, text: str):
             line += f" · {args.focus}"
         elif args.goal in GOAL_SHORT:
             line += f" · {GOAL_SHORT[args.goal]}"
-        m = _re.search(r"\+(\d+)% for your goal compared with what you wear now", text)
+        m = _re.search(r"\+(\d+)% for your goal compared with (?:what you wear now|wearing nothing)", text)
         if m:
             line += f"\n+{m.group(1)}% over your current gear"
         if "No build in range meets every minimum" in text:
@@ -323,6 +328,133 @@ def autocomplete(q: str, kind: str = "") -> list:
             out.append({"name": it.name, "tier": it.tier, "type": it.type, "level": it.level})
     out.sort(key=lambda x: (not x["name"].lower().startswith(q), x["level"]))
     return out[:12]
+
+
+# ============================================================================== result summary and build history
+# The visuals (equipment screen, before/after bars, tree map) are drawn from this, not from the report text.
+# History is kept on this computer only (wynn_data/build_history.json); updates never touch it.
+
+HISTORY_PATH = os.path.join(wh.DATA_DIR, "build_history.json")
+GOAL_LABELS = {"melee": "Average DPS", "spells": "Spell damage per second", "burst": "Burst combo damage",
+               "survival": "Survival score", "balanced": "Damage × survival score", "healing": "Healing per second"}
+
+
+def _clean_desc(text: str) -> str:
+    import re as _re
+    t = _re.sub(r"<\s*/?\s*br\s*/?\s*>", "\n", text or "", flags=_re.I)
+    t = "\n".join(wh.strip_mc(line).strip() for line in t.split("\n"))
+    t = _re.sub(r"<[^>]+>", "", t).replace("&emsp;", " ").replace("&nbsp;", " ")
+    return _re.sub(r"\n{3,}", "\n\n", t).strip()
+
+
+def item_card(it, slot: str):
+    if it is None:
+        return None
+    stats = []
+    for k, v in it.stats.items():
+        if k in wh.SKILLS or not v or k in ("atkTier",):
+            continue
+        stats.append([STAT_NAMES.get(k, k), round(v, 1) if isinstance(v, float) and v != int(v) else int(v)])
+    card = {"slot": slot, "name": it.name, "tier": it.tier, "type": it.type, "level": it.level,
+            "reqs": list(it.reqs), "bonus": list(it.bonus), "stats": stats[:22], "slots": it.slots,
+            "powders": [p.label() for p in (it.powders or [])], "set": it.set,
+            "major_ids": [[m, _clean_desc((game_data().majids.get(m) or {}).get("description", ""))[:240]]
+                          for m in (it.major_ids or [])],
+            "notes": it.source_notes()}
+    if getattr(it, "category", "") == "weapon" or slot == "Weapon":
+        card["atk_spd"] = str(getattr(it, "atk_spd", "") or "").replace("_", " ").lower()
+        card["damage"] = [[wh.ELEM_NAMES[i], round(lo), round(hi)] for i, (lo, hi) in enumerate(it.damage or []) if hi]
+    return card
+
+
+def numbers_of(ev) -> dict:
+    d = ev.get("defense", {})
+    return {"goal": ev.get("main", 0.0),
+            "spell": ev.get("spell_dps", 0) + (ev.get("poison_spell", 0) if ev.get("spell_dps") else 0),
+            "melee": ev.get("melee_dps", 0) + (ev.get("poison_melee", 0) if ev.get("melee_dps") else 0),
+            "ehp": d.get("ehp_enemy") or d.get("ehp_agi", 0.0), "hp": d.get("hp", 0.0),
+            "spd": ev.get("stats", {}).get("spd", 0.0), "mr": ev.get("stats", {}).get("mr", 0.0)}
+
+
+def tree_static(tree) -> dict:
+    nodes = []
+    for n in tree.nodes:
+        toggles = [e["toggle"] for e in n.raw.get("effects", []) if e.get("toggle")]
+        nodes.append({"id": n.id, "name": n.name, "row": n.row, "col": n.col, "cost": n.cost, "arch": n.archetype,
+                      "parents": list(n.parents), "ult": bool(n.ultimate), "desc": _clean_desc(n.raw.get("desc", ""))[:700],
+                      "toggle": toggles[0] if toggles else None})
+    return {"nodes": nodes, "archetypes": list(dict.fromkeys(n.archetype for n in tree.nodes if n.archetype))}
+
+
+def load_history() -> list:
+    try:
+        with open(HISTORY_PATH, encoding="utf-8") as fh:
+            h = json.load(fh)
+        return h if isinstance(h, list) else []
+    except Exception:
+        return []
+
+
+def save_history(h: list):
+    try:
+        os.makedirs(os.path.dirname(HISTORY_PATH), exist_ok=True)
+        tmp = HISTORY_PATH + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as fh:
+            json.dump(h[-60:], fh)
+        os.replace(tmp, HISTORY_PATH)
+    except Exception:
+        pass
+
+
+def build_summary():
+    """The last report as data for the visuals, plus its before/after baseline; saves it to history."""
+    R = wh.LAST_RESULT
+    if not R.get("current"):
+        return None
+    tree, level, b = R["tree"], R["level"], R["build"]
+    focus = R.get("focus")
+    label = focus[1] if R["goal"] == "ability" and focus else GOAL_LABELS.get(R["goal"], "Score")
+
+    def pack(x):
+        ev = x["eval"]
+        ass, _, _ = wh.solve_skill_points(x["armor"], x["weapon"])
+        extra = list(x["extra"])
+        totals = list(ev.get("totals") or [0] * 5)
+        return {"items": [item_card(a, wh.SLOT_LABELS[i]) for i, a in enumerate(x["armor"])] + [item_card(x["weapon"], "Weapon")],
+                "numbers": numbers_of(ev), "owned": sorted(x["owned"]),
+                "order": tree.validate(x["owned"], level)["order"],
+                "sp": {"assigned": list(ass), "extra": extra, "gear": [totals[i] - ass[i] - extra[i] for i in range(5)]}}
+
+    out = {"class": R["cls"], "class_title": wh.CLASS_TITLE[R["cls"]], "level": level, "goal": R["goal"], "label": label,
+           "focus": focus[1] if focus else None, "floors": dict(b.floors), "toggles_on": sorted(b.toggles),
+           "no_gear": R["no_gear"], "current": pack(R["current"]), "best": pack(R["best"]) if R.get("best") else None,
+           "best_link": R.get("best_link"), "tree": tree_static(tree)}
+    hist = load_history()
+    if out["best"]:
+        zero = {k: 0.0 for k in out["best"]["numbers"]}
+        if not R["no_gear"]:
+            st = R.get("start") or R["current"]["eval"]
+            out["baseline"] = {"kind": "gear", "label": "Your gear", "numbers": numbers_of(st),
+                               "items": [x["name"] if x else None for x in out["current"]["items"]]}
+        else:
+            prev = next((h for h in reversed(hist) if h.get("class") == R["cls"] and h.get("goal") == R["goal"]
+                         and h.get("focus") == out["focus"]), None)
+            if prev:
+                out["baseline"] = {"kind": "history", "numbers": prev["numbers"],
+                                   "label": f"Your last {out['class_title']} build (level {prev['level']}, {prev['date']})",
+                                   "items": [x["name"] if x else None for x in prev.get("items", [])]}
+            else:
+                out["baseline"] = {"kind": "zero", "label": "Starting from zero (no gear entered, no earlier build)",
+                                   "numbers": zero, "items": None}
+        entry = {"id": str(int(time.time() * 1000)), "date": time.strftime("%b %d %H:%M"), "class": R["cls"],
+                 "class_title": out["class_title"], "level": level, "goal": R["goal"], "label": label,
+                 "focus": out["focus"], "floors": out["floors"], "toggles_on": out["toggles_on"],
+                 "numbers": out["best"]["numbers"], "items": out["best"]["items"], "sp": out["best"]["sp"],
+                 "owned": out["best"]["owned"], "order": out["best"]["order"], "link": out["best_link"]}
+        hist.append(entry)
+        save_history(hist)
+        out["history_id"] = entry["id"]
+    return out
 
 
 # ============================================================================== Claude
@@ -479,7 +611,7 @@ def chat_turn(user_text: str) -> dict:
     history = STATE["chat"]
     start = len(history)
     history.append({"role": "user", "content": user_text})
-    reports = []
+    reports, summaries = [], []
     try:
         for _ in range(8):
             resp = call_claude(history, model)
@@ -487,7 +619,7 @@ def chat_turn(user_text: str) -> dict:
             history.append({"role": "assistant", "content": content})
             if resp.get("stop_reason") != "tool_use":
                 text = "\n".join(b.get("text", "") for b in content if b.get("type") == "text").strip()
-                return {"reply": text or "(no reply)", "reports": reports, "args": STATE["last_args"]}
+                return {"reply": text or "(no reply)", "reports": reports, "summaries": summaries, "args": STATE["last_args"]}
             results = []
             for block in content:
                 if block.get("type") != "tool_use":
@@ -497,6 +629,7 @@ def chat_turn(user_text: str) -> dict:
                     out = run_report(inp)
                     if out["ok"]:
                         reports.append(out["text"])
+                        summaries.append(out.get("summary"))
                     result = out["text"]
                 elif name == "lookup_item":
                     result = item_summary(inp.get("name", ""))
@@ -546,7 +679,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, {
                 "classes": wh.CLASSES, "goals": wh.GOALS, "buffs": list(wh.BUFFS), "version": d.version,
                 "has_key": bool(api_key()), "model": cfg.get("model") or DEFAULT_MODEL, "models": MODELS,
-                "popup": cfg.get("popup", True), "sound": cfg.get("sound", False), "app_version": updater.current_version().get("version", "?"),
+                "popup": cfg.get("popup", True), "sound": cfg.get("sound", True), "app_version": updater.current_version().get("version", "?"),
                 "auto_update": cfg.get("auto_update", True), "updates_configured": updater.configured(),
                 "key_hint": ("…" + api_key()[-4:]) if api_key() else ""})
         if path == "/api/items":
@@ -562,6 +695,20 @@ class Handler(BaseHTTPRequestHandler):
                 names = sorted({e.get("name") for n in tree.nodes for e in n.raw.get("effects", [])
                                 if e.get("type") == "replace_spell" and e.get("name")})
             return self._send(200, names)
+        if path == "/api/history":
+            return self._send(200, [{**{k: h.get(k) for k in ("id", "date", "class_title", "level", "label", "focus", "numbers", "floors")},
+                                     "items": [[x["name"], x["tier"]] if x else None for x in h.get("items", [])]}
+                                    for h in reversed(load_history())])
+        if path.startswith("/api/history/"):
+            hid = path.rsplit("/", 1)[-1]
+            h = next((x for x in load_history() if x.get("id") == hid), None)
+            if h is None:
+                return self._send(404, {"error": "not found"})
+            try:
+                h = dict(h, tree=tree_static(wh.Tree(game_data(), h["class"])))
+            except Exception:
+                pass
+            return self._send(200, h)
         if path == "/api/live":
             full = "full=1" in self.path
             return self._send(200, ws.live_snapshot(full) if STATE.get("progress") else {"id": None})
@@ -611,6 +758,12 @@ class Handler(BaseHTTPRequestHandler):
                 cfg["auto_update"] = bool(body["auto_update"])
             save_config(cfg)
             return self._send(200, {"ok": True, "has_key": bool(api_key())})
+        if self.path == "/api/history/delete":
+            save_history([h for h in load_history() if h.get("id") != body.get("id")])
+            return self._send(200, {"ok": True})
+        if self.path == "/api/history/clear":
+            save_history([])
+            return self._send(200, {"ok": True})
         if self.path == "/api/update/install":
             if RUN_LOCK.locked():
                 return self._send(200, {"ok": False, "error": "A build is still being worked out. Install the update when it's done."})

@@ -1,4 +1,4 @@
 {
-  "version": "1.0.3",
-  "notes": "The Forge got flashier: slot-machine reels that land with a bounce, sparks in the item's rarity colour when a slot improves, a rolling score with a floating +% on every new best, embers that rise faster the faster the search runs, livelier weapon cards with a hopping crown, a comet along the search steps, and a big BUILD FORGED finish. Optional anvil sounds: turn them on in Settings."
+  "version": "1.1.0",
+  "notes": "New results screen: before/after bars, a Wynncraft-style equipment screen with item tooltips and NEW ribbons, skill point bars, and a map of your ability tree in click order. A showy final assembly: your items fly into a core that detonates and drops them into place. Build history (on your computer only); your next build is compared with your last one. The form starts blank, sounds are on by default, and the chat uses the smartest model (Opus) by default."
 }

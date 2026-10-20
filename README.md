@@ -22,7 +22,7 @@ You get:
 2. **Download** the app from https://github.com/Petereta7/wynn-build-helper (green **Code** button, then **Download ZIP**) and **unzip** it anywhere. You only do this once: after that the app updates itself (it asks first).
 3. **Double-click** `Start Wynn Helper.bat` (Windows) or `Start Wynn Helper.command` (Mac). The first start sets up the app window, which takes about a minute. After that it opens straight away.
    - Mac: if it says the file is from an unidentified developer, right-click it, choose **Open**, then **Open** again.
-4. **To chat with Claude**, open **api_key.txt** in the app folder, paste your Anthropic API key on the empty line and save. Get a key at https://console.anthropic.com/settings/keys. You can also paste it in the app under **Settings**, which saves it to the same file. The key stays on your computer. The API is billed to that account, separately from a Claude subscription. Rough cost with Claude Sonnet: a few cents per build request, about 30 to 45 cents for a 5-message conversation (Haiku is about 20 times cheaper; "New chat" keeps costs down).
+4. **To chat with Claude**, open **api_key.txt** in the app folder, paste your Anthropic API key on the empty line and save. Get a key at https://console.anthropic.com/settings/keys. You can also paste it in the app under **Settings**, which saves it to the same file. The key stays on your computer. The API is billed to that account, separately from a Claude subscription. The chat uses Claude Opus 5.5 (the smartest model) by default; it costs more per message than Claude Sonnet 5.5 or Haiku 5.5, which you can switch to in Settings to keep costs down ("New chat" also helps).
    - No key? The **Fill in** tab gives the same results without chatting.
 
 Then just talk to it, for example:
@@ -37,7 +37,12 @@ While it searches, **the Forge** shows the search live: a reel for each slot loc
 
 Before the first build, Claude asks whether you want any minimum stats kept (like at least 20,000 health or no slower walk speed). Say "no" to skip.
 
-The build appears on the right: the top card shows your numbers now and with the best whole build (damage, effective HP, health and walk speed), with buttons to open either in Wynnbuilder. When a build is ready, a small white box pops up in the top-left corner of your screen, on top of other windows, and disappears by itself, so you can play while it searches. (Games in exclusive fullscreen can cover it; turn the pop-up off in Settings if you don't want it.)
+The build appears on the right. When the search finishes, every item flies into a glowing core that detonates and drops the pieces into place on your equipment screen (click or press Esc to skip). Then you get:
+
+- **Before → after bars** for your goal, main attack and spell damage, effective HP, health, walk speed and mana regen, with your minimums marked on the bars. "Before" is the gear you entered; if you didn't enter any, your last build for the same class and goal; and for your very first build, zero.
+- **Your equipment screen**: every piece in its slot as a Wynncraft-style card (hover or tap for its stats, requirements and powders), "NEW" on pieces that changed, and your skill points split into what you assign and what your gear gives.
+- **The ability tree map**: the real tree with your abilities lit up and numbered in click order, coloured by archetype (hover for what each does).
+- **History**: every build you make is saved on your computer only (the History tab) and kept through updates. Everyone starts with an empty history. When a build is ready, a small white box pops up in the top-left corner of your screen, on top of other windows, and disappears by itself, so you can play while it searches. (Games in exclusive fullscreen can cover it; turn the pop-up off in Settings if you don't want it.)
 
 ## Updates
 

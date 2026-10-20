@@ -2569,7 +2569,8 @@ def describe_floors(floors: dict) -> str:
 
 # ============================================================================== build evaluation
 
-EVAL_STATS = {"n": 0, "tick": None}     # how many builds were scored; tick() is called every 256
+EVAL_STATS = {"n": 0, "tick": None}
+LAST_RESULT: dict = {}      # the last report's builds as objects (the app turns them into its visuals)     # how many builds were scored; tick() is called every 256
 
 
 class Build:
@@ -3904,6 +3905,7 @@ def run(args):
     POISON_MODE = getattr(args, "poison", "wynnbuilder") or "wynnbuilder"
     CLICKS_PER_SECOND = getattr(args, "cps", CLICKS_PER_SECOND) or CLICKS_PER_SECOND
     t0 = time.time()
+    LAST_RESULT.clear()
     data = load_game_data(offline=args.offline)
     link = None
     if getattr(args, "from_link", None):
@@ -3989,6 +3991,7 @@ def run(args):
     if weapon is None:
         weapon = default_weapon(data, cls, level, Build(data, tree, level, goal), armor)
         assumed_weapon = True
+    no_gear = assumed_weapon and all(a is None for a in armor)
     worn = [a for a in armor if a] + [weapon]
 
     # Powders you already have slotted (armor ones change defense/health; weapon ones change damage).
@@ -4170,6 +4173,9 @@ def run(args):
         final = build.evaluate(chosen, armor, weapon, extra)
         final = dict(final, floor_values=floor_values(final["stats"], final["defense"]), floors_met=False)
 
+    LAST_RESULT.update(cls=cls, level=level, goal=goal, focus=focus, tree=tree, build=floor_build, no_gear=no_gear,
+                       current={"armor": list(armor), "weapon": weapon, "owned": frozenset(chosen), "extra": list(extra),
+                                "eval": final})
     req_line = ", ".join(f"{SKILL_NAMES[i]} {assigned[i]}" for i in range(5) if assigned[i])
     print(f"  Needed to wear everything: {sum(assigned)} points ({req_line or 'none'})")
     ex_line = ", ".join(f"{SKILL_NAMES[i]} +{extra[i]}" for i in range(5) if extra[i])
@@ -4421,6 +4427,9 @@ def run(args):
             print(f"  How sure: {k} of {n} search attempts around this weapon, each from a different starting point, "
                   f"ended at this build ({sure}).")
         fin, st = wb["final"], wb["start"]
+        LAST_RESULT["best"] = {"armor": list(wb["armor"]), "weapon": wb["weapon"], "owned": frozenset(wb["owned"]),
+                               "extra": list(wb["extra"]), "eval": fin}
+        LAST_RESULT["start"] = st
         gain = fin["value"] / st["value"] - 1 if st["value"] > 0 else 0
         if floor_build.floors:
             if not fin.get("floors_met", True):
@@ -4440,7 +4449,9 @@ def run(args):
                 print("  Each piece was picked with the others on, so skill points they give each other, set bonuses,")
                 print("  elements, major IDs and the re-planned ability tree all count.")
             else:
-                print(f"  +{gain * 100:.0f}% for your goal compared with what you wear now. Each piece was picked with the")
+                print(f"  +{gain * 100:.0f}% for your goal compared with "
+                      + ("wearing nothing (you didn't enter any gear)" if no_gear else "what you wear now")
+                      + ". Each piece was picked with the")
                 print("  others on, so skill points they give each other, set bonuses, elements, major IDs and the")
                 print("  re-planned ability tree all count.")
             for s_i in range(8):
@@ -4481,6 +4492,7 @@ def run(args):
                                             wb["armor"], w, build.tomes, build.aspects, wb["owned"],
                                             [fin["totals"][i] - wb["extra"][i] for i in range(5)], fin["totals"])
                     print("  Whole build in Wynnbuilder: " + url)
+                    LAST_RESULT["best_link"] = url
                 except Exception:
                     pass
             if any("not a mob drop" in (x.short() if x else "") for x in wb["armor"] + [w]):
