@@ -449,29 +449,35 @@ async function sendChat(text) {
   addMsg("you", text);
   $("#input").value = ""; autosize();
   setBusy(true);
+  chatWatch = true;
+  showWaiting();
   const wait = addMsg("bot", "Thinking", "thinking");
-  const slow = setTimeout(async () => {
-    try { const p = (await fetch("/api/progress").then((r) => r.json())).progress; if (p) showBusy("Claude asked for a full calculation."); } catch (e) {}
-  }, 2500);
   try {
     const r = await api("/api/chat", { text });
-    clearTimeout(slow); wait.remove();
+    wait.remove();
     addMsg("bot", r.reply || "", r.error ? "err" : "");
     if (r.needs_key) $("#keynote").hidden = false;
     if (r.reports && r.reports.length) { await forgeFinish(); showReport(r.reports[r.reports.length - 1]); }
-    else if (F) { forgeStop(); showEmpty(); }
+    else { forgeStop(); if (LAST_REPORT) showReport(LAST_REPORT); else showEmpty(); }   // no new build: bring the last one back
     if (r.args) fillForm(r.args);
   } catch (e) {
-    clearTimeout(slow); wait.remove();
+    wait.remove(); forgeStop();
+    if (LAST_REPORT) showReport(LAST_REPORT); else showEmpty();
     addMsg("bot", "The app stopped responding. Close it and open it again.", "err");
   }
+  chatWatch = false;
   setBusy(false);
 }
-let progTimer = null;
+let progTimer = null, chatWatch = false, LAST_REPORT = null;
 function setBusy(b) {
   busy = b; $("#send").disabled = b; $("#runForm").disabled = b;
   clearInterval(progTimer);
-  if (b) progTimer = setInterval(pollProgress, 1000);
+  if (b) progTimer = setInterval(pollProgress, 500);
+}
+function showWaiting() {
+  forgeStop();
+  $("#main").innerHTML = `<section class="tip forge" id="waiting"><div class="forge-head"><h2>Claude is reading your message…</h2></div>
+    <p class="busy-sub" style="margin:0">If it works out a build, you'll watch the search here.</p></section>`;
 }
 function fmtTime(sec) { sec = Math.max(0, Math.round(sec)); return sec < 60 ? `${sec}s` : `${Math.floor(sec / 60)} min ${sec % 60}s`; }
 async function pollProgress() {
@@ -481,6 +487,7 @@ async function pollProgress() {
     (p.eta != null ? `, about ${fmtTime(p.eta)} left` : "") : "";
   const bp = $("#busyProgress"); if (bp && p) { bp.textContent = line; $("#busyBar").style.width = Math.round((p.fraction || 0) * 100) + "%"; }
   const cp = document.querySelector(".msg.thinking"); if (cp && p) cp.textContent = line;
+  if (p && chatWatch && !document.getElementById("forge")) showBusy("Claude asked for a full calculation.");   // a build started from the chat
 }
 /* ---------- the forge: a live view of the search ---------- */
 const SLOTS = ["Helmet", "Chestplate", "Leggings", "Boots", "Ring 1", "Ring 2", "Bracelet", "Necklace", "Weapon"];
@@ -608,7 +615,7 @@ function autosize() { const t = $("#input"); t.style.height = "auto"; t.style.he
 $("#input").addEventListener("input", autosize);
 $("#input").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendChat($("#input").value); } });
 $("#compose").addEventListener("submit", (e) => { e.preventDefault(); sendChat($("#input").value); });
-$("#newChat").addEventListener("click", async () => { await api("/api/chat/reset", {}); greet(); });
+$("#newChat").addEventListener("click", async () => { if (busy) return; await api("/api/chat/reset", {}); greet(); LAST_REPORT = null; forgeStop(); showEmpty(); });
 
 /* ---------- form ---------- */
 function renderGear() {
@@ -708,6 +715,7 @@ function splitSections(text) {
 const pick = (re, text) => { const m = text.match(re); return m ? m : null; };
 const OPEN = ["Best whole build", "Skill points", "Powders", "Ability tree", "What it does", "Survivability", "Level-by-level plan"];
 function showReport(text) {
+  LAST_REPORT = text;
   const { head, secs } = splitSections(text);
   const title = pick(/·\s*(\w+), level (\d+), goal: (\w+)/, head.join("\n"));
   const goalWords = { ability: "one ability's damage", spells: "spell damage", burst: "burst damage", melee: "highest DPS", survival: "survival", balanced: "damage and survival", healing: "healing" };
