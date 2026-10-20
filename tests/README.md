@@ -1,6 +1,12 @@
 # Tests
 
-Two kinds of checks ship with the helper.
+## Automatic checks on GitHub
+
+Every push to `main` runs these checks on Windows, Mac and Linux (newest Python, plus Python 3.10 on Linux, the oldest the app runs on): the app check, self-test, toggle check and speed check, and the build check for every class. **Only when every check passes** is that version copied to the `stable` branch, which is where the app's update bar looks, and kept as `release/<version>` for switching back. A version that fails never reaches anyone.
+
+Once a week (and on demand: Actions tab → Checks → Run workflow) the helper is also compared side by side with Wynnbuilder's current code, plus three brute-force accuracy cases, to catch game or Wynnbuilder updates that change the numbers.
+
+The setup is in `.github/workflows/checks.yml`. The checks below can all be run by hand too.
 
 ## 1. Quick self-test (Python only)
 
@@ -60,7 +66,23 @@ python3 tests/toggle_check.py
 
 Checks that a buff that's fully on gives the same numbers as Wynnbuilder's on switch, that a buff up part of the time adds exactly that share of its effect, and that "the best Mystic Mask" really is the best of the three.
 
-## 5. Accuracy test (does the search find the true best build?)
+## 5. App check
+
+```
+python3 tests/app_check.py
+```
+
+The things that would break the app for everyone: every Python file compiles, the page's JavaScript has no syntax errors (needs Node.js, skipped without), no real API key is in any file, `version.json` matches `versions.json`, an update and a switch back (run on a copy of the app) never touch the API key, settings, history or saved builds, and the app's server answers the page and its data for every class. Takes a few seconds.
+
+## 6. Build check (every class, never worse)
+
+```
+python3 tests/build_check.py
+```
+
+Runs the whole app, the same way as asking the bot, for one build per class (each with a different goal), plus one with a minimum health and one with an ability buff part of the time. Each build must be wearable (items in level range, the class's weapon, skill points worked out from scratch, a legal ability tree, minimums met), and its score must be at least the one recorded in `tests/golden/build_baseline.json`, so a change can never make builds worse without this failing. After a change that makes builds better, run `python3 tests/build_check.py --record` to save the higher scores (it never lowers one). Takes about 10 minutes.
+
+## 7. Accuracy test (does the search find the true best build?)
 
 ```
 python3 tests/accuracy_test.py 100 5

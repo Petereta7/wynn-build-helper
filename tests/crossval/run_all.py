@@ -118,6 +118,7 @@ def main():
             json.dump({"wynnbuilder_data": ver}, fh)
         print("tests/golden updated.")
     print("All identical." if all_ok else "Some checks differ; see above.")
+    sys.exit(0 if all_ok else 1)
 
 
 if __name__ == "__main__":

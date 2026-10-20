@@ -1,0 +1,107 @@
+# Automatic checks. Every push to main runs the tests on Windows, Mac and Linux. Only when every check passes is
+# that version published to the "stable" branch, which is where the app's updater looks, and kept as
+# release/<version> for switching back. A version that fails never reaches anyone's update bar.
+#
+# Once a week (and on demand from the Actions tab) the helper is also compared with Wynnbuilder's current code,
+# to catch game or Wynnbuilder updates that change the numbers.
+
+name: Checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 14 * * 1"        # Mondays
+
+permissions:
+  contents: read
+
+concurrency:
+  group: checks-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
+
+env:
+  PYTHONUTF8: "1"
+  WYNN_HELPER_NO_POPUP: "1"
+
+jobs:
+  quick:
+    name: Tests (${{ matrix.os }}, Python ${{ matrix.python }})
+    if: github.event_name != 'schedule'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+        python: ["3.14"]
+        include:
+          - os: ubuntu-latest
+            python: "3.10"           # the oldest Python the app runs on
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: App, updater and release files
+        run: python tests/app_check.py
+      - name: Self-test (matches Wynnbuilder)
+        run: python tests/self_test.py
+      - name: Ability buffs, every class
+        run: python tests/toggle_check.py
+      - name: Fast skill points = reference
+        run: python tests/speed_check.py
+
+  builds:
+    name: Builds for every class (legal, never worse)
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - name: Whole app, one build per class
+        run: python tests/build_check.py
+
+  publish:
+    name: Publish to the update bar
+    needs: [quick, builds]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Move "stable" to this version and keep release/<version>
+        run: |
+          ver=$(python3 -c "import json; print(json.load(open('version.json'))['version'])")
+          git push --force origin "HEAD:refs/heads/stable"
+          git push --force origin "HEAD:refs/heads/release/${ver}"
+          echo "Published version ${ver} ($(git rev-parse --short HEAD)) to the update bar." >> "$GITHUB_STEP_SUMMARY"
+
+  wynnbuilder:
+    name: Same numbers as Wynnbuilder's current code
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Side-by-side with Wynnbuilder
+        run: python tests/crossval/run_all.py
+      - name: Search finds the true best build (brute force, 3 cases)
+        run: python tests/accuracy_test.py 1 3
