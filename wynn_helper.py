@@ -1049,22 +1049,26 @@ _SP_CACHE: dict = {}
 
 
 _SIG_IDS: dict = {}
+_SIG_EPOCH = os.urandom(8)      # this process's numbering; items copied in from another process carry theirs
 
 
 def _sp_sig(it):
     """A small number standing for an item's skill point signature (requirements, bonuses, crafted), worked
-    out once per item. The solver reads nothing else, so items with equal signatures share answers."""
+    out once per item. The solver reads nothing else, so items with equal signatures share answers.
+    The number is only trusted in the process that made it: items sent between the search's worker
+    processes carry the sender's numbering, which means something else here, so it is worked out again."""
     s = it.__dict__.get("_spsig") if hasattr(it, "__dict__") else None
-    if s is None:
-        sig = (tuple(it.reqs), tuple(it.bonus), bool(getattr(it, "crafted", False)))
-        s = _SIG_IDS.get(sig)
-        if s is None:
-            s = _SIG_IDS[sig] = len(_SIG_IDS)
-        try:
-            it._spsig = s
-        except Exception:
-            pass
-    return s
+    if s is not None and s[0] is _SIG_EPOCH:
+        return s[1]
+    sig = (tuple(it.reqs), tuple(it.bonus), bool(getattr(it, "crafted", False)))
+    n = _SIG_IDS.get(sig)
+    if n is None:
+        n = _SIG_IDS[sig] = len(_SIG_IDS)
+    try:
+        it._spsig = (_SIG_EPOCH, n)
+    except Exception:
+        pass
+    return n
 
 
 def _sp_key(armor, weapon):

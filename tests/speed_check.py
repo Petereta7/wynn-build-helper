@@ -59,7 +59,28 @@ def main():
             if wh._wearable(armor, wp, lvl) != ok_ref:
                 wear_diff += 1
                 print("WEARABLE DIFFERS:", cls, lvl, [a.name for a in arm], wp.name)
+    # Items sent from another process (the search's workers) carry that process's item numbers. They must
+    # never be mistaken for this process's numbers: pretend to be a new process and check again.
+    import pickle
+    cross = 0
+    sample = [it for it in d.items.values() if it.category != "weapon"][:400]
+    for it in sample:
+        wh._sp_sig(it)
+    sent = pickle.loads(pickle.dumps(sample))
+    wh._SIG_IDS.clear(); wh._SP_CACHE.clear(); wh._WEAR_CACHE.clear()
+    wh._SIG_EPOCH = os.urandom(8)
+    wpn = d.find_item("Void Catalyst")[0]
+    import copy
+    for it in [it for it in d.items.values() if it.category != "weapon"][-300:]:   # this "process" numbers and
+        local = copy.copy(it)                                                     # solves other items first
+        local.__dict__.pop("_spsig", None)
+        wh.solve_skill_points([local], wpn)
+    for it in sent:
+        if wh.solve_skill_points([it], wpn)[0] != list(wh._solve_skill_points_reference([it], wpn)[0]):
+            cross += 1
     print(f"skill points     {n} gear sets, {diff} differences (reference {t_ref:.1f}s, fast {t_fast:.1f}s)")
+    print(f"between processes {len(sent)} items sent from another process, {cross} differences")
+    diff += cross
     print(f"can be worn      {n} gear sets, {wear_diff} differences")
     sys.exit(1 if diff or wear_diff else 0)
 

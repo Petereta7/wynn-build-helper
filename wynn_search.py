@@ -548,6 +548,25 @@ def _report(frac, msg):
             pass
 
 
+def _wearable_fresh(build, armor, weapon) -> bool:
+    """Can this gear be worn at this level? Worked out from scratch (no remembered answers)."""
+    assigned, _, _ = wh._solve_skill_points_uncached([a for a in armor if a is not None], weapon)
+    return (sum(assigned) <= wh.skill_points_available(build.level)
+            and max(assigned) <= wh.MAX_ASSIGNED_PER_SKILL)
+
+
+def _legal_points(build, armor, weapon, extra):
+    """Spare points trimmed (if ever needed) so that what the gear needs plus the spare points fits the level
+    and no skill goes over the cap, worked out from scratch. Returns (extra, points left over)."""
+    assigned, _, _ = wh._solve_skill_points_uncached([a for a in armor if a is not None], weapon)
+    room = wh.skill_points_available(build.level) - sum(assigned)
+    ex = [max(0, min(int(x), wh.MAX_ASSIGNED_PER_SKILL - assigned[i])) for i, x in enumerate(extra)]
+    while sum(ex) > max(0, room):
+        i = max(range(5), key=lambda k: ex[k])
+        ex[i] -= 1
+    return ex, room - sum(ex)
+
+
 def _scaled_extra(extra, armor, weapon, level):
     """Keep the same split of free points when gear changes how many are free."""
     assigned, _, _ = wh.solve_skill_points(armor, weapon)
@@ -1103,6 +1122,7 @@ def search_best_build(build, owned, armor0, weapon0, base_weapon0, keep=(), ap_b
         if not STOP["flag"]:
             _v, a, e, wp = _refined_sweep(build, own, a, wp, pools, e, wpn=wpn)
         e, free = refine_points(build, own, a, wp, e, fast=False)
+        e, free = _legal_points(build, a, wp, e)
         fin = build.evaluate(own, a, wp, e)
         return (fin["value"], a, wp, wpn, own, e, free, fin)
 
@@ -1211,6 +1231,14 @@ def search_best_build(build, owned, armor0, weapon0, base_weapon0, keep=(), ap_b
             agree, n_attempts = agreement(results + [r[:5] for r in extra_results])
     _PHASE[:] = [0.0, 1.0]
     LIVE["phase"] = 5
+    # Last check, worked out from scratch: never hand back gear the level can't wear.
+    legal = [f for f in finals if _wearable_fresh(build, f[1], f[2])]
+    if legal:
+        finals = legal
+    else:
+        e0, free0 = _legal_points(build, armor0, weapon0, [0] * 5)
+        fin0 = build.evaluate(cur_own, armor0, weapon0, e0)
+        finals = [(fin0["value"], list(armor0), weapon0, base_weapon0 or weapon0, cur_own, e0, free0, fin0)]
     if pools_override is None:
         remember(build, include_never, min_level, finals)
     v, a, wp, wpn, own, e, free, fin = finals[0]
