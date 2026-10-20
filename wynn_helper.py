@@ -1786,7 +1786,12 @@ class Tree:
         Returns (spells, stats, damage multipliers, deferred stat-input scalings, interactives).
         """
         sliders = sliders or {}
-        key = (frozenset(owned), tuple(k for k, _ in extras), frozenset(toggles),
+        # toggles: names that are on, or {name: share of the time on (0-1)}. A buff that's up part of the time
+        # counts with its bonus scaled by that share: damage, attack speed and walk speed grow in a straight line
+        # with these bonuses, so this is the average over a fight.
+        tog = ({k: float(v) for k, v in toggles.items() if v} if isinstance(toggles, dict)
+               else {k: 1.0 for k in toggles})
+        key = (frozenset(owned), tuple(k for k, _ in extras), tuple(sorted(tog.items())),
                tuple(sorted(sliders.items())), slider_mode)
         if key in self._spell_cache:
             return self._spell_cache[key]
@@ -1902,10 +1907,16 @@ class Tree:
             for ab in merged.values():
                 for eff in ab["effects"]:
                     if eff["type"] == "raw_stat":
-                        if eff.get("toggle") and eff["toggle"] not in toggles:
-                            continue
+                        share = 1.0
+                        if eff.get("toggle"):
+                            share = tog.get(eff["toggle"], 0.0)
+                            if share <= 0:
+                                continue
                         for b in eff.get("bonuses", []):
-                            apply(b, translate(b.get("value", 0)), phase)
+                            v = translate(b.get("value", 0))
+                            if share != 1.0 and isinstance(v, (int, float)):
+                                v = 1 + (v - 1) * share if b.get("mult") else v * share
+                            apply(b, v, phase)
                     elif eff["type"] == "stat_scaling" and "output" in eff:
                         if eff.get("slider"):
                             name = eff.get("slider_name")
@@ -2451,14 +2462,74 @@ def score_build(results: dict, stats: dict, weapon, goal: str, ult_spells=frozen
 # their condition is part of a normal rotation for the build that takes the ability (the report says so, and
 # --toggles-off or --no-auto-toggles turns them off). Toggles whose condition is hard to keep up (next hit
 # after 4s, hits from behind, ultimates) stay off; the report shows what each would add.
-AUTO_TOGGLES = {
-    "Activate Bullwhip": "you keep enemies Whipped by hitting them with Uproot or Haunting Memory at least every 10s",
+MASKS = ("Mask of the Lunatic", "Mask of the Fanatic", "Mask of the Heretic")
+# Toggles counted by default. Only buffs whose condition is part of normal play and whose timing is known:
+#   "on": a standing state you keep up (Bullwhip: hit with Uproot or Haunting Memory at least every 10s)
+#   "uptime": counted for the share of time it can be up, from its duration and cooldown in the game data
+#   "ult": an ultimate's buff, counted for the same share of time as ultimate damage (ULT_DPS_UPTIME)
+# Buffs that depend on a resource whose timing the data doesn't give (Holy Power, Tricks, Unstable, Blood
+# Pool, Corrupted, "next hit" effects) stay off; the report shows what each would add.
+TOGGLE_RULES = {
+    "Activate Bullwhip": ("on", "you keep enemies Whipped by hitting them with Uproot or Haunting Memory at least every 10s"),
+    "Coursing Restraints": ("uptime", "Shocking Bomb's shock lasts {dur:g}s and can be reapplied every {cd:g}s"),
+    "Activate Angelic Ascension": ("ult", "ultimate, active about {pct:.0f}% of the time"),
+    "Activate Gravitational Collapse": ("ult", "ultimate, active about {pct:.0f}% of the time"),
+    "Awakened": ("ult", "ultimate, active about {pct:.0f}% of the time"),
+}
+AUTO_TOGGLES = {k: v[1] for k, v in TOGGLE_RULES.items()}      # (kept for older callers)
+
+
+def _owns(tree, owned, name) -> bool:
+    n = next((x for x in tree.nodes if x.name == name), None)
+    return n is not None and n.id in owned
+
+
+# A default buff that can't be kept up with some trees: (condition, why it's off when the condition fails)
+TOGGLE_NEEDS = {
+    "Activate Bullwhip": (lambda tree, owned: not _owns(tree, owned, "Mystic Masks") or _owns(tree, owned, "Haunting Memory"),
+                          "with Mystic Masks, Uproot switches masks instead of hitting, so Bullwhip needs Haunting Memory"),
 }
 
 
-def auto_toggles_for(tree) -> list:
-    names = {e.get("toggle") for n in tree.nodes for e in n.raw.get("effects", []) if e.get("toggle")}
-    return [t for t in AUTO_TOGGLES if t in names]
+def auto_toggles_for(tree) -> dict:
+    """{toggle name: (share of the time on, why)} counted by default for this class's tree."""
+    out = {}
+    for n in tree.nodes:
+        props = n.raw.get("properties") or {}
+        for e in n.raw.get("effects", []):
+            t = e.get("toggle")
+            if not t or t not in TOGGLE_RULES or t in out:
+                continue
+            mode, why = TOGGLE_RULES[t]
+            if mode == "on":
+                out[t] = (1.0, why)
+            elif mode == "uptime":
+                dur, cd = float(props.get("duration") or 0), float(props.get("cooldown") or 0)
+                if dur > 0 and cd > 0:
+                    out[t] = (min(1.0, dur / cd), why.format(dur=dur, cd=cd))
+            elif mode == "ult":
+                out[t] = (ULT_DPS_UPTIME, why.format(pct=ULT_DPS_UPTIME * 100))
+    return out
+
+
+def inter_names(tree, owned) -> set:
+    """Toggle names the abilities in this tree have."""
+    names = set()
+    for i in owned:
+        n = tree.by_id.get(i)
+        if n is not None:
+            names |= {e["toggle"] for e in n.raw.get("effects", []) if e.get("toggle")}
+    return names
+
+
+def parse_toggle_arg(tree, text: str):
+    """"Contamination=70%, Activate Luster Purge" -> {resolved name: share} (1.0 when no share is given)."""
+    out = {}
+    for part in [p.strip() for p in (text or "").split(",") if p.strip()]:
+        m = re.match(r"^(.*?)\s*(?:=|:|\s)\s*(\d+(?:\.\d+)?)\s*%\s*$", part)
+        name, share = (m.group(1), float(m.group(2)) / 100) if m else (part, 1.0)
+        out[resolve_toggles(tree, [name])[0]] = max(0.0, min(1.0, share))
+    return out
 
 
 def resolve_toggles(tree, names) -> list:
@@ -2582,14 +2653,18 @@ class Build:
 
     def __init__(self, data: GameData, tree: Tree, level: int, goal: str, tomes=(), aspects=(),
                  toggles=frozenset(), sliders=None, slider_mode="none", buffs=(), raid_buffs=(), enemy=None,
-                 focus=None, floors=None):
+                 focus=None, floors=None, toggle_share=None, auto_masks=False, toggles_off=(), auto_toggles=()):
         self.data, self.tree, self.level, self.goal = data, tree, level, goal
+        self.toggle_share = {k: float(v) for k, v in (toggle_share or {}).items() if 0 < float(v) < 1}
+        self.auto_masks = bool(auto_masks)  # wear whichever Mystic Mask helps the goal most
         self.floors = clean_floors(floors)  # minimum stats every build must meet, e.g. {"hp": 20000, "spd": 0}
         self.focus = focus                 # (spell slot, name, node id) for the "ability" goal
         self.enemy = dict(enemy or {})     # element index -> damage per enemy hit (--enemy)
         self.tomes = list(tomes)          # Item objects
         self.aspects = list(aspects)      # (aspect dict, tier 1-4)
         self.toggles = frozenset(toggles)
+        self.toggles_off = frozenset(toggles_off)   # toggles you turned off (--toggles-off)
+        self.auto_toggles = frozenset(auto_toggles)  # the ones on because of the defaults (not because you said so)
         self.sliders = dict(sliders or {})
         self.slider_mode = slider_mode
         self.buffs = tuple(buffs)          # party/potion buffs, names from BUFFS
@@ -2599,7 +2674,8 @@ class Build:
         fields = dict(level=self.level, goal=self.goal, tomes=self.tomes, aspects=self.aspects,
                       toggles=self.toggles, sliders=self.sliders, slider_mode=self.slider_mode,
                       buffs=self.buffs, raid_buffs=self.raid_buffs, enemy=self.enemy, focus=self.focus,
-                      floors=self.floors)
+                      floors=self.floors, toggle_share=self.toggle_share, auto_masks=self.auto_masks,
+                      toggles_off=self.toggles_off, auto_toggles=self.auto_toggles)
         fields.update(kw)
         return Build(self.data, self.tree, **fields)
 
@@ -2655,7 +2731,49 @@ class Build:
         cache[key] = {"value": res["value"], "main": res["main"]} if fast else res
         return dict(res) if not fast else res
 
+    def toggle_map(self, owned=None) -> dict:
+        """{toggle name: share of the time on}: the ones you (or the defaults) turned on, and partial ones.
+        With `owned`, default buffs this tree can't keep up are left out (see TOGGLE_NEEDS)."""
+        m = {t: 1.0 for t in self.toggles}
+        m.update(self.toggle_share)
+        if owned is not None:
+            for t, (ok, _why) in TOGGLE_NEEDS.items():
+                if t in m and t in self.auto_toggles and not ok(self.tree, owned):
+                    del m[t]
+        return m
+
+    def mask_options(self, owned) -> list:
+        """The Mystic Masks to try, if this tree has them and you didn't pick one yourself."""
+        if not self.auto_masks:
+            return []
+        node = next((n for n in self.tree.nodes if n.name == "Mystic Masks"), None)
+        if node is None or node.id not in owned:
+            return []
+        tm = self.toggle_map(owned)
+        if any(m in tm for m in MASKS):
+            return []
+        return list(MASKS)
+
     def _evaluate(self, owned, armor, weapon, extra_points=None, fast=False):
+        masks = self.mask_options(owned)
+        if not masks:
+            return self._evaluate_with(owned, armor, weapon, extra_points, fast, self.toggle_map(owned))
+        best = None
+        transmute = next((n for n in self.tree.nodes if n.name == "Transmute"), None)
+        for m in masks:          # you always wear one mask: use the one that helps your goal most
+            tm = dict(self.toggle_map(owned))
+            tm[m] = 1.0
+            if m == "Mask of the Lunatic" and transmute is not None and transmute.id in owned \
+                    and "Lunatic Transmute" not in self.toggles_off:
+                tm["Lunatic Transmute"] = 1.0
+            r = self._evaluate_with(owned, armor, weapon, extra_points, fast, tm)
+            if best is None or r["value"] > best["value"]:
+                best, best_mask = r, m
+        best = dict(best)
+        best["mask"] = best_mask
+        return best
+
+    def _evaluate_with(self, owned, armor, weapon, extra_points, fast, tog):
         assigned, totals, order = solve_skill_points(armor, weapon)
         extra = extra_points or [0] * 5
         sb = set_bonuses(armor, weapon, self.data)
@@ -2665,7 +2783,7 @@ class Build:
         totals = [totals[i] + extra[i] + int(sb.get(SKILLS[i], 0)) + tome_sp[i] + int(rb_stats.get(SKILLS[i], 0))
                   for i in range(5)]
         spells, tstats, dmult, deferred, _inter = self.tree.spells(
-            owned, self.extra_abilities(armor, weapon, rb_majids), self.toggles, self.sliders, self.slider_mode)
+            owned, self.extra_abilities(armor, weapon, rb_majids), tog, self.sliders, self.slider_mode)
         stats = build_stats(armor, weapon, totals, tstats, self.data, self.tomes, level=self.level)
         for k, v in rb_stats.items():
             if k not in SKILLS:
@@ -4026,16 +4144,20 @@ def run(args):
     if len(owned_aspects) > aspect_slots(level):
         print(f"  Only {aspect_slots(level)} aspect slots at level {level}; using the first {aspect_slots(level)}.")
         owned_aspects = owned_aspects[:aspect_slots(level)]
-    toggles = resolve_toggles(tree, [t.strip() for t in (args.toggles or "").split(",") if t.strip()])
+    user_toggles = parse_toggle_arg(tree, args.toggles or "")            # {name: share}, what you said
     toggles_off = set(resolve_toggles(tree, [t.strip() for t in (getattr(args, "toggles_off", "") or "").split(",")
                                              if t.strip()]))
-    auto_on = []
-    if not getattr(args, "no_auto_toggles", False):
-        for tname in auto_toggles_for(tree):
-            if tname not in toggles and tname not in toggles_off:
-                toggles.append(tname)
-                auto_on.append(tname)
-    toggles = [t for t in toggles if t not in toggles_off]
+    no_auto = getattr(args, "no_auto_toggles", False)
+    share = dict(user_toggles)
+    auto_on = {}                                                          # name -> (share, why) assumed by default
+    if not no_auto:
+        for tname, (frac, why) in auto_toggles_for(tree).items():
+            if tname not in share and tname not in toggles_off:
+                share[tname] = frac
+                auto_on[tname] = (frac, why)
+    share = {k: v for k, v in share.items() if k not in toggles_off and v > 0}
+    toggles = [k for k, v in share.items() if v >= 1]
+    toggle_share = {k: v for k, v in share.items() if v < 1}
     sliders = {}
     for part in [x for x in (args.sliders or "").split(",") if "=" in x]:
         k, v = part.split("=", 1)
@@ -4091,7 +4213,9 @@ def run(args):
         print(f"  Minimums every suggested build must keep: {describe_floors(floors)}.")
     build = Build(data, tree, level, goal, tomes=owned_tomes, aspects=owned_aspects, toggles=toggles,
                   sliders=sliders, slider_mode=args.slider_mode, buffs=buffs, raid_buffs=raid_buffs, enemy=enemy,
-                  focus=focus, floors=floors)
+                  focus=focus, floors=floors, toggle_share=toggle_share,
+                  auto_masks=not no_auto and not (set(MASKS) & set(toggles_off)), toggles_off=toggles_off,
+                  auto_toggles=set(auto_on))
     floor_build = build                   # the whole-build search always keeps the minimums
     try:                                   # item names for the app's live view while the tree is planned
         import wynn_search as _ws
@@ -4270,19 +4394,40 @@ def run(args):
             src = "you set" if name in build.sliders else {"half": "half of max", "none": "default", "max": "max"}[build.slider_mode]
             print(f"  Slider  {name:<32} {val:g} of {mx:g}  ({src})")
         base_v = final["value"]
+        tm = build.toggle_map(chosen)
+        mask = final.get("mask")
         for name in inter["toggles"]:
-            note = ""
-            if name in auto_on:
-                note = f"  (assumed on: {AUTO_TOGGLES[name]}; --toggles-off \"{name}\" if you don't)"
-            elif name not in build.toggles and base_v > 0:
-                try:     # what turning it on would add, so you can decide
-                    on_v = build.copy_with(toggles=build.toggles | {name}).evaluate(chosen, armor, weapon, extra)["value"]
-                    if on_v > base_v * 1.001:
-                        note = f"  (on: +{(on_v / base_v - 1) * 100:.0f}% for your goal, if you can keep it up)"
-                except Exception:
-                    pass
-            print(f"  Toggle  {name:<32} {'ON' if name in build.toggles else 'off'}{note}")
-        print('  Set your typical stacks with --sliders "Name=value" and turn on toggles with --toggles "Name".')
+            f = tm.get(name, 0.0)
+            need = TOGGLE_NEEDS.get(name)
+            if name in auto_on and need and not need[0](tree, chosen):
+                print(f"  Toggle  {name:<32} off  ({need[1]})")
+                continue
+            if name in MASKS and mask:
+                status = "ON" if name == mask else "off"
+                note = "  (the mask you'd wear: best for your goal)" if name == mask else ""
+            elif name == "Lunatic Transmute" and mask == "Mask of the Lunatic" and name not in build.toggles_off:
+                status, note = "ON", "  (comes with Mask of the Lunatic)"
+            elif f >= 1:
+                status = "ON"
+                note = (f"  (assumed: {auto_on[name][1]}; --toggles-off \"{name}\" if you don't)" if name in auto_on
+                        else "  (you turned it on)")
+            elif f > 0:
+                status = f"{f * 100:.0f}% of the time"
+                note = (f"  (assumed: {auto_on[name][1]})" if name in auto_on else "  (you set this)")
+            else:
+                status, note = "off", ""
+                if base_v > 0:
+                    try:     # what keeping it up would add, so you can decide
+                        on_v = build.copy_with(toggles=build.toggles | {name}).evaluate(chosen, armor, weapon, extra)["value"]
+                        if on_v > base_v * 1.001:
+                            note = (f"  (if you keep it up all the time: +{(on_v / base_v - 1) * 100:.0f}% for your goal; "
+                                    "half the time adds about half that)")
+                    except Exception:
+                        pass
+            print(f"  Toggle  {name:<32} {status}{note}")
+        print('  Turn a toggle on with --toggles "Name" (or "Name=60%" if it\'s up part of the time), off with')
+        print('  --toggles-off "Name". In the chat, just say e.g. "I keep Contamination up about 70% of the time".')
+        print("  Only buffs whose timing is known are counted by default; the rest are off so numbers aren't inflated.")
         print("  Toggles you turn on also count when the tree and whole build are chosen.")
         print("  Stacks can change the best tree a lot, so it's worth entering what you usually reach.")
 
@@ -4497,6 +4642,18 @@ def run(args):
                                             [fin["totals"][i] - wb["extra"][i] for i in range(5)], fin["totals"])
                     print("  Whole build in Wynnbuilder: " + url)
                     LAST_RESULT["best_link"] = url
+                    tick = sorted(set(floor_build.toggle_map(wb["owned"])) - set(floor_build.toggle_share)
+                                  | ({fin["mask"]} if fin.get("mask") else set()))
+                    if fin.get("mask") == "Mask of the Lunatic" and "Lunatic Transmute" in inter_names(tree, wb["owned"]) \
+                            and "Lunatic Transmute" not in floor_build.toggles_off:
+                        tick.append("Lunatic Transmute")
+                    part = {k: v for k, v in floor_build.toggle_share.items() if k in inter_names(tree, wb["owned"])}
+                    tick = [t for t in tick if t in inter_names(tree, wb["owned"])]
+                    if tick or part:
+                        print("  Wynnbuilder starts with every toggle off. " +
+                              (f"To see the same numbers there, tick: {', '.join(tick)}. " if tick else "") +
+                              (f"It can't show buffs that are up part of the time ({', '.join(f'{k} {v * 100:.0f}%' for k, v in part.items())}), "
+                               "so its numbers will be a little lower." if part else ""))
                 except Exception:
                     pass
             if any("not a mob drop" in (x.short() if x else "") for x in wb["armor"] + [w]):

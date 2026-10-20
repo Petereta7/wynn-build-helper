@@ -384,6 +384,7 @@ label.deep input[type=checkbox] { width: auto; flex: 0 0 auto; margin-top: 3px; 
 .tnode:hover, .tnode:focus-visible { transform: scale(1.25); opacity: 1; z-index: 2; }
 .tnode .tg { position: absolute; right: -7px; top: -7px; width: 13px; height: 13px; border-radius: 50%; background: #20223a; border: 1px solid var(--faint); font-size: 8px; color: var(--muted); display: grid; place-items: center; }
 .tnode .tg.on { background: var(--set); border-color: var(--set); color: #08200d; box-shadow: 0 0 6px var(--set); }
+.tnode .tg.part { background: #ffd36b; border-color: #ffd36b; color: #3a2400; }
 @keyframes nodein { from { transform: scale(.3); opacity: 0; } }
 #tip { position: fixed; z-index: 50; max-width: 340px; pointer-events: none; padding: 10px 12px; border-radius: 6px; font-size: 13px; line-height: 1.45;
   background: rgba(16, 0, 28, .96); border: 2px solid #28007a; box-shadow: 0 0 0 1px #12002b, 0 10px 30px rgba(0, 0, 0, .55); color: #e8e8e8; display: none; white-space: normal; }
@@ -1291,25 +1292,31 @@ function treeHTML(T, order, togglesOn, tabs) {
   const nodeHTML = nodes.map((n) => {
     const k = idx[n.id];
     return `<div class="tnode${k ? " on" : ""}${n.ult ? " ult" : ""}" tabindex="0" data-tipk="${n.id}" style="left:${cx(n)}px;top:${cy(n)}px;--ac:${archCol(n.arch)};${k ? `animation-delay:${Math.min(k * 25, 900)}ms` : ""}">${k || ""}
-      ${n.toggle ? `<span class="tg${k && togOn.has(n.toggle) ? " on" : ""}" title="toggle">⏻</span>` : ""}</div>`;
+      ${n.toggle ? `<span class="tg${k && togOn.has(n.toggle) ? " on" : k && TOGGLE_SHARE[n.toggle] ? " part" : ""}" title="toggle">⏻</span>` : ""}</div>`;
   }).join("");
   const legend = T.archetypes.map((a) => `<span><i style="background:${archCol(a)}"></i>${esc(a)}</span>`).join("") +
-    '<span><i style="background:#8a90b8"></i>no archetype</span><span>numbers = click order</span><span><span class="tg on" style="position:static;display:inline-grid;width:13px;height:13px;border-radius:50%;font-size:8px;place-items:center">⏻</span> toggle on</span>';
+    '<span><i style="background:#8a90b8"></i>no archetype</span><span>numbers = click order</span><span><span class="tg on" style="position:static;display:inline-grid;width:13px;height:13px;border-radius:50%;font-size:8px;place-items:center">⏻</span> toggle counted</span><span><span class="tg part" style="position:static;display:inline-grid;width:13px;height:13px;border-radius:50%;font-size:8px;place-items:center">⏻</span> counted part of the time</span>';
   return `<section class="tip panel" id="treePanel"><h3>Ability tree <small>${order.length} abilities, in click order</small>${tabs || ""}</h3>
     <div class="tlegend">${legend}</div>
     <div class="tmap-wrap"><div class="tmap" style="width:${W}px;height:${H}px"><svg width="${W}" height="${H}" aria-hidden="true">${lines.join("")}</svg>${nodeHTML}</div></div></section>`;
 }
+let TOGGLE_SHARE = {};
 function nodeTip(T, order, togglesOn, id) {
   const n = T.nodes.find((x) => String(x.id) === String(id)); if (!n) return "";
   const k = order.indexOf(n.id) + 1;
   let h = `<div class="tn" style="color:${n.ult ? "#ffaa00" : "#55ffff"}">${esc(n.name)}</div>`;
   h += `<div class="tl">${n.cost} AP${n.arch ? ` · ${esc(n.arch)}` : ""}${n.ult ? " · ultimate, level 90+" : ""}</div>`;
   h += k ? `<div class="ok">Click #${k}</div>` : '<div class="gray">Not in this tree</div>';
-  if (n.toggle) h += `<div class="${k && (togglesOn || []).includes(n.toggle) ? "ok" : "gray"}">Toggle "${esc(n.toggle)}": ${k && (togglesOn || []).includes(n.toggle) ? "counted as on" : "off"}</div>`;
+  if (n.toggle) {
+    const sh = TOGGLE_SHARE[n.toggle];
+    const st = !k ? "off" : (togglesOn || []).includes(n.toggle) ? "counted as on" : sh ? `counted ${Math.round(sh * 100)}% of the time` : "off (not counted)";
+    h += `<div class="${k && st !== "off" && !st.startsWith("off") ? "ok" : "gray"}">Toggle "${esc(n.toggle)}": ${st}</div>`;
+  }
   if (n.desc) h += `<hr><div class="desc">${esc(n.desc)}</div>`;
   return h;
 }
 function mountTree(S, which) {
+  TOGGLE_SHARE = S.toggle_share || {};
   const pack = which === "current" ? S.current : (S.best || S.current);
   const both = S.best && S.current && JSON.stringify(S.best.order) !== JSON.stringify(S.current.order);
   const tabs = both ? `<span class="ttabs"><button type="button" data-tree="best" aria-pressed="${which !== "current"}">Best build's tree</button><button type="button" data-tree="current" aria-pressed="${which === "current"}">For your current gear</button></span>` : "";
@@ -1630,7 +1637,7 @@ async function showSaved(id) {
     <div class="actions">${h.link ? `<a class="btn" href="${esc(h.link)}" target="_blank" rel="noopener">Open in Wynnbuilder</a><button class="btn-quiet" data-copy="${esc(h.link)}">Copy link</button>` : ""}
       <button class="btn-quiet" id="savedBack" type="button">Back to the latest build</button></div></section>` +
     equipHTML({ items: h.items, sp: h.sp }, null, "Gear", "Hover any piece for its stats.") +
-    (h.tree ? treeHTML(h.tree, h.order || [], h.toggles_on || [], "") : "");
+    (h.tree ? (TOGGLE_SHARE = h.toggle_share || {}, treeHTML(h.tree, h.order || [], h.toggles_on || [], "")) : "");
   $("#main").scrollTop = 0;
   bindTips($("#equipPanel"), (i) => itemTip(h.items[+i]));
   if (h.tree) bindTips($("#treePanel"), (nid) => nodeTip(h.tree, h.order || [], h.toggles_on || [], nid));

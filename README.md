@@ -52,6 +52,17 @@ From a terminal: `python updater.py` checks and asks before installing.
 
 **Going back to an earlier version:** if an update causes problems, open **Settings → Versions**, pick an earlier version and click **Switch to this version**. The app restarts on that version. Your API key, settings, history and saved builds stay as they are. The update bar always offers the newest version whenever you're on an older one (including after switching back), so coming back is one click. Versions you've used are kept on your computer, so switching back to them works offline; others are downloaded from this app's GitHub page. From a terminal: `python updater.py 1.1.0`.
 
+## Ability buffs (toggles)
+
+Many abilities only give their bonus while a toggle is on (Wynnbuilder leaves them all off). To keep numbers honest, the helper only counts the ones whose timing is known:
+
+- **Bullwhip**: on (summoners keep enemies Whipped with Uproot or Haunting Memory).
+- **Mystic Masks**: you always wear one, so the helper uses the mask that helps your goal most (and Lunatic Transmute with the Lunatic mask).
+- **Coursing Restraints**: counted for the share of time its duration and cooldown allow (4s every 12s, so 33%).
+- **Ultimate buffs** (Angelic Ascension, Gravitational Collapse, Awakened): counted for the same share of time as ultimate damage (25%).
+
+Everything that depends on a resource whose timing the game data doesn't give (Holy Power, Tricks, Unstable, Blood Pool, Corrupted, "next hit" effects) stays off. The report lists every toggle in your tree, shows what each off one would add if you keep it up, and tells you which to tick in Wynnbuilder to see the same numbers there. If you keep a buff up, say so (for example "I keep Contamination up about 70% of the time") and it counts, for that share of the time, when the tree and gear are chosen.
+
 ## How the best build is found
 
 There are trillions of possible gear combinations (about 643 trillion for a level 60 Warrior), far too many to try one by one. The helper:
@@ -122,7 +133,8 @@ python3 wynn_helper.py --class warrior --level 60 --goal melee --min "hp=6000, w
 | `--aspects` | Aspects you own with tier, e.g. `"Comet 2, Ray of Frost 1"` |
 | `--aspect-tier` | Tier to assume for recommended aspects (default 1) |
 | `--sliders` | Your typical stacks, e.g. `"Distortion=40"`. Sliders you don't set use Wynnbuilder's default. |
-| `--toggles-off`, `--no-auto-toggles` | Bullwhip (Shaman) counts as on by default, since summoners keep enemies Whipped with Uproot or Haunting Memory; this turns it off. Other toggles are off unless you turn them on with `--toggles`; the report shows what each would add. |
+| `--toggles` | Ability buffs you keep up, with an optional share of the time: `"Contamination=70%, Activate Luster Purge"` |
+| `--toggles-off`, `--no-auto-toggles` | Turn off buffs counted by default, or all of them (exactly like Wynnbuilder's defaults). |
 | `--toggles` | Ability toggles to turn on, e.g. `"Activate Gravitational Collapse"` |
 | `--buffs` | Party buffs: totem, fortitude, chantlunatic, warscream, emboldeningcry, hauntingfanatic, hauntinglunatic, eldritchcall, judgement, chantfanatic, weathering, acidrain |
 | `--raid-buffs` | Raid buffs, e.g. `"Lightbearer-II, Seraphim-I"` |

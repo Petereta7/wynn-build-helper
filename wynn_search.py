@@ -597,7 +597,9 @@ def _settings(build, include_never, min_level):
             "buffs": sorted(build.buffs), "raid_buffs": sorted(build.raid_buffs),
             "enemy": sorted(build.enemy.items()), "rolls": wh.ROLL_MODE, "poison": wh.POISON_MODE,
             "drops_only": not include_never, "min_level": min_level, "focus": build.focus,
-            **({"floors": sorted(build.floors.items())} if getattr(build, "floors", None) else {})}
+            **({"floors": sorted(build.floors.items())} if getattr(build, "floors", None) else {}),
+            **({"toggle_share": sorted(build.toggle_share.items())} if getattr(build, "toggle_share", None) else {}),
+            **({"auto_masks": True} if getattr(build, "auto_masks", False) else {})}
 
 
 def _key(settings: dict, level: int) -> str:
@@ -865,7 +867,10 @@ def _build_spec(build):
             "toggles": list(build.toggles), "sliders": dict(build.sliders), "slider_mode": build.slider_mode,
             "buffs": list(build.buffs), "raid_buffs": list(build.raid_buffs), "enemy": dict(build.enemy),
             "rolls": wh.ROLL_MODE, "poison": wh.POISON_MODE, "version": build.data.version, "data_dir": wh.DATA_DIR,
-            "focus": build.focus, "floors": dict(getattr(build, "floors", None) or {})}
+            "focus": build.focus, "floors": dict(getattr(build, "floors", None) or {}),
+            "toggle_share": dict(getattr(build, "toggle_share", {}) or {}), "auto_masks": getattr(build, "auto_masks", False),
+            "toggles_off": sorted(getattr(build, "toggles_off", ()) or ()),
+            "auto_toggles": sorted(getattr(build, "auto_toggles", ()) or ())}
 
 
 def _worker_init(spec, stop_event, q=None):
@@ -878,7 +883,9 @@ def _worker_init(spec, stop_event, q=None):
     _W["build"] = wh.Build(data, tree, spec["level"], spec["goal"], tomes=tomes, aspects=aspects,
                            toggles=spec["toggles"], sliders=spec["sliders"], slider_mode=spec["slider_mode"],
                            buffs=spec["buffs"], raid_buffs=spec["raid_buffs"], enemy=spec["enemy"],
-                           focus=tuple(spec["focus"]) if spec.get("focus") else None, floors=spec.get("floors"))
+                           focus=tuple(spec["focus"]) if spec.get("focus") else None, floors=spec.get("floors"),
+                           toggle_share=spec.get("toggle_share"), auto_masks=spec.get("auto_masks", False),
+                           toggles_off=spec.get("toggles_off", ()), auto_toggles=spec.get("auto_toggles", ()))
     _W["stop"] = stop_event
     if q is not None:
         last = {"t": 0.0, "v": -1e300, "n": wh.EVAL_STATS["n"]}

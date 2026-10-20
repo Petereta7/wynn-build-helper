@@ -52,7 +52,15 @@ python3 tests/speed_check.py
 
 The search uses a faster skill point solver. This compares it with the reference version on 3,000 random gear sets (many with negative skill bonuses, where the equip order matters): points per skill, totals and equip order must all be identical. Both lines should say 0 differences.
 
-## 4. Accuracy test (does the search find the true best build?)
+## 4. Toggle check
+
+```
+python3 tests/toggle_check.py
+```
+
+Checks that a buff that's fully on gives the same numbers as Wynnbuilder's on switch, that a buff up part of the time adds exactly that share of its effect, and that "the best Mystic Mask" really is the best of the three.
+
+## 5. Accuracy test (does the search find the true best build?)
 
 ```
 python3 tests/accuracy_test.py 100 5

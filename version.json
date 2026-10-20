@@ -1,4 +1,4 @@
 {
-  "version": "1.2.1",
-  "notes": "Switch versions in Settings: go back to an earlier version if an update causes problems, and forward again any time. The update bar always offers the newest version."
+  "version": "1.3.0",
+  "notes": "Ability buffs counted honestly: the best Mystic Mask, Coursing Restraints for the share of time it can be up, and ultimate buffs at the same share as ultimate damage. Buffs with unknown timing stay off; you can turn any on, even for part of the time (\"Contamination=70%\"). The report says which toggles to tick in Wynnbuilder to match."
 }

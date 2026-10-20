@@ -425,8 +425,14 @@ def build_summary():
                 "order": tree.validate(x["owned"], level)["order"],
                 "sp": {"assigned": list(ass), "extra": extra, "gear": [totals[i] - ass[i] - extra[i] for i in range(5)]}}
 
+    best_ev = (R.get("best") or R["current"])["eval"]
+    mask = best_ev.get("mask")
+    on = set(b.toggle_map((R.get("best") or R["current"])["owned"])) - set(b.toggle_share) | ({mask} if mask else set())
+    if mask == "Mask of the Lunatic" and "Lunatic Transmute" not in b.toggles_off:
+        on.add("Lunatic Transmute")
     out = {"class": R["cls"], "class_title": wh.CLASS_TITLE[R["cls"]], "level": level, "goal": R["goal"], "label": label,
-           "focus": focus[1] if focus else None, "floors": dict(b.floors), "toggles_on": sorted(b.toggles),
+           "focus": focus[1] if focus else None, "floors": dict(b.floors), "toggles_on": sorted(on),
+           "toggle_share": dict(b.toggle_share), "mask": mask,
            "no_gear": R["no_gear"], "current": pack(R["current"]), "best": pack(R["best"]) if R.get("best") else None,
            "best_link": R.get("best_link"), "tree": tree_static(tree)}
     hist = load_history()
@@ -449,6 +455,7 @@ def build_summary():
         entry = {"id": str(int(time.time() * 1000)), "date": time.strftime("%b %d %H:%M"), "class": R["cls"],
                  "class_title": out["class_title"], "level": level, "goal": R["goal"], "label": label,
                  "focus": out["focus"], "floors": out["floors"], "toggles_on": out["toggles_on"],
+                 "toggle_share": out["toggle_share"],
                  "numbers": out["best"]["numbers"], "items": out["best"]["items"], "sp": out["best"]["sp"],
                  "owned": out["best"]["owned"], "order": out["best"]["order"], "link": out["best_link"]}
         hist.append(entry)
@@ -466,7 +473,7 @@ You have a calculator (the analyze_build tool) that uses Wynnbuilder's exact for
 How to work:
 - To run the calculator you need the class and combat level, or a Wynnbuilder link. If either is missing, ask for it in one short question. Ask about gear too, but if they don't know or don't care, run without it.
 - Baseline stats: the first time they ask for a build (or a new goal), ask whether they want any minimums kept, for example "Any baseline stats you want to keep, like at least 20,000 health or no slower walk speed?". Put it in the same message as any other question you need to ask; if you have everything else, ask it on its own and wait. If they say no or don't care, run without minimums and don't ask again for follow-ups. Pass what they say as minimums (health, ehp, walk_speed in %, mana_regen, health_regen, elemental defenses). "No negative walk speed" means walk_speed 0.
-- Some abilities only give their bonus while a toggle is on. Bullwhip (Shaman) counts as on by default, since a summoner keeps enemies Whipped with Uproot or Haunting Memory; pass toggles_off if the player says they don't. Other toggles are off unless the player says they keep that buff up (then pass toggles); the report's "Toggles and sliders" section shows what each one would add, so mention a big one.
+- Some abilities only give their bonus while a toggle is on. By default the calculator only counts buffs whose timing is known: Bullwhip (on), the best Mystic Mask (you always wear one), Coursing Restraints for the share of time its duration and cooldown allow, and ultimate buffs for the same share as ultimate damage. Everything else (Holy Power, Tricks, Unstable, Blood Pool, Corrupted, "next hit" effects) is off so numbers aren't inflated. If the player says they keep a buff up, pass it in toggles, with a share if it's only part of the time, e.g. "Contamination=70%, Activate Luster Purge". Pass toggles_off for buffs they say they don't keep up. The report's "Toggles and sliders" section shows what each off toggle would add; mention a big one and ask if they keep it up.
 - If no build meets every minimum, the report says so and shows the closest one; tell them which minimum couldn't be met and suggest relaxing it.
 - The report shows health, effective HP and walk speed for the best build next to the current gear; mention any big drop in health or walk speed so they can set a minimum.
 - If they want the most damage from one specific ability ("maximum puppet damage", "biggest Meteor", "strongest Bash"), use goal ability with focus set to that ability.
@@ -530,8 +537,9 @@ TOOLS = [
                 },
                 "sliders": {"type": "string", "description": 'Ability stack sliders, e.g. "Distortion=40"'},
                 "toggles": {"type": "string",
-                            "description": "Ability toggles to count as on, e.g. 'Activate Aerial Ace' (the player keeps "
-                                           "that buff up). The report lists each toggle and what it would add."},
+                            "description": "Ability toggles the player keeps up, comma-separated, with an optional share of "
+                                           "the time, e.g. 'Activate Aerial Ace, Contamination=70%'. The report lists each "
+                                           "toggle and what it would add."},
                 "toggles_off": {"type": "string",
                                 "description": "Toggles that are on by default to turn off, e.g. 'Activate Bullwhip' "
                                                "if the player doesn't keep enemies Whipped"},
