@@ -107,6 +107,38 @@ def main():
           "Activate Bullwhip" in bw.toggle_map(ids("Mystic Masks", "Haunting Memory")))
     check("Bullwhip only counts when the tree can keep it up", ok)
 
+    # 6: every toggle of every class: fully on and half on both work, and half on adds exactly half
+    for cls in wh.CLASSES:
+        t = wh.Tree(d, cls)
+        owned_all = frozenset(n.id for n in t.nodes)                   # every ability, so every toggle exists
+        wpn = wh.default_weapon(d, cls, 106)
+        names = sorted({e["toggle"] for n in t.nodes for e in n.raw.get("effects", []) if e.get("toggle")})
+        bad, tested = [], 0
+        for name in names:
+            vals = {}
+            try:
+                for sh in (0.0, 0.5, 1.0):
+                    bld = wh.Build(d, t, 106, "spells", toggles=[name] if sh >= 1 else (),
+                                   toggle_share={name: sh} if 0 < sh < 1 else None)
+                    r = bld.evaluate(owned_all, [None] * 8, wpn, [0] * 5)
+                    vals[sh] = {k: v["damage"] for k, v in r["results"].items()}
+                    vals[sh]["_value"] = r["value"]
+                    vals[sh]["_goal"] = r["main"]
+                    vals[sh]["_ehp"] = r["defense"].get("ehp", 0)
+                    vals[sh]["_spd"] = r["stats"].get("spd", 0)
+                    vals[sh]["_mr"] = r["stats"].get("mr", 0)
+            except Exception as exc:
+                bad.append(f"{name}: {type(exc).__name__}")
+                continue
+            tested += 1
+            for k in vals[0.0]:
+                lo, hi, mid = vals[0.0][k], vals[1.0][k], vals[0.5].get(k, 0)
+                if abs(hi - lo) > 1e-9 and abs(mid - (lo + hi) / 2) > 1e-6 * max(1, abs(hi)):
+                    bad.append(f"{name} ({k}: half {mid:.1f}, expected {(lo + hi) / 2:.1f})")
+                    break
+        check(f"{wh.CLASS_TITLE[cls]}: every toggle, half on = exactly half the effect", not bad,
+              f"({tested} toggles)" + (" " + "; ".join(bad[:3]) if bad else ""))
+
     print(f"\n{sum(RESULTS)}/{len(RESULTS)} checks passed.")
     sys.exit(0 if all(RESULTS) else 1)
 

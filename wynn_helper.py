@@ -1777,6 +1777,35 @@ class Tree:
         return out
 
     # ---------------------------------------------------------------- spells
+    def toggle_bonus_kinds(self) -> dict:
+        """{toggle name: "linear" (only damage multipliers, walk speed, mana regen, jump height: scale exactly with a
+        share of time), "conv" (also element conversions: scale to within about 0.1%) or "other"}."""
+        cached = getattr(self, "_toggle_kinds", None)
+        if cached is None:
+            cached = {}
+            for n in self.nodes:
+                for e in n.raw.get("effects", []):
+                    t = e.get("toggle")
+                    if not t:
+                        continue
+                    kind = "linear"
+                    for b in e.get("bonuses", []):
+                        nm = str(b.get("name", ""))
+                        if b.get("type") == "stat" and not b.get("mult") and \
+                                (nm.startswith("damMult.") or nm in ("spd", "mr", "jh", "mainAttackRange")):
+                            continue
+                        if b.get("type") == "stat" and "ConvBase" in nm:
+                            kind = "conv" if kind == "linear" else kind
+                            continue
+                        kind = "other"
+                    order = {"linear": 0, "conv": 1, "other": 2}
+                    if order[kind] > order[cached.get(t, "linear")]:
+                        cached[t] = kind
+                    else:
+                        cached.setdefault(t, kind)
+            self._toggle_kinds = cached
+        return cached
+
     def spells(self, owned, extras=(), toggles=frozenset(), sliders=None, slider_mode="none"):
         """
         Merge the owned abilities (Wynnbuilder's atree_merge, atree_scaling and collect_spells). Cached.
@@ -2479,9 +2508,56 @@ TOGGLE_RULES = {
 AUTO_TOGGLES = {k: v[1] for k, v in TOGGLE_RULES.items()}      # (kept for older callers)
 
 
+def _blend(runs):
+    """Weighted average of results that have the same shape (numbers averaged; text and items from the heaviest)."""
+    runs = [(w, r) for w, r in runs if w > 0]
+    tot = sum(w for w, _ in runs) or 1.0
+    heavy = max(runs, key=lambda x: x[0])[1]
+
+    def mix(vals):
+        first = vals[0][1]
+        if isinstance(first, bool) or first is None:
+            return heavy_of(vals)
+        if isinstance(first, (int, float)) and all(isinstance(v, (int, float)) and not isinstance(v, bool) for _, v in vals):
+            return sum(w * v for w, v in vals) / tot
+        if isinstance(first, dict) and all(isinstance(v, dict) for _, v in vals):
+            out = {}
+            keys = list(first) + [k for _, v in vals for k in v if k not in first]
+            for k in dict.fromkeys(keys):
+                sub = [(w, v[k]) for w, v in vals if k in v]
+                if len(sub) == len(vals):
+                    out[k] = mix(sub)
+                elif all(isinstance(x, (int, float)) and not isinstance(x, bool) for _, x in sub):
+                    out[k] = mix([(w, v.get(k, 0.0)) for w, v in vals])    # a stat missing in a run is 0 there
+                else:
+                    out[k] = heavy_of(sub)
+            if isinstance(first, defaultdict):
+                dd = defaultdict(first.default_factory)
+                dd.update(out)
+                return dd
+            return out
+        if isinstance(first, (list, tuple)) and all(isinstance(v, (list, tuple)) and len(v) == len(first) for _, v in vals) \
+                and all(isinstance(x, (int, float)) and not isinstance(x, bool) for _, v in vals for x in v):
+            res = [sum(w * v[i] for w, v in vals) / tot for i in range(len(first))]
+            return type(first)(res) if isinstance(first, tuple) else res
+        return heavy_of(vals)
+
+    def heavy_of(vals):
+        return max(vals, key=lambda x: x[0])[1]
+    return mix(runs)
+
+
+def _node_id(tree, name):
+    ids = tree.__dict__.setdefault("_name_ids", {})
+    if name not in ids:
+        n = next((x for x in tree.nodes if x.name == name), None)
+        ids[name] = n.id if n is not None else None
+    return ids[name]
+
+
 def _owns(tree, owned, name) -> bool:
-    n = next((x for x in tree.nodes if x.name == name), None)
-    return n is not None and n.id in owned
+    i = _node_id(tree, name)
+    return i is not None and i in owned
 
 
 # A default buff that can't be kept up with some trees: (condition, why it's off when the condition fails)
@@ -2746,8 +2822,7 @@ class Build:
         """The Mystic Masks to try, if this tree has them and you didn't pick one yourself."""
         if not self.auto_masks:
             return []
-        node = next((n for n in self.tree.nodes if n.name == "Mystic Masks"), None)
-        if node is None or node.id not in owned:
+        if not _owns(self.tree, owned, "Mystic Masks"):
             return []
         tm = self.toggle_map(owned)
         if any(m in tm for m in MASKS):
@@ -2757,21 +2832,47 @@ class Build:
     def _evaluate(self, owned, armor, weapon, extra_points=None, fast=False):
         masks = self.mask_options(owned)
         if not masks:
-            return self._evaluate_with(owned, armor, weapon, extra_points, fast, self.toggle_map(owned))
+            return self._evaluate_shares(owned, armor, weapon, extra_points, fast, self.toggle_map(owned))
         best = None
-        transmute = next((n for n in self.tree.nodes if n.name == "Transmute"), None)
+        transmute_id = _node_id(self.tree, "Transmute")
         for m in masks:          # you always wear one mask: use the one that helps your goal most
             tm = dict(self.toggle_map(owned))
             tm[m] = 1.0
-            if m == "Mask of the Lunatic" and transmute is not None and transmute.id in owned \
+            if m == "Mask of the Lunatic" and transmute_id is not None and transmute_id in owned \
                     and "Lunatic Transmute" not in self.toggles_off:
                 tm["Lunatic Transmute"] = 1.0
-            r = self._evaluate_with(owned, armor, weapon, extra_points, fast, tm)
+            r = self._evaluate_shares(owned, armor, weapon, extra_points, fast, tm)
             if best is None or r["value"] > best["value"]:
                 best, best_mask = r, m
         best = dict(best)
         best["mask"] = best_mask
         return best
+
+    def _evaluate_shares(self, owned, armor, weapon, extra_points, fast, tog):
+        """Buffs that are up part of the time. Ones whose bonuses only add damage multipliers, walk speed or mana
+        regen are exact when scaled by their share (damage grows in a straight line with them). For any other
+        buff (attack counts, element conversions, defense, spell costs) the build is worked out with the buff on
+        and off and the two are averaged by the share of time: the exact average over a fight."""
+        kinds = self.tree.toggle_bonus_kinds()
+        # While searching (fast), buffs that only change damage multipliers and element conversions are scaled
+        # (within about 0.1%); the numbers you're shown (fast=False) are always worked out exactly.
+        ok = ("linear", "conv") if fast else ("linear",)
+        split = [k for k, f in tog.items() if 0 < f < 1 and kinds.get(k, "linear") not in ok]
+        if not split:
+            return self._evaluate_with(owned, armor, weapon, extra_points, fast, tog)
+        runs = []
+        for combo in itertools.product((0, 1), repeat=len(split)):
+            t2, w = dict(tog), 1.0
+            for k, on in zip(split, combo):
+                f = tog[k]
+                w *= f if on else (1 - f)
+                if on:
+                    t2[k] = 1.0
+                else:
+                    t2.pop(k, None)
+            if w > 0:
+                runs.append((w, self._evaluate_with(owned, armor, weapon, extra_points, fast, t2)))
+        return _blend(runs)
 
     def _evaluate_with(self, owned, armor, weapon, extra_points, fast, tog):
         assigned, totals, order = solve_skill_points(armor, weapon)
@@ -4420,7 +4521,9 @@ def run(args):
                     try:     # what keeping it up would add, so you can decide
                         on_v = build.copy_with(toggles=build.toggles | {name}).evaluate(chosen, armor, weapon, extra)["value"]
                         if on_v > base_v * 1.001:
-                            note = (f"  (if you keep it up all the time: +{(on_v / base_v - 1) * 100:.0f}% for your goal; "
+                            g = (on_v / base_v - 1) * 100
+                            gs = f"{g:.0f}" if g >= 10 else f"{g:.1f}"
+                            note = (f"  (if you keep it up all the time: +{gs}% for your goal; "
                                     "half the time adds about half that)")
                     except Exception:
                         pass
@@ -4620,6 +4723,13 @@ def run(args):
             removed = [tree.by_id[i].name for i in chosen if i not in wb["owned"]]
             if added or removed:
                 print(f"  Tree changes for this gear: add {', '.join(added) or '-'}; remove {', '.join(removed) or '-'}")
+            names_b = inter_names(tree, wb["owned"])
+            tm_b = floor_build.toggle_map(wb["owned"])
+            counted = [f"{k} ({'on' if v >= 1 else f'{v * 100:.0f}% of the time'})" for k, v in tm_b.items() if k in names_b]
+            if fin.get("mask"):
+                counted.append(f"{fin['mask']} (the mask you'd wear)")
+            if counted:
+                print("  Ability buffs counted in this build: " + ", ".join(counted) + ". (See \"Toggles and sliders\" for why.)")
             def nums(r):
                 return (r["spell_dps"] + (r["poison_spell"] if r["spell_dps"] else 0),
                         r["melee_dps"] + (r["poison_melee"] if r["melee_dps"] else 0), r["defense"].get("ehp_agi", 0))
