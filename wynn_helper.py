@@ -2569,6 +2569,9 @@ def describe_floors(floors: dict) -> str:
 
 # ============================================================================== build evaluation
 
+EVAL_STATS = {"n": 0, "tick": None}     # how many builds were scored; tick() is called every 256
+
+
 class Build:
     """Everything needed to score one combination of tree + gear + skill points."""
 
@@ -2639,6 +2642,9 @@ class Build:
             self.__dict__["_eval_hits"] = self.__dict__.get("_eval_hits", 0) + 1
             return dict(hit)
         res = self._evaluate(owned, armor, weapon, extra_points, fast)
+        EVAL_STATS["n"] += 1                       # builds actually scored (for the live view in the app)
+        if EVAL_STATS["tick"] is not None and not EVAL_STATS["n"] & 255:
+            EVAL_STATS["tick"]()
         if len(cache) > (300000 if fast else 20000):
             cache.clear()
         cache[key] = {"value": res["value"], "main": res["main"]} if fast else res
@@ -4080,6 +4086,12 @@ def run(args):
                   sliders=sliders, slider_mode=args.slider_mode, buffs=buffs, raid_buffs=raid_buffs, enemy=enemy,
                   focus=focus, floors=floors)
     floor_build = build                   # the whole-build search always keeps the minimums
+    try:                                   # item names for the app's live view while the tree is planned
+        import wynn_search as _ws
+        if _ws.LIVE:
+            _ws.live_pools_hint(build, not getattr(args, "drops_only", False))
+    except Exception:
+        pass
     include_never = not getattr(args, "drops_only", False)
     budget = ability_points(level, args.rank_ap)
 

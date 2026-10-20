@@ -452,6 +452,92 @@ PROGRESS = {"cb": None}         # PROGRESS["cb"] = function(fraction, message) t
 
 _PHASE = [0.0, 1.0]             # progress range of the current part of the search
 
+# ---- live view for the app ("The Forge"): the best build so far, its score, how many builds were scored,
+# and the weapons being built around. Worker processes send theirs through a queue.
+LIVE = {}
+PHASES = ["Throwing out items that can't win", "Ranking weapons", "Building around each weapon",
+          "Fine-tuning the best builds", "Searching some more"]
+_HOOK = {"best": None}
+
+
+GOAL_LABELS = {"melee": "Average DPS", "spells": "Spell damage per second", "burst": "Burst combo damage",
+               "survival": "Survival score", "balanced": "Damage × survival score", "healing": "Healing per second"}
+
+
+def live_reset(label=""):
+    LIVE.clear()
+    LIVE.update(id=f"{time.time():.3f}", phase=-1, label=label, evals0=wh.EVAL_STATS["n"], worker_evals=0,
+                best=None, weapons=[], pools={}, improvements=0)
+
+
+def live_pools_hint(build, include_never=True, min_level=1):
+    """Item lists for the reels before the search starts (the search replaces them with the filtered lists)."""
+    if LIVE.get("pools"):
+        return
+    try:
+        labels = [wh.SLOT_LABELS[k] for k in range(8)] + ["Weapon"]
+        out = {}
+        for i, (slot, kind) in enumerate(slot_kinds(build.tree.cls)):
+            items = sorted(item_pool(build, kind, include_never, min_level), key=lambda it: -it.level)[:80]
+            out[labels[i]] = [[it.name, it.tier] for it in items]
+        LIVE["pools"] = out
+    except Exception:
+        pass
+
+
+def live_snapshot(full=False) -> dict:
+    out = {k: v for k, v in LIVE.items() if k not in ("pools", "evals0", "worker_evals")}
+    out["evals"] = (wh.EVAL_STATS["n"] - LIVE.get("evals0", 0) + LIVE.get("worker_evals", 0)) if LIVE else 0
+    out["phases"] = PHASES
+    if full:
+        out["pools"] = LIVE.get("pools", {})
+    return out
+
+
+def _names(a, wpn):
+    return [[it.name, it.tier] if it is not None else None for it in a], [wpn.name, wpn.tier]
+
+
+def _live_offer(value, main, armor_names, weapon_name):
+    b = LIVE.get("best")
+    if b is None or value > b["value"]:
+        LIVE["best"] = {"value": value, "main": main, "armor": armor_names, "weapon": weapon_name}
+        LIVE["improvements"] = LIVE.get("improvements", 0) + 1
+
+
+def _offer(build, own, a, wp, e, wpn):
+    """Show a build that may beat the best so far (straight away here, or through the queue from a worker)."""
+    try:
+        r = build.evaluate(own, a, wp, wh._fit_extra(e, a, wp, build.level), fast=True)
+        an, wn = _names(a, wpn)
+        hook = _HOOK.get("best")
+        if hook is not None:
+            hook(r["value"], r["main"], an, wn)
+        else:
+            _live_offer(r["value"], r["main"], an, wn)
+    except Exception:
+        pass
+
+
+def _card(name, **kw):
+    for c in LIVE.get("weapons", []):
+        if c["name"] == name and c.get("status") != "done":
+            c.update(kw)
+            return
+
+
+def _drain(q):
+    import queue as _q
+    try:
+        while True:
+            m = q.get_nowait()
+            if m[0] == "b":
+                _live_offer(*m[1:])
+            elif m[0] == "e":
+                LIVE["worker_evals"] = LIVE.get("worker_evals", 0) + m[1]
+    except (_q.Empty, EOFError, OSError):
+        pass
+
 
 def _report(frac, msg):
     cb = PROGRESS.get("cb")
@@ -571,6 +657,7 @@ def _local_search(build, cur_own, pools, wpn, wp, starts, base_extra, P, out_of_
             a = [None] * 8
         e, _ = refine_points(build, cur_own, a, wp, base_extra)
         v = score(a, wp, e)
+        _offer(build, cur_own, a, wp, e, wpn)
         for _round in range(P.get("rounds", 6)):
             improved = False
             for slot in range(8):
@@ -588,6 +675,7 @@ def _local_search(build, cur_own, pools, wpn, wp, starts, base_extra, P, out_of_
                     v, a = best
                     e = _scaled_extra(e, a, wp, level)
                     improved = True
+                    _offer(build, cur_own, a, wp, e, wpn)
             if P.get("singles_only"):          # quick pass: one-item swaps only
                 if not improved or out_of_time():
                     break
@@ -632,11 +720,13 @@ def _local_search(build, cur_own, pools, wpn, wp, starts, base_extra, P, out_of_
             if best:
                 v, a = best
                 improved = True
+                _offer(build, cur_own, a, wp, _scaled_extra(e, a, wp, level), wpn)
             e2, _ = refine_points(build, cur_own, a, wp, e)
             v2 = score(a, wp, e2)
             if better(v2, v, 1.0001):
                 e, v = e2, v2
                 improved = True
+                _offer(build, cur_own, a, wp, e, wpn)
             else:
                 e = _scaled_extra(e, a, wp, level)
             if not improved or out_of_time():
@@ -759,7 +849,7 @@ def _build_spec(build):
             "focus": build.focus, "floors": dict(getattr(build, "floors", None) or {})}
 
 
-def _worker_init(spec, stop_event):
+def _worker_init(spec, stop_event, q=None):
     wh.ROLL_MODE, wh.POISON_MODE = spec["rolls"], spec["poison"]
     data = wh.load_game_data(offline=True, data_dir=spec["data_dir"], version=spec["version"])
     tree = wh.Tree(data, spec["cls"])
@@ -771,6 +861,23 @@ def _worker_init(spec, stop_event):
                            buffs=spec["buffs"], raid_buffs=spec["raid_buffs"], enemy=spec["enemy"],
                            focus=tuple(spec["focus"]) if spec.get("focus") else None, floors=spec.get("floors"))
     _W["stop"] = stop_event
+    if q is not None:
+        last = {"t": 0.0, "v": -1e300, "n": wh.EVAL_STATS["n"]}
+
+        def best_hook(v, main, an, wn):
+            if v > last["v"]:
+                last["v"] = v
+                q.put(("b", v, main, an, wn))
+
+        def tick(force=False):
+            now = time.time()
+            if force or now - last["t"] > 0.3:
+                n = wh.EVAL_STATS["n"]
+                if n > last["n"]:
+                    q.put(("e", n - last["n"]))
+                last["n"], last["t"] = n, now
+        _HOOK["best"] = best_hook
+        wh.EVAL_STATS["tick"] = tick
 
 
 def _worker_job(job):
@@ -781,7 +888,11 @@ def _worker_job(job):
     def out_of_time():
         return (stop is not None and stop.is_set()) or (deadline is not None and time.time() > deadline)
     starts = _starts_for(build, cur_own, pools, wpn, wp, armor0, base_extra, memory_arms, P)
-    return _local_search(build, cur_own, pools, wpn, wp, starts, base_extra, P, out_of_time)
+    res = _local_search(build, cur_own, pools, wpn, wp, starts, base_extra, P, out_of_time)
+    tick = wh.EVAL_STATS.get("tick")
+    if tick is not None:
+        tick(True)
+    return res
 
 
 def _run_weapon_jobs(build, cur_own, pools, jobs, armor0, base_extra, P, deadline, log):
@@ -797,8 +908,9 @@ def _run_weapon_jobs(build, cur_own, pools, jobs, armor0, base_extra, P, deadlin
             from concurrent.futures import ProcessPoolExecutor, as_completed
             ctx = mp.get_context("spawn")
             stop_event = ctx.Event()
+            live_q = ctx.Queue()
             with ProcessPoolExecutor(max_workers=workers, mp_context=ctx, initializer=_worker_init,
-                                     initargs=(_build_spec(build), stop_event)) as ex:
+                                     initargs=(_build_spec(build), stop_event, live_q)) as ex:
                 futs = {ex.submit(_worker_job, (cur_own, pools, wpn, wp, armor0, base_extra, mem, P, deadline)): wpn
                         for wpn, wp, mem in jobs}
                 done = 0
@@ -806,19 +918,28 @@ def _run_weapon_jobs(build, cur_own, pools, jobs, armor0, base_extra, P, deadlin
                 _report(0.05, f"Building around {total} weapons on {workers} CPU cores")
                 pending = set(futs)
                 while pending:
+                    _drain(live_q)
+                    for f in pending:
+                        if f.running():
+                            _card(futs[f].name, status="running")
                     finished = [f for f in pending if f.done()]
                     for f in finished:
                         pending.discard(f)
                         done += 1
                         try:
-                            results.extend(f.result())
+                            got = f.result()
+                            results.extend(got)
+                            _card(futs[f].name, status="done", best=max([r[0] for r in got], default=None))
                         except Exception as exc:
                             failures.append(exc)
+                            _card(futs[f].name, status="done")
                         _report(0.05 + 0.75 * done / total, f"Built around {done} of {total} weapons ({futs[f].name})")
                     if out_of_time():
                         stop_event.set()
                     if pending:
                         time.sleep(0.2)
+            time.sleep(0.3)
+            _drain(live_q)
             if results:
                 if log:
                     log(f"Used {workers} CPU cores.")
@@ -832,8 +953,11 @@ def _run_weapon_jobs(build, cur_own, pools, jobs, armor0, base_extra, P, deadlin
         if out_of_time():
             break
         _report(0.05 + 0.75 * i / max(1, total), f"Building around {wpn.name} ({i + 1}/{total})")
+        _card(wpn.name, status="running")
         starts = _starts_for(build, cur_own, pools, wpn, wp, armor0, base_extra, mem, P)
-        results.extend(_local_search(build, cur_own, pools, wpn, wp, starts, base_extra, P, out_of_time))
+        got = _local_search(build, cur_own, pools, wpn, wp, starts, base_extra, P, out_of_time)
+        results.extend(got)
+        _card(wpn.name, status="done", best=max([r[0] for r in got], default=None))
     return results
 
 
@@ -855,6 +979,8 @@ def search_best_build(build, owned, armor0, weapon0, base_weapon0, keep=(), ap_b
     P = EFFORT[effort]
     level, cls = build.level, build.tree.cls
     slots = list(range(8)) + ["weapon"]
+    LIVE["phase"] = 0
+    LIVE["label"] = (build.focus[1] if build.goal == "ability" and build.focus else GOAL_LABELS.get(build.goal, "Score"))
     keep_items = [a for a in armor0 if a is not None] + ([base_weapon0] if base_weapon0 else [])
     if pools_override is not None:
         pools = dict(pools_override)
@@ -863,6 +989,10 @@ def search_best_build(build, owned, armor0, weapon0, base_weapon0, keep=(), ap_b
                   "after": {k: len(v) for k, v in pools.items() if k != 5}}
     else:
         pools, fstats = safe_filter(build, include_never, min_level, keep=keep_items)
+    labels = [wh.SLOT_LABELS[k] for k in range(8)] + ["Weapon"]
+    LIVE["pools"] = {labels[i]: [[it.name, it.tier] for it in (pools[k] or [])[:80]]
+                     for i, k in enumerate(list(range(8)) + ["weapon"])}
+    LIVE["phase"] = 1
     if log:
         log(f"Item lists after safe filtering: " + ", ".join(
             f"{wh.SLOT_LABELS[k] if k != 'weapon' else 'Weapon'} {fstats['before'][k]}->{fstats['after'][k]}"
@@ -928,6 +1058,9 @@ def search_best_build(build, owned, armor0, weapon0, base_weapon0, keep=(), ap_b
             seen_w.add(wpn.name)
 
     # ---- 2. local search around each weapon (in parallel on every CPU core when possible)
+    LIVE["weapons"] = [{"name": w.name, "tier": w.tier, "status": "queued", "best": None, "stage": "main"}
+                       for w, _wp in weapons]
+    LIVE["phase"] = 2
     memory_arms = {}
     for arm, mw in memory:
         memory_arms.setdefault(mw.name, []).append(list(arm))
@@ -974,6 +1107,7 @@ def search_best_build(build, owned, armor0, weapon0, base_weapon0, keep=(), ap_b
         return (fin["value"], a, wp, wpn, own, e, free, fin)
 
     # ---- 3. polish the best few: tree, skill points, powders
+    LIVE["phase"] = 3
     uniq = dedupe(results)
     agree, n_attempts = agreement(results)
     if P["kicks"] and uniq and not out_of_time():
@@ -988,6 +1122,7 @@ def search_best_build(build, owned, armor0, weapon0, base_weapon0, keep=(), ap_b
         _report(0.82 + 0.15 * i / n_polish, "Fine-tuning the best builds (ability tree, skill points, powders)")
         finals.append(polish(v, a, wpn, wp, e, cur_own))
         polished.add((tuple(it.name if it else None for it in a), wpn.name))
+        _live_offer(finals[-1][0], finals[-1][7]["main"], *_names(finals[-1][1], wpn))
     finals.sort(key=lambda x: -x[0])
     main_best = finals[0][0]
 
@@ -999,8 +1134,11 @@ def search_best_build(build, owned, armor0, weapon0, base_weapon0, keep=(), ap_b
         extra_results = []
         # 4a. quick passes on weapons the main search skipped; the best few then get the full search
         rest = [(wpn, wp) for _v, wpn, wp in w_scores if wpn.name not in seen_w][: P.get("extra_weapons", 0)]
+        LIVE["phase"] = 4
         if rest and not out_of_time():
             bonus["weapons"] = len(rest)
+            LIVE["weapons"] += [{"name": w.name, "tier": w.tier, "status": "queued", "best": None, "stage": "quick"}
+                                for w, _wp in rest]
             qp = dict(P, greedy_only=True, singles_only=True, rounds=2, random_starts=0)
             _report(0.0, f"Quick look at {len(rest)} more weapons")
             quick = _run_weapon_jobs(build, cur_own, pools, [(wpn, wp, []) for wpn, wp in rest], armor0,
@@ -1014,6 +1152,8 @@ def search_best_build(build, owned, armor0, weapon0, base_weapon0, keep=(), ap_b
                     promote.append((r[2], r[3], []))
             promote = promote[: P.get("promote", 2)]
             if promote and not out_of_time():
+                LIVE["weapons"] += [{"name": w.name, "tier": w.tier, "status": "queued", "best": None, "stage": "full"}
+                                    for w, _wp, _m in promote]
                 _report(0.35, f"Full search around the {len(promote)} most promising of them")
                 extra_results += _run_weapon_jobs(build, cur_own, pools, promote, armor0, base_extra, P,
                                                   deadline, None)
@@ -1062,6 +1202,7 @@ def search_best_build(build, owned, armor0, weapon0, base_weapon0, keep=(), ap_b
             f = polish(r[0], r[1], r[2], r[3], r[4], own0)
             source[id(f)] = "deeper search" if len(r) > 5 else "more weapons"
             finals.append(f)
+            _live_offer(f[0], f[7]["main"], *_names(f[1], f[3]))
         finals.sort(key=lambda x: -x[0])
         if id(finals[0]) in source and better(finals[0][0], main_best, 1.001):
             bonus["found_by"] = source[id(finals[0])]
@@ -1069,6 +1210,7 @@ def search_best_build(build, owned, armor0, weapon0, base_weapon0, keep=(), ap_b
         if finals[0][0] > main_best:
             agree, n_attempts = agreement(results + [r[:5] for r in extra_results])
     _PHASE[:] = [0.0, 1.0]
+    LIVE["phase"] = 5
     if pools_override is None:
         remember(build, include_never, min_level, finals)
     v, a, wp, wpn, own, e, free, fin = finals[0]

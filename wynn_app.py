@@ -184,6 +184,7 @@ def run_report(params: dict) -> dict:
     args.offline = STATE.get("data_checked", False)    # new game data is checked once, when the app opens
     buf = io.StringIO()
     STATE["progress"] = {"fraction": 0.0, "message": "Starting", "time": time.time(), "started": time.time()}
+    ws.live_reset()
     with RUN_LOCK:
         try:
             with contextlib.redirect_stdout(buf):
@@ -561,6 +562,9 @@ class Handler(BaseHTTPRequestHandler):
                 names = sorted({e.get("name") for n in tree.nodes for e in n.raw.get("effects", [])
                                 if e.get("type") == "replace_spell" and e.get("name")})
             return self._send(200, names)
+        if path == "/api/live":
+            full = "full=1" in self.path
+            return self._send(200, ws.live_snapshot(full) if STATE.get("progress") else {"id": None})
         if path == "/api/update/check":
             return self._send(200, updater.check())
         if path == "/api/ping":

@@ -5,7 +5,7 @@ A build helper for Wynncraft, all five classes. Tell it about your character in 
 You get:
 
 - **Best whole build**: every piece of gear picked together, not the strongest item per slot. Skill points items give and need from each other, set bonuses, elements, major IDs and the ability tree all count.
-- **Minimum stats you choose**: for example "max DPS, but at least 20,000 health and no slower walk speed". The best build is picked only among builds that keep them, and every result shows health, effective HP and walk speed next to your current gear.
+- **Minimum stats you choose**: for example "max DPS, but at least 20,000 health, 60,000 effective HP and no slower walk speed". The best build is picked only among builds that keep them, and every result shows health, effective HP and walk speed next to your current gear.
 - **Ability tree**: the best legal tree for your level, in click order.
 - **Skill points**: what to assign, and the order to equip items.
 - **Powders** for your weapon and armor, and the special they unlock.
@@ -32,6 +32,8 @@ Then just talk to it, for example:
 > I hit level 50. What changes?
 
 > I keep dying to a boss that hits for about 3000 fire. Make me tankier without losing too much damage.
+
+While it searches, **the Forge** shows the search live: a reel for each slot locks onto the best build found so far (and flicks through other items as the search tries swaps), the score for your goal climbs, a counter shows how many builds have been checked, and each weapon being built around lights up. Everything on it is real data from the search.
 
 Before the first build, Claude asks whether you want any minimum stats kept (like at least 20,000 health or no slower walk speed). Say "no" to skip.
 
