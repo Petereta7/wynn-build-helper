@@ -1,4 +1,4 @@
 {
-  "version": "1.2.0",
-  "notes": "Switch versions in Settings: go back to an earlier version if an update causes problems, and forward again any time."
+  "version": "1.2.1",
+  "notes": "Switch versions in Settings: go back to an earlier version if an update causes problems, and forward again any time. The update bar always offers the newest version."
 }

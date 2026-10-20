@@ -1,9 +1,15 @@
 {
   "versions": [
     {
+      "version": "1.2.1",
+      "date": "Oct 20",
+      "notes": "Switch versions in Settings: go back to an earlier version if an update causes problems, and forward again any time. The update bar always offers the newest version."
+    },
+    {
       "version": "1.2.0",
       "date": "Oct 20",
-      "notes": "Switch versions in Settings: go back to an earlier version if an update causes problems, and forward again any time."
+      "notes": "First try at version switching (switching may not work in this one; use 1.2.1).",
+      "warning": "Switching versions doesn't work in this version; use 1.2.1 or newer."
     },
     {
       "version": "1.1.1",

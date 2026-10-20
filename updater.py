@@ -216,7 +216,10 @@ def install(expected_version: str | None = None, log=print, version: str | None 
             files = _files_from_snapshot(version)
         elif version:
             log(f"Downloading version {version}...")
-            files = _files_from_zip(f"https://codeload.github.com/{OWNER}/{REPO}/zip/refs/tags/v{version}")
+            try:                                     # each version is kept as a release/<version> branch
+                files = _files_from_zip(f"https://codeload.github.com/{OWNER}/{REPO}/zip/refs/heads/release/{version}")
+            except Exception:                        # (or a v<version> tag)
+                files = _files_from_zip(f"https://codeload.github.com/{OWNER}/{REPO}/zip/refs/tags/v{version}")
         else:
             log("Downloading the update...")
             files = _files_from_zip(f"https://codeload.github.com/{OWNER}/{REPO}/zip/refs/heads/{BRANCH}")
