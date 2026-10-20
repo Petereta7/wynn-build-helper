@@ -212,6 +212,9 @@ label.deep input[type=checkbox] { width: auto; flex: 0 0 auto; margin-top: 3px; 
 .update-bar b { color: var(--legendary); }
 .update-bar .notes { color: var(--muted); flex: 1 1 260px; margin: 0; white-space: pre-line; }
 .update-bar .btn, .update-bar .btn-quiet { padding: 6px 12px; }
+.vrow { display: flex; gap: 8px; flex-wrap: wrap; } .vrow select { flex: 1 1 200px; }
+.vnotes { margin: 8px 0 0; font-size: 13px; color: var(--muted); white-space: pre-line; }
+.vnotes .warn { color: var(--warn); display: block; margin-top: 4px; }
 
 @media (max-width: 900px) {
   html, body { height: auto; }
@@ -577,6 +580,12 @@ label.deep input[type=checkbox] { width: auto; flex: 0 0 auto; margin-top: 3px; 
       <p id="s-version" style="margin:0 0 8px"></p>
       <label class="deep"><input type="checkbox" id="s-autoupd" checked> <span><b>Check for updates when the app opens.</b> Updates come only from this app's GitHub page, and you're always asked before one is installed. Your API key, settings and saved builds are never changed.</span></label>
       <button class="btn-quiet" id="checkUpd" type="button" style="margin-top:8px">Check for updates now</button>
+    </div>
+    <div class="field"><span class="lbl">Versions</span>
+      <p style="margin:0 0 8px">If an update causes problems, switch to an earlier version here (and back again any time). Your API key, settings, history and saved builds stay as they are.</p>
+      <div class="vrow"><select id="s-ver" aria-label="Version"><option>Loading…</option></select>
+        <button class="btn-quiet" id="switchVer" type="button">Switch to this version</button></div>
+      <p id="s-ver-notes" class="vnotes"></p>
     </div>
     <label class="deep"><input type="checkbox" id="s-sound"> <span><b>Sounds</b>: an anvil clang when the search finds a better build, and a big one when your build is ready.</span></label>
     <label class="deep"><input type="checkbox" id="s-popup" checked> <span><b>Pop-up when a build is ready</b>: a small white box in the top-left corner of your screen, on top of other windows, that disappears by itself.</span></label>
@@ -1650,7 +1659,35 @@ function showEmpty() {
 }
 
 /* ---------- settings ---------- */
-function openSettings() { $("#s-popup").checked = !META || META.popup !== false; $("#s-sound").checked = !!(META && META.sound); $("#s-autoupd").checked = !META || META.auto_update !== false;
+let VERSIONS = null;
+async function loadVersions() {
+  const sel = $("#s-ver");
+  try { VERSIONS = await fetch("/api/versions").then((r) => r.json()); } catch (e) { sel.innerHTML = "<option>Couldn't load versions</option>"; return; }
+  const vs = VERSIONS.versions || [];
+  if (!vs.length) { sel.innerHTML = "<option>No other versions available</option>"; $("#s-ver-notes").textContent = VERSIONS.error || ""; return; }
+  sel.innerHTML = vs.map((v) => `<option value="${esc(v.version)}"${v.version === VERSIONS.current ? " selected" : ""}>${esc(v.version)}${v.version === VERSIONS.current ? " (you're on this)" : ""}${v.date ? " · " + esc(v.date) : ""}${v.local ? " · on this computer" : ""}${v.warning ? " · ⚠" : ""}</option>`).join("");
+  showVerNotes();
+}
+function showVerNotes() {
+  const v = ((VERSIONS && VERSIONS.versions) || []).find((x) => x.version === $("#s-ver").value);
+  $("#s-ver-notes").innerHTML = v ? esc(v.notes || "") + (v.warning ? `<span class="warn">⚠ ${esc(v.warning)}</span>` : "") + (VERSIONS.error ? `<span class="warn">${esc(VERSIONS.error)}</span>` : "") : "";
+  $("#switchVer").disabled = !v || v.version === VERSIONS.current;
+}
+$("#s-ver").addEventListener("change", showVerNotes);
+$("#switchVer").addEventListener("click", async () => {
+  const ver = $("#s-ver").value;
+  if (!ver || !VERSIONS || ver === VERSIONS.current) return;
+  if (busy) { toast("Wait for the build to finish first"); return; }
+  const older = (VERSIONS.versions || []).findIndex((x) => x.version === ver) > (VERSIONS.versions || []).findIndex((x) => x.version === VERSIONS.current);
+  if (!confirm(`Switch to version ${ver}? The app restarts.` + (older ? " The update bar will keep offering the newest version, so you can come back with one click." : ""))) return;
+  const b = $("#switchVer"); b.disabled = true; b.textContent = "Switching…";
+  const r = await api("/api/versions/switch", { version: ver });
+  if (!r.ok) { toast(r.error || "That didn't work"); b.disabled = false; b.textContent = "Switch to this version"; return; }
+  $("#settings").classList.remove("on");
+  await api("/api/restart", {});
+  document.body.innerHTML = `<p style="padding:40px">Switching to version ${esc(ver)}: the app is restarting. If a new window doesn't open, start Wynn Build Helper again.</p>`;
+});
+function openSettings() { loadVersions(); $("#s-popup").checked = !META || META.popup !== false; $("#s-sound").checked = !!(META && META.sound); $("#s-autoupd").checked = !META || META.auto_update !== false;
   $("#s-version").textContent = META ? `You have version ${META.app_version}.` + (META.updates_configured ? "" : " (Updates aren't set up for this copy.)") : ""; $("#s-key").value = ""; $("#s-key").placeholder = META && META.key_hint ? `saved (${META.key_hint})` : "sk-ant-…"; $("#settings").classList.add("on"); $("#s-key").focus(); }
 $("#openSettings").addEventListener("click", openSettings);
 $("#keyLink").addEventListener("click", openSettings);
@@ -1703,7 +1740,7 @@ async function init() {
 let UPD = null;
 async function checkUpdate(manual) {
   try {
-    const r = await fetch("/api/update/check").then((x) => x.json());
+    const r = await fetch("/api/update/check" + (manual ? "?manual=1" : "")).then((x) => x.json());
     if (r.error) { if (manual) toast(r.error); return; }
     if (!r.available) { if (manual) toast(r.configured ? `You're up to date (version ${r.current})` : "Updates aren't set up for this copy"); return; }
     UPD = r;

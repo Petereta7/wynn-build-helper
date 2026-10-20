@@ -1,0 +1,45 @@
+{
+  "versions": [
+    {
+      "version": "1.2.0",
+      "date": "Oct 20",
+      "notes": "Switch versions in Settings: go back to an earlier version if an update causes problems, and forward again any time."
+    },
+    {
+      "version": "1.1.1",
+      "date": "Oct 19",
+      "notes": "Fix: builds could plan more spare skill points than your level has. Every build is now re-checked from scratch.",
+      "warning": "This version has no Versions menu; to come back, use the update bar or Settings > Check for updates now."
+    },
+    {
+      "version": "1.1.0",
+      "date": "Oct 19",
+      "notes": "Results screen: before/after bars, equipment screen, tree map, the final assembly animation, build history.",
+      "warning": "Has the skill point bug fixed in 1.1.1: some builds plan more spare skill points than your level has. This version also has no Versions menu; to come back, use the update bar or Settings > Check for updates now."
+    },
+    {
+      "version": "1.0.3",
+      "date": "Oct 19",
+      "notes": "Flashier Forge: slot-machine reels, sparks, rolling score, embers, BUILD FORGED finish, optional sounds.",
+      "warning": "Has the skill point bug fixed in 1.1.1: some builds plan more spare skill points than your level has. This version also has no Versions menu; to come back, use the update bar or Settings > Check for updates now."
+    },
+    {
+      "version": "1.0.2",
+      "date": "Oct 19",
+      "notes": "The build panel clears when you chat, so you can watch the Forge.",
+      "warning": "Has the skill point bug fixed in 1.1.1: some builds plan more spare skill points than your level has. This version also has no Versions menu; to come back, use the update bar or Settings > Check for updates now."
+    },
+    {
+      "version": "1.0.1",
+      "date": "Oct 19",
+      "notes": "The Forge: watch the search live. Effective HP minimum in the form.",
+      "warning": "Has the skill point bug fixed in 1.1.1: some builds plan more spare skill points than your level has. This version also has no Versions menu; to come back, use the update bar or Settings > Check for updates now."
+    },
+    {
+      "version": "1.0.0",
+      "date": "Oct 19",
+      "notes": "First version with built-in updates: minimum stats, faster scoring, extra searching, the build-ready pop-up, Bullwhip counts.",
+      "warning": "Has the skill point bug fixed in 1.1.1: some builds plan more spare skill points than your level has. This version also has no Versions menu; to come back, use the update bar or Settings > Check for updates now."
+    }
+  ]
+}

@@ -11,7 +11,8 @@ then downloads that version from the same repository and copies it over this fol
 Files it replaces are kept in _previous_version/ until the next update, so an update can be undone by
 copying them back. It only ever downloads from the repository named below, over HTTPS.
 
-From a terminal:  python3 updater.py          (check, and ask before installing)
+From a terminal:  python3 updater.py               (check, and ask before installing)
+                  python3 updater.py 1.1.0         (switch to that version, newer or older)
 """
 from __future__ import annotations
 
@@ -34,8 +35,12 @@ BRANCH = "main"
 
 VERSION_FILE = os.path.join(HERE, "version.json")
 # Never overwritten or removed by an update (paths relative to the app folder, "/" separated).
-PROTECTED = ("api_key.txt", "wynn_app_config.json", "wynn_data/", "_previous_version/", "app.log", ".window_ready")
+PROTECTED = ("api_key.txt", "wynn_app_config.json", "wynn_data/", "_previous_version/", "_versions/", "app.log",
+             ".window_ready")
 BACKUP_DIR = os.path.join(HERE, "_previous_version")
+SNAP_DIR = os.path.join(HERE, "_versions")         # copies of versions you've used, for switching back offline
+SNAP_LEAVE_OUT = PROTECTED + ("tests/", ".git/")
+KEEP_SNAPSHOTS = 6
 MAX_DOWNLOAD = 60 * 1024 * 1024
 
 
@@ -99,42 +104,141 @@ def _protected(rel: str) -> bool:
     return any(rel == p or (p.endswith("/") and rel.startswith(p)) for p in PROTECTED)
 
 
-def install(expected_version: str | None = None, log=print) -> dict:
-    """Download the newest version from the repository and copy it over this folder.
-    Returns {"ok", "version", "changed", "error"}."""
-    if not configured():
+def _safe_rel(rel: str) -> bool:
+    parts = rel.replace("\\", "/").split("/")
+    return bool(rel) and not rel.startswith("/") and ".." not in parts and ":" not in rel
+
+
+def _files_from_zip(url: str) -> dict:
+    zf = zipfile.ZipFile(io.BytesIO(_get(url, MAX_DOWNLOAD, timeout=120)))
+    names = zf.namelist()
+    if not names:
+        raise ValueError("the download is empty")
+    root = names[0].split("/")[0] + "/"
+    files = {}
+    for n in names:
+        if not n.startswith(root) or n.endswith("/"):
+            continue
+        rel = n[len(root):]
+        if not _safe_rel(rel):
+            raise ValueError(f"unsafe path in the download: {rel}")
+        files[rel] = zf.read(n)
+    return files
+
+
+def _files_from_snapshot(version: str) -> dict:
+    base = os.path.join(SNAP_DIR, version)
+    files = {}
+    for dp, dn, fn in os.walk(base):
+        dn[:] = [d for d in dn if d != "__pycache__"]
+        for f in fn:
+            full = os.path.join(dp, f)
+            rel = os.path.relpath(full, base).replace(os.sep, "/")
+            if _safe_rel(rel):
+                with open(full, "rb") as fh:
+                    files[rel] = fh.read()
+    return files
+
+
+def local_versions() -> list:
+    """Versions kept on this computer (newest first)."""
+    out = []
+    if os.path.isdir(SNAP_DIR):
+        for name in os.listdir(SNAP_DIR):
+            if os.path.isfile(os.path.join(SNAP_DIR, name, "version.json")):
+                out.append(name)
+    return sorted(out, key=_vtuple, reverse=True)
+
+
+def snapshot_current() -> str | None:
+    """Keep a copy of the version you're on (program files only) before switching away from it."""
+    ver = current_version().get("version", "0.0.0")
+    dest = os.path.join(SNAP_DIR, ver)
+    if os.path.isdir(dest) or ver == "0.0.0":
+        return ver
+    tmp = dest + ".partial"
+    shutil.rmtree(tmp, ignore_errors=True)
+    for dp, dn, fn in os.walk(HERE):
+        rel_dir = os.path.relpath(dp, HERE).replace(os.sep, "/")
+        rel_dir = "" if rel_dir == "." else rel_dir + "/"
+        dn[:] = [d for d in dn if d != "__pycache__" and not _left_out(rel_dir + d + "/")]
+        for f in fn:
+            rel = rel_dir + f
+            if _left_out(rel) or f.endswith((".updating", ".pyc")):
+                continue
+            target = os.path.join(tmp, *rel.split("/"))
+            os.makedirs(os.path.dirname(target), exist_ok=True)
+            shutil.copy2(os.path.join(dp, f), target)
+    os.replace(tmp, dest)
+    for old in local_versions()[KEEP_SNAPSHOTS:]:                 # keep the newest few
+        shutil.rmtree(os.path.join(SNAP_DIR, old), ignore_errors=True)
+    return ver
+
+
+def _left_out(rel: str) -> bool:
+    return any(rel == p or (p.endswith("/") and rel.startswith(p)) for p in SNAP_LEAVE_OUT)
+
+
+def list_versions() -> dict:
+    """{"current", "versions": [{"version", "date", "notes", "warning", "local"}], "error"}"""
+    cur = current_version().get("version", "0.0.0")
+    local = set(local_versions())
+    out = {"current": cur, "versions": [], "error": None}
+    remote = []
+    if configured():
+        try:
+            url = f"https://raw.githubusercontent.com/{OWNER}/{REPO}/{BRANCH}/versions.json?t={int(time.time())}"
+            remote = json.loads(_get(url, 512 * 1024).decode("utf-8")).get("versions", [])
+        except Exception as exc:
+            out["error"] = f"Couldn't get the list of versions ({type(exc).__name__}); showing the ones on this computer."
+    seen = set()
+    for v in remote:
+        ver = str(v.get("version", ""))
+        if not ver or ver in seen:
+            continue
+        seen.add(ver)
+        out["versions"].append({"version": ver, "date": v.get("date", ""), "notes": str(v.get("notes", ""))[:600],
+                                "warning": v.get("warning") or "", "local": ver in local})
+    for ver in local - seen:
+        out["versions"].append({"version": ver, "date": "", "notes": "Kept on this computer.", "warning": "", "local": True})
+    out["versions"].sort(key=lambda v: _vtuple(v["version"]), reverse=True)
+    return out
+
+
+def install(expected_version: str | None = None, log=print, version: str | None = None) -> dict:
+    """Install the newest version (or `version`, newer or older) over this folder. The version you're on is kept
+    in _versions first, so you can switch back. Returns {"ok", "version", "changed", "error"}."""
+    if not configured() and not (version and version in local_versions()):
         return {"ok": False, "error": "Updates aren't set up for this copy."}
     try:
-        log("Downloading the update...")
-        url = f"https://codeload.github.com/{OWNER}/{REPO}/zip/refs/heads/{BRANCH}"
-        zf = zipfile.ZipFile(io.BytesIO(_get(url, MAX_DOWNLOAD, timeout=120)))
-        names = zf.namelist()
-        if not names:
-            raise ValueError("the download is empty")
-        root = names[0].split("/")[0] + "/"
-        files = {}
-        for n in names:
-            if not n.startswith(root) or n.endswith("/"):
-                continue
-            rel = n[len(root):]
-            parts = rel.replace("\\", "/").split("/")
-            if not rel or rel.startswith("/") or ".." in parts or ":" in rel:
-                raise ValueError(f"unsafe path in the download: {rel}")
-            files[rel] = n
+        if version and version in local_versions():
+            log(f"Switching to version {version} (kept on this computer)...")
+            files = _files_from_snapshot(version)
+        elif version:
+            log(f"Downloading version {version}...")
+            files = _files_from_zip(f"https://codeload.github.com/{OWNER}/{REPO}/zip/refs/tags/v{version}")
+        else:
+            log("Downloading the update...")
+            files = _files_from_zip(f"https://codeload.github.com/{OWNER}/{REPO}/zip/refs/heads/{BRANCH}")
         for must in ("version.json", "wynn_helper.py", "wynn_app.py", "app/index.html"):
             if must not in files:
                 raise ValueError(f"the download is missing {must}")
-        new_version = json.loads(zf.read(files["version.json"]).decode("utf-8")).get("version", "")
-        if expected_version and _vtuple(new_version) < _vtuple(expected_version):
+        new_version = json.loads(files["version.json"].decode("utf-8")).get("version", "")
+        if version and _vtuple(new_version) != _vtuple(version):
+            raise ValueError(f"asked for version {version} but got {new_version}")
+        if not version and expected_version and _vtuple(new_version) < _vtuple(expected_version):
             raise ValueError("the download is older than the version announced")
+        try:
+            snapshot_current()
+        except Exception:
+            pass                                    # a missing snapshot only means switching back needs the internet
         # Back up what gets replaced, then write each file next to its target and swap it in.
         if os.path.isdir(BACKUP_DIR):
             shutil.rmtree(BACKUP_DIR, ignore_errors=True)
         changed = 0
-        for rel, n in sorted(files.items()):
+        for rel, data in sorted(files.items()):
             if _protected(rel):
                 continue
-            data = zf.read(n)
             dest = os.path.join(HERE, *rel.split("/"))
             if os.path.exists(dest):
                 with open(dest, "rb") as fh:
@@ -151,10 +255,10 @@ def install(expected_version: str | None = None, log=print) -> dict:
                 os.chmod(tmp, 0o755)
             os.replace(tmp, dest)
             changed += 1
-        log(f"Updated to version {new_version} ({changed} files changed).")
+        log(f"Now on version {new_version} ({changed} files changed).")
         return {"ok": True, "version": new_version, "changed": changed, "error": None}
     except Exception as exc:
-        return {"ok": False, "error": f"The update didn't install: {exc}. Nothing important was changed; "
+        return {"ok": False, "error": f"That didn't install: {exc}. Nothing important was changed; "
                                       "you can try again later."}
 
 
@@ -171,6 +275,10 @@ def restart_app():
 
 
 def main():
+    if len(sys.argv) > 1:
+        res = install(version=sys.argv[1].lstrip("v"))
+        print("Done. Open the app again to use it." if res["ok"] else res["error"])
+        return
     info = check()
     if not info["configured"]:
         print("Updates aren't set up for this copy.")

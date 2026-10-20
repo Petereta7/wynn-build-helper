@@ -713,7 +713,9 @@ class Handler(BaseHTTPRequestHandler):
             full = "full=1" in self.path
             return self._send(200, ws.live_snapshot(full) if STATE.get("progress") else {"id": None})
         if path == "/api/update/check":
-            return self._send(200, updater.check())
+            return self._send(200, updater.check())        # a newer version is always offered, even after switching back
+        if path == "/api/versions":
+            return self._send(200, updater.list_versions())
         if path == "/api/ping":
             return self._send(200, {"ok": True})
         if path == "/api/progress":
@@ -769,6 +771,14 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, {"ok": False, "error": "A build is still being worked out. Install the update when it's done."})
             with RUN_LOCK:
                 return self._send(200, updater.install(body.get("version")))
+        if self.path == "/api/versions/switch":
+            target = str(body.get("version") or "").lstrip("v")
+            if not target:
+                return self._send(200, {"ok": False, "error": "Pick a version first."})
+            if RUN_LOCK.locked():
+                return self._send(200, {"ok": False, "error": "A build is still being worked out. Switch when it's done."})
+            with RUN_LOCK:
+                return self._send(200, updater.install(version=target))
         if self.path == "/api/restart":
             self._send(200, {"ok": True})
             def _restart():

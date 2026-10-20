@@ -50,6 +50,8 @@ The app checks for a new version when it opens (you can turn this off, or check 
 
 From a terminal: `python updater.py` checks and asks before installing.
 
+**Going back to an earlier version:** if an update causes problems, open **Settings → Versions**, pick an earlier version and click **Switch to this version**. The app restarts on that version. Your API key, settings, history and saved builds stay as they are. The update bar always offers the newest version whenever you're on an older one (including after switching back), so coming back is one click. Versions you've used are kept on your computer, so switching back to them works offline; others are downloaded from this app's GitHub page. From a terminal: `python updater.py 1.1.0`.
+
 ## How the best build is found
 
 There are trillions of possible gear combinations (about 643 trillion for a level 60 Warrior), far too many to try one by one. The helper:

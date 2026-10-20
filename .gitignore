@@ -12,3 +12,4 @@ tests/crossval/work/
 tests/crossval/wynnbuilder/
 wynn_data/build_history.json
 wynn_data/*.tmp
+_versions/
