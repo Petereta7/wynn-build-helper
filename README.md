@@ -73,6 +73,8 @@ There are trillions of possible gear combinations (about 643 trillion for a leve
 4. **Fine-tunes the best few**: ability tree, exact skill point split and powders.
 5. **Searches some more on top**: a quick look at 12 more weapons (32 in Deep search) that step 2 skipped, the full search around the most promising of them, and deeper three-item swaps plus a few shake-ups around the best builds. These only add builds to choose from; everything above is kept exactly as it was, and the answer is the best of all of them, so this step can only find better builds, never worse ones.
 
+6. **Designs crafted items** for the best builds: for each slot (weapon included) it designs the crafted item that makes the whole build best with the rest of the build on, and keeps it where it beats the normal item; then fine-tunes again around the crafts. See "Crafted items" below. Like step 5, this only adds builds to choose from.
+
 If you set minimum stats, a build that misses one always scores below every build that meets them all, so the search moves toward builds that qualify and then maximizes your goal among them. If nothing in range can meet them all, the report says which minimum was missed and shows the closest build.
 
 It uses every CPU core, and remembers builds it has already scored, so repeats cost nothing. Working out the skill points each gear set needs (most of the search's time) is about twice as fast as before, with exactly the same answers (`tests/speed_check.py` checks this). **Deep search** is the default (untick it in the app, or use `--quick`, for a faster search of about a minute). It tries more weapons, more starting points and three-item swaps, then shakes up the best build and searches again; it takes several minutes (about 3 to 4 on a typical 6 to 8 core PC, longer on older ones). Progress and time left are shown, and you can stop anytime and keep the best build so far.
@@ -82,6 +84,16 @@ Searches remember their best builds in `wynn_data/best_builds.json` (only for th
 Every result says **how sure** it is: how many independent search attempts (each from a different starting point) ended at the same best build. If they disagree, try Deep search.
 
 **Accuracy:** on small cases where every possible combination can be checked by brute force, the search found the true best build every time (see `tests/accuracy_test.py` to run it yourself). On full-size cases nobody can check every combination, so there it's very likely, not guaranteed, to be the best.
+
+## Crafted items
+
+The search designs crafted items for your build and uses them wherever they beat normal items (often accessories and mid-level gear). For each slot it picks the highest recipe you can wear (most health or damage), tier 3 materials, for weapons the best attack speed, and the six ingredients and where each goes in the 3 x 2 grid (some ingredients make their neighbours stronger or weaker). Every craft follows the game's crafting rules, the same ones Wynnbuilder's crafter checks: each ingredient usable by that profession, none above the recipe's level range, and durability left over.
+
+The report and the "How to craft" panel show each crafted piece's recipe, materials, the ingredient grid, where each ingredient drops, and a link that opens it in Wynnbuilder's crafter. Someone has to craft it: you (you can craft an item up to your own level in that profession) or a crafter. Crafted stats use the best rolls, like every other item (Wynnbuilder does the same).
+
+Don't want crafted items? Untick "Design crafted items" in the form, tell the bot, or use `--no-crafted`.
+
+How well the designer does is checked in `tests/craft_check.py`: on small cases every possible ingredient grid is tried and the designer must find one exactly as good, and every craft it designs is checked against the crafting rules.
 
 ## Command line (optional)
 
@@ -143,6 +155,7 @@ python3 wynn_helper.py --class warrior --level 60 --goal melee --min "hp=6000, w
 | `--min` | Minimum stats every suggested build must keep, e.g. `"hp=20000, walk speed=0"`. Stats: health (`hp`), effective HP (`ehp`, against `--enemy` if given), `walk speed` (%), `mana regen`, `health regen`, and `earth`/`thunder`/`water`/`fire`/`air def` |
 | `--min-hp`, `--min-ehp`, `--min-walk-speed`, `--min-mana-regen` | The same minimums one at a time |
 | `--drops-only` | Only suggest items that drop from mobs, loot chests or dungeons |
+| `--no-crafted` | Don't design crafted items for the build (they're designed by default) |
 | `--no-whole-build` | Skip choosing all gear together (faster) |
 | `--quick` | Faster normal search (about a minute) instead of the default deep search |
 | `--time-limit` | Stop the whole-build search after this many seconds and keep the best so far |

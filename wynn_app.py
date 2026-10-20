@@ -159,6 +159,7 @@ def run_report(params: dict) -> dict:
     args.buffs = _as_list_text(params.get("buffs"))
     args.raid_buffs = _as_list_text(params.get("raid_buffs"))
     args.drops_only = bool(params.get("drops_only"))
+    args.no_crafted = params.get("crafted") is False          # crafted items are designed unless asked not to
     if params.get("rolls") in wh.ROLL_MODES:
         args.rolls = params["rolls"]
     if params.get("poison") in ("wynnbuilder", "low"):
@@ -361,6 +362,14 @@ def item_card(it, slot: str):
             "major_ids": [[m, _clean_desc((game_data().majids.get(m) or {}).get("description", ""))[:240]]
                           for m in (it.major_ids or [])],
             "notes": it.source_notes()}
+    lc = getattr(it, "link_code", None)
+    if getattr(it, "crafted", False) and lc and lc[0] == "craft":          # how to make it
+        rec = game_data().recipes.get(lc[1], {})
+        ings = game_data().ingredients
+        card["craft"] = {"recipe": rec.get("name", ""), "profession": (rec.get("skill") or "").capitalize(),
+                         "mats": list(lc[2]), "grid": ["" if i == 4000 else (ings.get(i) or {}).get("name", "?") for i in lc[3]],
+                         "durability": list(getattr(it, "durability", []) or []),
+                         "link": wh.CRAFTER_URL + wh.craft_code(it)}
     if getattr(it, "category", "") == "weapon" or slot == "Weapon":
         card["atk_spd"] = str(getattr(it, "atk_spd", "") or "").replace("_", " ").lower()
         card["damage"] = [[wh.ELEM_NAMES[i], round(lo), round(hi)] for i, (lo, hi) in enumerate(it.damage or []) if hi]
@@ -480,6 +489,7 @@ How to work:
 - Otherwise pick the goal from what they say: melee whenever they ask for "DPS" or "highest DPS" (this is exactly Wynnbuilder's Average DPS: main attack damage per hit x attack speed, which is what players compare), spells only when they talk about spell damage or casting, burst for one big combo, survival (tanky / keeps dying), balanced (damage and survival), healing (support). If unclear, use melee for "damage/DPS". If they keep dying to a particular boss or element, pass that as the enemy hit.
 - Pass item and ability names exactly as the player wrote them; the calculator corrects spelling and says so. "Mana bank" means the Mage ability Arcane Transfer.
 - Crafted items are written as codes starting with CR- (and custom items CI-); pass them as gear.
+- The search also designs crafted items for the build (recipe, materials and the 6-ingredient grid, following the game's crafting rules) and uses them where they beat normal items. The report's "Crafted pieces" part says how to make each one and where its ingredients drop. When the best build has crafted pieces, say which and what they add; someone has to craft them (the player, with the profession level the report gives, or a crafter). If the player doesn't want crafted items (doesn't craft, wants only drops, can't get the ingredients), set crafted to false.
 - Deep search is the default and takes several minutes. Only set deep_search to false if they ask for something quick, or for small follow-up questions where a rough answer is enough.
 - Think about the build as a whole, never as the best item per slot. The report's "Best whole build" section is the calculator choosing every piece together with the rest of the build on (skill points items give and need from each other, set bonuses, elements and powders, major IDs, the ability tree re-planned for that gear). Lead with that when the player wants a new build or upgrades, and use the one-slot list only for a single quick swap.
 - Explain the synergy in plain words: why these pieces work together, for example "Ajax's +13 Strength covers the Strength the chestplate and leggings need, which frees points for Dexterity", "two Corrupted pieces turn on the set bonus", "every piece adds air damage, matching the air powders and Wind Prison". Check item details with lookup_item when you explain, so what you say is true. If a piece is there mainly to enable others, say so.
@@ -546,6 +556,8 @@ TOOLS = [
                 "buffs": {"type": "array", "items": {"type": "string", "enum": list(wh.BUFFS)}},
                 "raid_buffs": {"type": "array", "items": {"type": "string"}},
                 "drops_only": {"type": "boolean", "description": "Only suggest items that drop from mobs, chests or dungeons"},
+                "crafted": {"type": "boolean", "description": "Design crafted items for the build (default true). False when "
+                            "the player doesn't want crafted items."},
                 "rolls": {"type": "string", "enum": wh.ROLL_MODES,
                           "description": "Item rolls: max (default, like Wynnbuilder), avg, min, base"},
                 "poison": {"type": "string", "enum": ["wynnbuilder", "low"]},

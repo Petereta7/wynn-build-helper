@@ -705,12 +705,16 @@ POWDER_ING_INFO = [(-35, 0), (-52.5, 0), (-70, 10), (-91, 20), (-112, 28), (-133
 ROMAN_NUM = ["I", "II", "III", "IV", "V", "VI", "VII"]
 WEAPON_TYPES = ["wand", "spear", "bow", "dagger", "relik"]
 ACCESSORY_TYPES = ["ring", "bracelet", "necklace"]
+# Who can use the blank slot and powder ingredients (Wynnbuilder load_ing.js).
+CRAFT_SKILLS_GEAR = ("ARMOURING", "TAILORING", "WEAPONSMITHING", "WOODWORKING", "JEWELING")
+CRAFT_SKILLS_ALL = CRAFT_SKILLS_GEAR + ("COOKING", "ALCHEMISM", "SCRIBING")
 
 
 def build_ingredient_table(ings: list) -> dict:
     """Ingredient id -> ingredient, including Wynnbuilder's 'No Ingredient' and the 35 powder ingredients."""
     zero_pos = {"left": 0, "right": 0, "above": 0, "under": 0, "touching": 0, "notTouching": 0}
-    table = {4000: {"name": "No Ingredient", "id": 4000, "ids": {}, "posMods": dict(zero_pos),
+    table = {4000: {"name": "No Ingredient", "id": 4000, "ids": {}, "posMods": dict(zero_pos), "lvl": 0, "tier": 0,
+                    "skills": list(CRAFT_SKILLS_ALL),
                     "itemIDs": {"dura": 0, "strReq": 0, "dexReq": 0, "intReq": 0, "defReq": 0, "agiReq": 0}}}
     for e in range(5):
         for t in range(7):
@@ -719,8 +723,8 @@ def build_ingredient_table(ings: list) -> dict:
             item_ids[SKILLS[e] + "Req"] = req
             pid = 7 * e + t
             table[4001 + pid] = {"name": f"{POWDER_ELEM_NAMES[e]} Powder {ROMAN_NUM[t]}", "id": 4001 + pid,
-                                 "ids": {}, "posMods": dict(zero_pos), "itemIDs": item_ids,
-                                 "isPowder": True, "pid": pid}
+                                 "ids": {}, "posMods": dict(zero_pos), "itemIDs": item_ids, "lvl": 0, "tier": 0,
+                                 "skills": list(CRAFT_SKILLS_GEAR), "isPowder": True, "pid": pid}
     for ing in ings:
         table[int(ing["id"])] = ing
     return table
@@ -760,6 +764,15 @@ def make_crafted(data, recipe_id: int, mat_tiers, ing_ids, atk_spd: str = "SLOW"
     raw = {"name": f"Crafted {rtype.capitalize()} (Lv {lvl_lo}-{lvl_hi})", "type": rtype, "category": category,
            "tier": "Crafted", "lvl": lvl_lo, "slots": slots, "fixID": True}
     damage = None
+    # Durability (Wynnbuilder craft.js): the recipe's, scaled by the materials, plus each ingredient's (not
+    # affected by effectiveness). Below 1 the craft doesn't work in game.
+    d_lo, d_hi = rng("durability")
+    dura = [_js_round(d_lo * matmult), _js_round(d_hi * matmult)]
+    for ing in ings:
+        v = (ing.get("itemIDs") or {}).get("dura", 0) or 0
+        dura = [x + v for x in dura]
+    missing_dura = next((x for x in reversed(dura) if x < 1), None)
+    dura = [0 if x < 1 else math.floor(x) for x in dura]
     if category == "weapon":
         ratio = {"SLOW": 2.05 / 1.5, "NORMAL": 1.0, "FAST": 2.05 / 2.5}[atk_spd]
         n_lo = math.floor(math.floor(low * matmult) * ratio)
@@ -842,7 +855,78 @@ def make_crafted(data, recipe_id: int, mat_tiers, ing_ids, atk_spd: str = "SLOW"
         it.ingred_powders = [ing["pid"] for ing in ings if ing.get("isPowder")]
     it.ingredients = [ing["name"] for ing in ings if ing["id"] != 4000]
     it.link_code = ("craft", recipe_id, list(mat_tiers), list(ing_ids), atk_spd)
+    it.durability, it.missing_durability = dura, missing_dura
+    it.recipe_name = recipe.get("name", "")
+    it.craft_problems = craft_problems(recipe, ings, missing_dura)
     return it
+
+
+CRAFTER_URL = "https://wynnbuilder.github.io/crafter/#"
+
+
+def craft_code(it) -> str:
+    """The code Wynnbuilder's crafter opens ("CR-..." without the prefix)."""
+    bits = Bits()
+    encode_craft_bits(bits, it)
+    return bits.to_b64()
+
+
+def ingredient_sources(data, name: str, limit: int = 3) -> str:
+    ing = next((g for g in data.ingredients.values() if g.get("name") == name or g.get("displayName") == name), None)
+    mobs = [m.get("name") for m in (ing or {}).get("droppedBy") or [] if m.get("name")]
+    if not mobs:
+        return "no mob listed in the game data"
+    mobs = list(dict.fromkeys(mobs))
+    return ", ".join(mobs[:limit]) + (f" and {len(mobs) - limit} more" if len(mobs) > limit else "")
+
+
+def print_crafts(data, pieces, info):
+    """How to make the crafted pieces of a build: recipe, materials, the grid, where the ingredients drop."""
+    import wynn_craft as wc
+    crafts, seen = [], set()
+    for label, it in pieces:
+        if not getattr(it, "crafted", False) or not getattr(it, "link_code", None) or it.link_code[0] != "craft":
+            continue
+        code = craft_code(it)
+        if code in seen:                                  # the same crafted ring on both hands: once
+            crafts = [(l + " and " + label if c == code else l, x, c) for l, x, c in crafts]
+            continue
+        seen.add(code)
+        crafts.append((label, it, code))
+    if not crafts:
+        return
+    wc.remember_names(data)
+    print("  Crafted pieces (designed for this build):")
+    for label, it, code in crafts:
+        rec = data.recipes.get(it.link_code[1], {})
+        prof = (rec.get("skill") or "").capitalize()
+        lo, hi = (rec.get("lvl") or {}).get("minimum", 0), (rec.get("lvl") or {}).get("maximum", 0)
+        print(f"   {label}: {prof} recipe level {lo}-{hi} (to craft it yourself: {prof} level {hi}; or ask a crafter)")
+        for line in wc.describe(it):
+            print("     " + line)
+        names = list(dict.fromkeys(n for n in it.ingredients if "Powder" not in n))
+        for n in names:
+            print(f"     {n}: dropped by {ingredient_sources(data, n)}")
+        print(f"     Durability {it.durability[0]}-{it.durability[1]}. Open it in Wynnbuilder's crafter: {CRAFTER_URL}{code}")
+    if info.get("found_by") and info.get("after", 0) > info.get("before", 0) > 0:
+        print(f"  The crafted pieces add +{(info['after'] / info['before'] - 1) * 100:.1f}% over the best build "
+              "without them. (\"No crafted items\" leaves them out.)")
+    print("  Crafted stats use the best rolls, like every other item here (Wynnbuilder does the same).")
+
+
+def craft_problems(recipe, ings, missing_dura=None) -> list:
+    """Why this craft can't be made in game (Wynnbuilder's crafter warnings), or [] if it can."""
+    out = []
+    skill = recipe.get("skill", "")
+    top = (recipe.get("lvl") or {}).get("maximum", 0)
+    for ing in ings:
+        if skill not in (ing.get("skills") or ()):
+            out.append(f"{ing['name']} can't be used for {skill.capitalize()}")
+        if (ing.get("lvl") or 0) > top:
+            out.append(f"{ing['name']} is too high level for a level {top} recipe")
+    if missing_dura is not None:
+        out.append(f"needs {-missing_dura:g} more durability")
+    return out
 
 
 def decode_craft_bits(data, cur):
@@ -4664,7 +4748,7 @@ def run(args):
         wb = ws.search_best_build(floor_build, chosen, armor, weapon, base_weapon, keep=keep_ids, ap_budget=budget,
                                   include_never=include_never, min_level=min_lvl,
                                   deep=getattr(args, "deep", False), time_limit=getattr(args, "time_limit", None),
-                                  log=lambda m: print("  " + m))
+                                  log=lambda m: print("  " + m), crafted=not getattr(args, "no_crafted", False))
         if wb.get("stopped"):
             print("  (Stopped early: this is the best build found so far.)")
         bs = wb.get("bonus_search") or {}
@@ -4682,6 +4766,7 @@ def run(args):
         LAST_RESULT["best"] = {"armor": list(wb["armor"]), "weapon": wb["weapon"], "owned": frozenset(wb["owned"]),
                                "extra": list(wb["extra"]), "eval": fin}
         LAST_RESULT["start"] = st
+        LAST_RESULT["craft_info"] = wb.get("crafted") or {}
         gain = fin["value"] / st["value"] - 1 if st["value"] > 0 else 0
         if floor_build.floors:
             if not fin.get("floors_met", True):
@@ -4769,6 +4854,8 @@ def run(args):
             if any("not a mob drop" in (x.short() if x else "") for x in wb["armor"] + [w]):
                 print("  \"Not a mob drop\" items come from raids, quests, merchants or events, or are no longer obtainable;")
                 print("  use --drops-only (or the drops option in the app) to build only from mob drops.")
+            print_crafts(data, [(SLOT_LABELS[i], x) for i, x in enumerate(wb["armor"]) if x is not None]
+                         + [("Weapon", w)], wb.get("crafted") or {})
 
     # ---- tomes and aspects
     if data.tomes:
@@ -4953,6 +5040,8 @@ def make_parser():
                    help="skip choosing all gear together (faster)")
     p.add_argument("--deep", action="store_true", default=True,
                    help="deep search for the best whole build (the default)")
+    p.add_argument("--no-crafted", action="store_true",
+                   help="leave crafted items out of the whole-build search (they're designed for your build by default)")
     p.add_argument("--quick", dest="deep", action="store_false",
                    help="faster, normal search instead of deep search (about a minute)")
     p.add_argument("--time-limit", type=float, default=None,

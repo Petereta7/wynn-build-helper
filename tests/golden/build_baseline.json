@@ -1,9 +1,10 @@
 {
-  "archer L60 melee": 22195.25938484643,
-  "assassin L50 balanced": 12959.787436085471,
-  "assassin L55 spells, Aerial Ace 50%": 81592.47048771699,
-  "mage L40 spells": 15604.831068598649,
-  "mage L45 survival, min 2500 health": 33632.64891131033,
-  "shaman L60 spells": 43312.22986869456,
-  "warrior L50 melee": 7000.235601970926
+  "archer L60 melee": 24153.328883012447,
+  "assassin L50 balanced": 20235.774465975584,
+  "assassin L55 spells, Aerial Ace 50%": 107581.52873035774,
+  "mage L40 spells": 23681.86799013237,
+  "mage L45 survival, min 2500 health": 67322.6440964662,
+  "shaman L60 spells": 53308.740970715546,
+  "warrior L50 melee": 7339.201369011177,
+  "warrior L50 melee, no crafted items": 7000.235601970926
 }

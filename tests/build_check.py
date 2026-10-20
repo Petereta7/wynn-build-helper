@@ -9,6 +9,7 @@ For every class it checks:
   * skill points, worked out from scratch: gear needs + spare points fit the level, no skill over 100
   * the ability tree is legal and fits the ability points for the level
   * any minimums asked for are met
+  * crafted pieces (designed by default) can be made in game, and their crafter codes read back the same
   * the score is at least the score recorded in tests/golden/build_baseline.json (builds never get worse)
 
     python3 tests/build_check.py              (all cases; a few minutes)
@@ -44,6 +45,7 @@ CASES = [
      "minimums": {"health": 2500}},
     {"name": "assassin L55 spells, Aerial Ace 50%", "class": "assassin", "level": 55, "goal": "spells",
      "toggles": ["Aerial Ace=50%"]},
+    {"name": "warrior L50 melee, no crafted items", "class": "warrior", "level": 50, "goal": "melee", "crafted": False},
 ]
 
 RESULTS = []
@@ -83,6 +85,16 @@ def problems_with(case, res):
         out.append("ability tree isn't legal: " + "; ".join(map(str, v.get("errors", [])[:3])))
     elif v.get("ap", 0) > wh.ability_points(lvl):
         out.append(f"ability tree uses {v['ap']} points, only {wh.ability_points(lvl)} at this level")
+    for it in armor + [weapon]:                  # crafted pieces: can be made in game, and the code reads back
+        if not getattr(it, "crafted", False) or not getattr(it, "link_code", None):
+            continue
+        if case.get("crafted") is False:
+            out.append(f"crafted {it.type} with crafted items turned off")
+        if it.craft_problems or it.missing_durability is not None:
+            out.append(f"crafted {it.type} can't be made: {it.craft_problems}")
+        back = wh.crafted_from_code(wh.LAST_RESULT["build"].data, "CR-" + wh.craft_code(it))
+        if back.max_stats != it.max_stats or back.reqs != it.reqs or back.bonus != it.bonus:
+            out.append(f"crafted {it.type}'s code doesn't read back the same")
     fin = best["eval"]
     if case.get("minimums") and not fin.get("floors_met", True):
         out.append("misses the minimums: " + "; ".join(wh.floor_misses(wh.parse_floors(
@@ -93,8 +105,15 @@ def problems_with(case, res):
 def main():
     argv = sys.argv[1:]
     record = "--record" in argv
+    one = None
+    if "--case" in argv:                      # one case by its name (tests/run_all.py runs cases side by side)
+        i = argv.index("--case")
+        one = argv[i + 1]
+        argv = argv[:i] + argv[i + 2:]
     only = {a.lower() for a in argv if not a.startswith("--")}
-    cases = [c for c in CASES if not only or c["class"] in only]
+    cases = [c for c in CASES if (one is None or c["name"] == one) and (not only or c["class"] in only)]
+    if one is not None and not cases:
+        sys.exit(f"No case named {one!r}.")
     base = {}
     if os.path.exists(BASELINE):
         with open(BASELINE, encoding="utf-8") as fh:
@@ -119,6 +138,7 @@ def main():
         if not best or not res.get("ok"):
             continue
         score = best["eval"]["main"]
+        print(f"SCORE\t{case['name']}\t{score!r}", flush=True)
         was = base.get(case["name"])
         if was is None:
             check(f"{case['name']}: not worse than before", True, f"({score:,.1f}; no score recorded yet)")

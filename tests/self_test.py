@@ -109,6 +109,8 @@ def main():
             except Exception:
                 continue
             good = it.reqs == c["reqs"] and it.bonus == c["bonus"] and it.slots == c["slots"]
+            if "dura" in c:                    # durability, and whether the craft works (Wynnbuilder's numbers)
+                good = good and it.durability == c["dura"] and it.missing_durability == c["missing"]
             for key, mine in (("min", it.min_stats), ("max", it.max_stats)):
                 a = {k: v for k, v in mine.items() if v}
                 b = {k: v for k, v in c[key].items() if v and k not in wh.SKILLS}

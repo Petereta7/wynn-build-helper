@@ -37,7 +37,8 @@ for (const c of cases) {
     const ings = __c.ings.map(id => expandIngredient(ingMap.get(ingIDMap.get(id))));
     const craft = new Craft(recipe, __c.mats, ings, __c.atk, "");
     const sm = craft.statMap;
-    const out = {reqs: sm.get("reqs"), sp: sm.get("skillpoints"), min: {}, max: {}, slots: sm.get("slots"), hash: encodeCraft(craft).toB64()};
+    const out = {reqs: sm.get("reqs"), sp: sm.get("skillpoints"), min: {}, max: {}, slots: sm.get("slots"), hash: encodeCraft(craft).toB64(),
+                 dura: sm.get("durability").slice(), missing: sm.has("missingDurability") ? sm.get("missingDurability") : null};
     for (const [k, v] of sm.get("maxRolls")) if (v) out.max[k] = v;
     for (const [k, v] of sm.get("minRolls")) if (v) out.min[k] = v;
     for (const k of ["hp", "eDef", "tDef", "wDef", "fDef", "aDef"]) { const v = sm.get(k); if (typeof v === "number" && v) { out.max[k] = (out.max[k]||0) + v; out.min[k] = (out.min[k]||0) + v; } }
@@ -52,6 +53,8 @@ for (const c of cases) {
   if (JSON.stringify(res.reqs) !== JSON.stringify(c.reqs)) errs.push(['reqs', res.reqs, c.reqs]);
   if (JSON.stringify(res.sp) !== JSON.stringify(c.bonus)) errs.push(['sp', res.sp, c.bonus]);
   if (res.slots !== c.slots) errs.push(['slots', res.slots, c.slots]);
+  if (JSON.stringify(res.dura) !== JSON.stringify(c.dura)) errs.push(['durability', res.dura, c.dura]);
+  if (!near(res.missing === null ? 1e9 : res.missing, c.missing === null ? 1e9 : c.missing)) errs.push(['missing durability', res.missing, c.missing]);
   for (const key of ['min', 'max']) {
     const a = res[key], b = {}; for (const [k, v] of Object.entries(c[key])) if (v) b[k] = v;
     for (const s of ['str','dex','int','def','agi']) delete a[s];

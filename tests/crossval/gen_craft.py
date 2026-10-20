@@ -29,6 +29,7 @@ for n in range(3000):
         powders = [w.Powder(random.randrange(5), random.randint(1, 7)) for _ in range(random.randint(1, it.slots))]
     out = {"recipe": r['name'], "mats": mats, "ings": ids, "atk": atk,
            "reqs": it.reqs, "bonus": it.bonus, "min": it.min_stats, "max": it.max_stats, "slots": it.slots,
+           "dura": it.durability, "missing": it.missing_durability,
            "powders": [p.elem * 7 + p.tier - 1 for p in powders]}
     if it.category == 'weapon':
         out["damage"] = [list(x) for x in w.weapon_with_powders(it, powders).damage]

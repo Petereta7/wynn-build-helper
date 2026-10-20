@@ -1,4 +1,4 @@
 {
-  "version": "1.3.2",
-  "notes": "Automatic checks: every update is now tested on Windows before it's offered, including the app itself, the updater (your key, settings and history stay untouched), and a full build for every class that must be legal and never worse than before. A version that fails any check never reaches the update bar."
+  "version": "1.4.0",
+  "notes": "Crafted items: the search now designs crafted items for your build (recipe, tier 3 materials, attack speed, and the six ingredients and where each goes) and uses them wherever they beat normal items, for every class and slot. Every craft follows the game's crafting rules. The report and a new \"How to craft\" panel show each recipe, where the ingredients drop, and a link to Wynnbuilder's crafter. Untick \"Design crafted items\" (or tell the bot) to leave them out. Also: tests/run_all.py runs every check at once on all your CPU cores."
 }

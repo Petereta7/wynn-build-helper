@@ -435,15 +435,16 @@ def refine_points(build, owned, armor, weapon, extra, fast=True):
 
 # Thoroughness settings (the slider in the app, --effort on the command line).
 EFFORT = {
-    1: {"name": "Quick", "weapons": 3, "random_starts": 0, "short": 4, "triple": 0, "kicks": 0, "polish": 1},
+    1: {"name": "Quick", "weapons": 3, "random_starts": 0, "short": 4, "triple": 0, "kicks": 0, "polish": 1,
+        "craft": 1, "craft_kicks": 12},
     2: {"name": "Normal", "weapons": 6, "random_starts": 0, "short": 6, "triple": 0, "kicks": 0, "polish": 2,
-        "extra_weapons": 12, "promote": 2, "depth": 1, "depth_kicks": 3, "extra_polish": 2},
+        "extra_weapons": 12, "promote": 2, "depth": 1, "depth_kicks": 3, "extra_polish": 2, "craft": 2, "craft_kicks": 24},
     3: {"name": "Thorough", "weapons": 10, "random_starts": 3, "short": 7, "triple": 3, "kicks": 6, "polish": 3,
-        "extra_weapons": 20, "promote": 3, "depth": 2, "depth_kicks": 4, "extra_polish": 3},
+        "extra_weapons": 20, "promote": 3, "depth": 2, "depth_kicks": 4, "extra_polish": 3, "craft": 2, "craft_kicks": 30},
     4: {"name": "Very thorough", "weapons": 16, "random_starts": 6, "short": 8, "triple": 4, "kicks": 15, "polish": 4,
-        "extra_weapons": 32, "promote": 4, "depth": 2, "depth_kicks": 6, "extra_polish": 3},
+        "extra_weapons": 32, "promote": 4, "depth": 2, "depth_kicks": 6, "extra_polish": 3, "craft": 3, "craft_kicks": 40},
     5: {"name": "Maximum", "weapons": 30, "random_starts": 10, "short": 10, "triple": 5, "kicks": 40, "polish": 6,
-        "extra_weapons": 60, "promote": 6, "depth": 3, "depth_kicks": 10, "extra_polish": 4},
+        "extra_weapons": 60, "promote": 6, "depth": 3, "depth_kicks": 10, "extra_polish": 4, "craft": 4, "craft_kicks": 60},
 }
 
 STOP = {"flag": False}          # set STOP["flag"] = True to stop a running search (keeps the best so far)
@@ -857,6 +858,152 @@ def _kicks(build, cur_own, pools, best, base_extra, n, out_of_time):
     return found
 
 
+def cpu_cores() -> int:
+    """CPU cores the search may use: all of them, or WYNN_HELPER_CORES (tests/run_all.py splits a big
+    computer's cores between several checks at once). The answer doesn't depend on it, only the speed."""
+    try:
+        n = int(os.environ.get("WYNN_HELPER_CORES") or 0)
+    except ValueError:
+        n = 0
+    return max(1, n or os.cpu_count() or 1)
+
+
+# ---- crafted items
+
+CRAFT_SLOTS = [0, 1, 2, 3, 4, 5, 6, 7, "weapon"]
+
+
+def _craft_designs(build, own, a, wp, e, slot, kicks):
+    """The crafted item designed for one slot of a build (the rest as it is): [(where, item)], where is a slot
+    number, "weapon", or "rings" for the same crafted ring on both hands. Runs in worker processes too."""
+    import wynn_craft as wc
+    level, cls, d = build.level, build.tree.cls, build.data
+    kind = wh.CLASS_WEAPON[cls] if slot == "weapon" else wh.SLOT_TYPES[slot]
+    rec = wc.recipe_for(d, kind, level)
+    if rec is None:
+        return []
+    seed = level * 31 + (9 if slot == "weapon" else slot)
+    out = []
+    if slot == "weapon":
+        def wscore(powders):
+            def score(it):
+                w2 = wh.weapon_with_powders(it, powders)
+                if not wh._wearable(a, w2, level):
+                    return None
+                return build.evaluate(own, a, w2, wh._fit_extra(_scaled_extra(e, a, w2, level), a, w2, level),
+                                      fast=True)["value"]
+            return score
+        pw0 = list(getattr(wp, "powders", None) or [])
+        _v, it = wc.Designer(d, rec, wscore(pw0), atk_spds=tuple(wh.CRAFT_ATK_SPDS), kicks=kicks, seed=seed).design()
+        if it is not None:
+            out.append(("weapon", it))
+            pw, _ = wh.best_weapon_powders(build, own, a, it, e)        # with its own best powders, once more
+            _v2, it2 = wc.Designer(d, rec, wscore(pw), atk_spds=(it.atk_spd,), kicks=kicks, seed=seed + 1).design()
+            if it2 is not None:
+                out.append(("weapon", it2))
+    else:
+        def score(it):
+            a2 = list(a)
+            a2[slot] = it
+            if not wh._wearable(a2, wp, level):
+                return None
+            return build.evaluate(own, a2, wp, wh._fit_extra(_scaled_extra(e, a2, wp, level), a2, wp, level),
+                                  fast=True)["value"]
+        _v, it = wc.Designer(d, rec, score, kicks=kicks, seed=seed).design()
+        if it is not None:
+            out.append((slot, it))
+            if slot in (4, 5):
+                out.append(("rings", it))
+    return out
+
+
+def _craft_job(job):
+    return _craft_designs(_W["build"], *job)
+
+
+class _CraftRunner:
+    """Designs crafts for several slots at once on every CPU core (one slot per core), or one after another
+    when that isn't possible. The answer is the same either way: every slot is designed for the same build."""
+
+    def __init__(self, build, parallel=True):
+        self.build, self.ex = build, None
+        workers = min(len(CRAFT_SLOTS), cpu_cores()) if parallel else 1
+        if workers > 1:
+            try:
+                import multiprocessing as mp
+                from concurrent.futures import ProcessPoolExecutor
+                ctx = mp.get_context("spawn")
+                self.ex = ProcessPoolExecutor(max_workers=workers, mp_context=ctx, initializer=_worker_init,
+                                              initargs=(_build_spec(build), ctx.Event(), None))
+            except Exception:
+                self.ex = None
+
+    def run(self, jobs):
+        if self.ex is not None:
+            try:
+                return list(self.ex.map(_craft_job, jobs))
+            except Exception:
+                self.close()
+        return [_craft_designs(self.build, *j) for j in jobs]
+
+    def close(self):
+        if self.ex is not None:
+            try:
+                self.ex.shutdown(wait=True, cancel_futures=True)
+            except Exception:
+                pass
+            self.ex = None
+
+
+def _craft_stage(build, f, kicks, out_of_time, info, runner=None):
+    """Starting from one finished build, design a crafted item for every slot (all for the same build), then
+    try them one at a time and keep each that makes the whole build better; repeat while anything changes.
+    Returns (value, armor, base weapon, weapon, spare points, tree) if any craft was kept, else None."""
+    level = build.level
+    _v, a, wp, wpn, own, e = f[:6]
+    a = list(a)
+    runner = runner or _CraftRunner(build, parallel=False)
+
+    def full(a2, wpn2):
+        pw, _ = wh.best_weapon_powders(build, own, a2, wpn2, e)
+        w2 = wh.weapon_with_powders(wpn2, pw) if wpn2.slots else wpn2
+        if not wh._wearable(a2, w2, level):
+            return None
+        e2, _ = refine_points(build, own, a2, w2, e)
+        return build.evaluate(own, a2, w2, e2, fast=True)["value"], e2, w2
+
+    cur = full(a, wpn)
+    if cur is None:
+        return None
+    v, e, wp = cur
+    kept = False
+    for _pass in range(3):
+        if out_of_time():
+            break
+        designs = runner.run([(own, list(a), wp, list(e), slot, kicks) for slot in CRAFT_SLOTS])
+        info["designed"] += len(CRAFT_SLOTS)
+        changed = False
+        for found in designs:
+            for where, it in found:
+                a2, wpn2 = list(a), wpn
+                if where == "weapon":
+                    wpn2 = it
+                elif where == "rings":
+                    a2[4] = a2[5] = it
+                else:
+                    a2[where] = it
+                got = full(a2, wpn2)
+                if got is not None and better(got[0], v, 1.000001):
+                    v, e, wp = got
+                    a, wpn = a2, wpn2
+                    changed = kept = True
+        if not changed:
+            break
+    if not kept:
+        return None
+    return v, a, wpn, wp, e, own
+
+
 # ---- worker processes (each loads the game data once, then searches around one weapon at a time)
 _W = {}
 
@@ -927,7 +1074,7 @@ def _run_weapon_jobs(build, cur_own, pools, jobs, armor0, base_extra, P, deadlin
     def out_of_time():
         return STOP["flag"] or (deadline is not None and time.time() > deadline)
     results = []
-    workers = min(total, max(1, (os.cpu_count() or 1)))
+    workers = min(total, cpu_cores())
     if workers > 1:
         try:
             import multiprocessing as mp
@@ -988,7 +1135,8 @@ def _run_weapon_jobs(build, cur_own, pools, jobs, armor0, base_extra, P, deadlin
 
 
 def search_best_build(build, owned, armor0, weapon0, base_weapon0, keep=(), ap_budget=0, include_never=True,
-                      min_level=1, deep=False, time_limit=None, log=None, pools_override=None, effort=2):
+                      min_level=1, deep=False, time_limit=None, log=None, pools_override=None, effort=2,
+                      crafted=False):
     """
     Search for the best whole build:
       1. safe filtering (items that provably can't win are dropped),
@@ -1093,7 +1241,8 @@ def search_best_build(build, owned, armor0, weapon0, base_weapon0, keep=(), ap_b
     jobs = [(wpn, wp, memory_arms.get(wpn.name, [])) for wpn, wp in weapons]
     deadline = (t_start + time_limit) if time_limit else None
     extra_on = bool(P.get("extra_weapons")) or bool(P.get("depth"))
-    _PHASE[:] = [0.0, 0.72 if extra_on else 1.0]
+    top = 0.86 if crafted else 1.0                  # the last part of the progress bar is for crafted items
+    _PHASE[:] = [0.0, (0.72 if extra_on else 1.0) * top]
     results = _run_weapon_jobs(build, cur_own, pools, jobs, armor0, base_extra, P, deadline, log)
     if not results:
         results.append((score(armor0, weapon0, base_extra), list(armor0), base_weapon0, weapon0, base_extra))
@@ -1157,7 +1306,7 @@ def search_best_build(build, owned, armor0, weapon0, base_weapon0, keep=(), ap_b
     # so the answer can only stay the same or get better)
     bonus = {"weapons": 0, "deeper": 0, "before": main_best, "after": main_best, "found_by": None}
     if extra_on and not out_of_time():
-        _PHASE[:] = [0.72, 1.0]
+        _PHASE[:] = [0.72 * top, top]
         extra_results = []
         # 4a. quick passes on weapons the main search skipped; the best few then get the full search
         rest = [(wpn, wp) for _v, wpn, wp in w_scores if wpn.name not in seen_w][: P.get("extra_weapons", 0)]
@@ -1236,9 +1385,47 @@ def search_best_build(build, owned, armor0, weapon0, base_weapon0, keep=(), ap_b
         bonus["after"] = finals[0][0]
         if finals[0][0] > main_best:
             agree, n_attempts = agreement(results + [r[:5] for r in extra_results])
+    # ---- 5. crafted items: for the best builds, design a crafted item for each slot that fits the rest of the
+    # build, and keep it where it beats what's there; then fine-tune again around the crafts. Only adds builds
+    # to choose from, so the answer can only stay the same or get better.
+    craft_info = {"on": bool(crafted), "designed": 0, "found_by": None, "before": finals[0][0]}
+    t_craft = time.time()
+    if crafted and not out_of_time():
+        LIVE["phase"] = 4
+        _PHASE[:] = [top, 1.0]
+        tops, names = [], set()
+        for f in sorted(finals, key=lambda x: -x[0]):
+            key = (tuple(it.name if it else None for it in f[1]), f[3].name)
+            if key not in names:
+                names.add(key)
+                tops.append(f)
+        tops = tops[: P.get("craft", 1)]
+        new_finals = []
+        runner = _CraftRunner(build)
+        try:
+            for i, f in enumerate(tops):
+                if out_of_time():
+                    break
+                _report(i / max(1, len(tops)), "Designing crafted items for the best builds")
+                got = _craft_stage(build, f, P.get("craft_kicks", 24), out_of_time, craft_info, runner)
+                if got is not None:
+                    v2, a2, wpn2, wp2, e2, own2 = got
+                    pf = polish(v2, a2, wpn2, wp2, e2, own2)
+                    new_finals.append(pf)
+                    _live_offer(pf[0], pf[7]["main"], *_names(pf[1], pf[3]))
+        finally:
+            runner.close()
+        best_before = finals[0][0]
+        finals = sorted(finals + new_finals, key=lambda x: -x[0])
+        if new_finals and finals[0] in new_finals and better(finals[0][0], best_before, 1.000001):
+            craft_info["found_by"] = "crafted items"
+        craft_info["after"] = finals[0][0]
+        craft_info["seconds"] = time.time() - t_craft
     _PHASE[:] = [0.0, 1.0]
     LIVE["phase"] = 5
-    # Last check, worked out from scratch: never hand back gear the level can't wear.
+    # Last check, worked out from scratch: never hand back gear the level can't wear, or a craft that can't
+    # be made.
+    finals = [f for f in finals if not any(getattr(x, "craft_problems", None) for x in list(f[1]) + [f[3]])] or finals
     legal = [f for f in finals if _wearable_fresh(build, f[1], f[2])]
     if legal:
         finals = legal
@@ -1255,7 +1442,8 @@ def search_best_build(build, owned, armor0, weapon0, base_weapon0, keep=(), ap_b
     return {"armor": a, "weapon": wp, "base_weapon": wpn, "owned": own, "extra": e, "free": free,
             "final": fin, "start": start, "start_val": start["value"], "filter": fstats,
             "stopped": STOP["flag"], "seconds": time.time() - t_start, "effort": effort,
-            "effort_name": P["name"], "agree": agree, "attempts": n_attempts, "bonus_search": bonus}
+            "effort_name": P["name"], "agree": agree, "attempts": n_attempts, "bonus_search": bonus,
+            "crafted": craft_info}
 
 
 # ============================================================================== time estimate
@@ -1278,7 +1466,7 @@ def estimate_seconds(build, include_never=True, min_level=1, cores=None, owned=N
         build.evaluate(own, a, wp, [rng.randint(0, 20) for _ in range(5)], fast=True)
         n += 1
     t_eval = (time.time() - t0) / max(1, n)
-    cores = cores or max(1, os.cpu_count() or 1)
+    cores = cores or cpu_cores()
     sum_pool = sum(len(pools[sl]) for sl in range(8))
     ap = wh.ability_points(build.level)
     t_tree = 2.5 * (ap / 32) ** 2 * (t_eval / 0.0004) * (2.5 if build.level >= wh.ULTIMATE_LEVEL else 1)

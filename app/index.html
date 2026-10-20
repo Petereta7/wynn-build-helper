@@ -352,6 +352,18 @@ label.deep input[type=checkbox] { width: auto; flex: 0 0 auto; margin-top: 3px; 
 .icard .pw { display: inline-flex; gap: 3px; margin-left: 6px; vertical-align: middle; }
 .icard .pw span { width: 9px; height: 9px; border-radius: 2px; border: 1px solid rgba(255, 255, 255, .35); }
 .icard.empty { --rc: #3a3f63; border-style: dashed; background: rgba(0, 0, 0, .2); }
+.icard .craftlink { display: inline-block; margin-top: 3px; font-size: 11.5px; color: var(--crafted, #2bc4c4); text-decoration: none; }
+.icard .craftlink:hover { text-decoration: underline; }
+.crafts { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; }
+.craft { border: 1px solid color-mix(in srgb, #2bc4c4 45%, var(--line)); border-radius: var(--r-md); padding: 10px 12px; background: rgba(10, 30, 34, .45); }
+.craft .ct { font-family: var(--display); color: #2bc4c4; font-size: 15.5px; }
+.craft .cm { color: var(--muted); font-size: 12px; margin: 2px 0 8px; }
+.cgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+.cgrid span { border: 1px solid var(--line); border-radius: 5px; padding: 4px 6px; font-size: 12px; min-height: 18px; background: rgba(0, 0, 0, .25); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cgrid span.e { color: var(--faint); font-style: italic; }
+.craft .ca { margin-top: 8px; font-size: 12px; }
+.craft .ca a { color: #2bc4c4; }
+.tipgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 8px; font-size: 12px; margin-top: 3px; }
 .icard.empty .n { color: var(--faint); font-style: italic; }
 .icard .ribbon { position: absolute; top: 8px; right: -1px; background: var(--set); color: #08200d; font-size: 10.5px; font-weight: 800; letter-spacing: .06em; padding: 1px 7px 1px 8px; border-radius: 4px 0 0 4px; box-shadow: 0 0 10px rgba(85, 255, 85, .5); }
 .icard.weapon { padding: 14px 16px; }
@@ -554,6 +566,7 @@ label.deep input[type=checkbox] { width: auto; flex: 0 0 auto; margin-top: 3px; 
                 <select id="f-poison"><option value="wynnbuilder">Wynnbuilder's figures</option><option value="low">Cautious estimate</option></select></div>
             </div>
             <label><input type="checkbox" id="f-drops"> Only suggest items that drop from mobs, chests or dungeons</label>
+            <label><input type="checkbox" id="f-crafted" checked> Design crafted items for my build too (you or a crafter make them; the report shows the recipe)</label>
             <div class="field"><label for="f-levels">Items to search</label>
               <select id="f-levels"><option value="">Every item up to my level</option><option value="10">Within 10 levels of mine</option><option value="20">Within 20 levels of mine</option><option value="30">Within 30 levels of mine</option></select></div>
           </div>
@@ -1088,7 +1101,7 @@ function formParams() {
     gear: gear.concat(pending), keep: $("#f-keep").value, wynnbuilder_link: $("#f-link").value.trim(),
     powders: $("#f-powders").value, enemy: $("#f-enemy").value, tomes: $("#f-tomes").value, aspects: $("#f-aspects").value,
     sliders: $("#f-sliders").value, raid_buffs: $("#f-raid").value, rolls: $("#f-rolls").value, poison: $("#f-poison").value,
-    drops_only: $("#f-drops").checked, deep_search: $("#f-deep").checked,
+    drops_only: $("#f-drops").checked, crafted: $("#f-crafted").checked, deep_search: $("#f-deep").checked,
     item_levels: $("#f-levels").value ? +$("#f-levels").value : undefined,
     buffs: [...document.querySelectorAll("#buffChips [aria-pressed=true]")].map((b) => b.dataset.buff),
     minimums: minimumsFromForm(),
@@ -1137,6 +1150,7 @@ function colour(line) {
   s = s.replace(/\b(T\d) (Earth|Thunder|Water|Fire|Air)\b/g, '<span class="e-$2">$1 $2</span>');
   s = s.replace(/(\+\s*\d+(?:\.\d+)?%)/g, '<span class="g">$1</span>');
   s = s.replace(/(https:\/\/wynnbuilder\.github\.io\/builder\/#\S+)/g, '<a href="$1" target="_blank" rel="noopener">open in Wynnbuilder</a>');
+  s = s.replace(/(https:\/\/wynnbuilder\.github\.io\/crafter\/#\S+)/g, '<a href="$1" target="_blank" rel="noopener">open in Wynnbuilder\'s crafter</a>');
   s = s.replace(/\((new)\)/g, '<span class="g">(new)</span>');
   return s;
 }
@@ -1202,6 +1216,9 @@ function itemTip(c) {
   if (c.slots) h += `<hr><div class="tl">[${c.powders.length}/${c.slots}] Powder Slots${c.powders.length ? ": " + c.powders.map((p) => `<span style="color:${POWDER_COL[p.split(" ")[1]] || "#fff"}">${esc(p)}</span>`).join(", ") : ""}</div>`;
   c.major_ids.forEach(([m, d]) => { h += `<hr><div class="aqua">+${esc(m.replace(/_/g, " "))}:</div><div class="desc">${esc(d)}</div>`; });
   if (c.set) h += `<hr><div class="ok">${esc(c.set)} Set</div>`;
+  if (c.craft) h += `<hr><div class="tl">${esc(c.craft.profession)} · ${esc(c.craft.recipe)} · materials T${c.craft.mats.join("/T")}</div>
+    <div class="tipgrid">${c.craft.grid.map((g) => `<span class="${g ? "" : "gray"}">${esc(g || "empty")}</span>`).join("")}</div>
+    ${c.craft.durability.length ? `<div class="gray">Durability ${c.craft.durability[0]}–${c.craft.durability[1]}</div>` : ""}`;
   h += `<hr><div style="color:${col}">${esc(c.tier)} Item</div>`;
   if (c.notes && c.notes.length) h += `<div class="gray">${esc(c.notes.join("; "))}</div>`;
   return h;
@@ -1251,7 +1268,8 @@ function equipHTML(pack, baseItems, title, sub) {
     return `<div class="icard ${cls}" tabindex="0" data-tipk="${i}" style="--rc:${TIER_COL[c.tier] || TIER_COL.Normal};animation-delay:${i * 45}ms">
       ${isNew ? '<span class="ribbon">NEW</span>' : ""}<div class="s">${slot}</div>
       <div class="n" style="color:${TIER_COL[c.tier] || TIER_COL.Normal}">${esc(c.name)}</div>
-      <div class="m">Lv ${c.level} ${esc(c.tier)} ${esc(c.type)}${pw}</div></div>`;
+      <div class="m">Lv ${c.level} ${esc(c.tier)} ${esc(c.type)}${pw}</div>
+      ${c.craft ? `<a class="craftlink" href="${esc(c.craft.link)}" target="_blank" rel="noopener">recipe in Wynnbuilder's crafter ↗</a>` : ""}</div>`;
   };
   const it = pack.items;
   const sp = pack.sp, tot = sp.assigned.map((a, i) => a + sp.extra[i] + sp.gear[i]);
@@ -1330,7 +1348,24 @@ function visualsHTML(S) {
   const baseItems = S.best && S.baseline && S.baseline.items ? S.baseline.items : null;
   const title = S.best ? "Your best whole build" : "Your build";
   const sub = S.best ? (baseItems ? `"NEW" marks pieces that differ from ${S.baseline.kind === "gear" ? "your gear" : "your last build"}. Hover any piece for its stats.` : "Hover any piece for its stats.") : "Hover any piece for its stats.";
-  return equipHTML(pack, baseItems, title, sub) + '<div id="treeSlot"></div>';
+  return equipHTML(pack, baseItems, title, sub) + craftsHTML(pack) + '<div id="treeSlot"></div>';
+}
+function craftsHTML(pack) {
+  const seen = {}, list = [];
+  (pack.items || []).forEach((c, i) => {
+    if (!c || !c.craft) return;
+    if (seen[c.craft.link] !== undefined) { list[seen[c.craft.link]].slots.push(SLOTS[i]); return; }
+    seen[c.craft.link] = list.length;
+    list.push({ c, slots: [SLOTS[i]] });
+  });
+  if (!list.length) return "";
+  const cards = list.map(({ c, slots }) => `<div class="craft">
+      <div class="ct">${esc(slots.join(" + "))}</div>
+      <div class="cm">${esc(c.craft.profession)} · ${esc(c.craft.recipe)} · materials tier ${c.craft.mats.join(" and ")}${c.atk_spd ? " · " + esc(c.atk_spd) + " attack speed" : ""}</div>
+      <div class="cgrid">${c.craft.grid.map((g) => `<span class="${g ? "" : "e"}" title="${esc(g)}">${esc(g || "empty")}</span>`).join("")}</div>
+      <div class="ca">Durability ${c.craft.durability.join("–")} · <a href="${esc(c.craft.link)}" target="_blank" rel="noopener">open in Wynnbuilder's crafter</a></div>
+    </div>`).join("");
+  return `<section class="panel" id="craftPanel"><h3>How to craft <small>Designed for this build. Where each ingredient drops is in the report.</small></h3><div class="crafts">${cards}</div></section>`;
 }
 function mountVisuals(S, bars = true) {
   const pack = S.best || S.current;
@@ -1636,7 +1671,7 @@ async function showSaved(id) {
     <div class="stats">${chips}</div>
     <div class="actions">${h.link ? `<a class="btn" href="${esc(h.link)}" target="_blank" rel="noopener">Open in Wynnbuilder</a><button class="btn-quiet" data-copy="${esc(h.link)}">Copy link</button>` : ""}
       <button class="btn-quiet" id="savedBack" type="button">Back to the latest build</button></div></section>` +
-    equipHTML({ items: h.items, sp: h.sp }, null, "Gear", "Hover any piece for its stats.") +
+    equipHTML({ items: h.items, sp: h.sp }, null, "Gear", "Hover any piece for its stats.") + craftsHTML({ items: h.items }) +
     (h.tree ? (TOGGLE_SHARE = h.toggle_share || {}, treeHTML(h.tree, h.order || [], h.toggles_on || [], "")) : "");
   $("#main").scrollTop = 0;
   bindTips($("#equipPanel"), (i) => itemTip(h.items[+i]));

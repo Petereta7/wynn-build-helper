@@ -2,11 +2,23 @@
 
 ## Automatic checks on GitHub
 
-Every push to `main` runs these checks on Windows, the only system the app is used on (newest Python, plus Python 3.10, the oldest the app runs on): the app check, self-test, toggle check and speed check, and the build check for every class. **Only when every check passes** is that version copied to the `stable` branch, which is where the app's update bar looks, and kept as `release/<version>` for switching back. A version that fails never reaches anyone.
+Every push to `main` runs these checks on Windows, the only system the app is used on (newest Python, plus Python 3.10, the oldest the app runs on): the app check, self-test, toggle check, speed check and craft check, and the build check for every class. **Only when every check passes** is that version copied to the `stable` branch, which is where the app's update bar looks, and kept as `release/<version>` for switching back. A version that fails never reaches anyone.
 
 Once a week (and on demand: Actions tab → Checks → Run workflow) the helper is also compared side by side with Wynnbuilder's current code, plus three brute-force accuracy cases, to catch game or Wynnbuilder updates that change the numbers.
 
 The setup is in `.github/workflows/checks.yml`. The checks below can all be run by hand too.
+
+## Everything at once, on all your cores
+
+```
+python tests/run_all.py
+```
+
+or double-click **Run all checks.bat** in this folder (Windows). It runs every check the GitHub checks run, side by side, splitting the computer's CPU cores between them (each build case gets its share; the answers don't depend on how many cores a case gets, only how fast it finishes). On a 24-core PC it takes a few minutes instead of the half hour or so it takes one after another. The summary is printed and saved to `tests/last_run.txt`.
+
+- `--full` also runs the side-by-side comparison with Wynnbuilder's code (needs Node.js and git) and brute-force accuracy cases, one per two cores (up to 24).
+- `--record` saves higher build scores to `tests/golden/build_baseline.json` (never lowers one).
+- `--cores 16` uses 16 cores instead of all of them.
 
 ## 1. Quick self-test (Python only)
 
@@ -82,7 +94,15 @@ python3 tests/build_check.py
 
 Runs the whole app, the same way as asking the bot, for one build per class (each with a different goal), plus one with a minimum health and one with an ability buff part of the time. Each build must be wearable (items in level range, the class's weapon, skill points worked out from scratch, a legal ability tree, minimums met), and its score must be at least the one recorded in `tests/golden/build_baseline.json`, so a change can never make builds worse without this failing. After a change that makes builds better, run `python3 tests/build_check.py --record` to save the higher scores (it never lowers one). Takes about 10 minutes.
 
-## 7. Accuracy test (does the search find the true best build?)
+## 7. Craft check
+
+```
+python3 tests/craft_check.py
+```
+
+The crafted item designer: on small cases (one per class, different slots and goals, and a weapon) every possible 6-ingredient grid is tried and the designer must find one exactly as good; every craft it designs (82, all classes and levels) is checked against the crafting rules from the raw game data (profession, level range, durability); and each craft's code for Wynnbuilder's crafter reads back as the same item. About a minute.
+
+## 8. Accuracy test (does the search find the true best build?)
 
 ```
 python3 tests/accuracy_test.py 100 5
