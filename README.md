@@ -33,7 +33,7 @@ Then just talk to it, for example:
 
 > I keep dying to a boss that hits for about 3000 fire. Make me tankier without losing too much damage.
 
-While it searches, **the Forge** shows the search live: a reel for each slot locks onto the best build found so far (and flicks through other items as the search tries swaps), the score for your goal climbs, a counter shows how many builds have been checked, and each weapon being built around lights up. Everything on it is real data from the search.
+While it searches, **the Forge** shows the search live: a reel for each slot locks onto the best build found so far (and flicks through other items as the search tries swaps), the score for your goal climbs, a counter shows how many builds have been checked, and each weapon being built around lights up. Everything on it is real data from the search: sparks fly in the item's rarity colour when a slot improves, the score rolls up with a "+x%" on every new best, and embers rise faster the faster builds are being checked. Turn on **Sounds** in Settings for an anvil clang on each new best and a big one at the finish. (If your computer is set to reduce motion, the Forge stays calm.)
 
 Before the first build, Claude asks whether you want any minimum stats kept (like at least 20,000 health or no slower walk speed). Say "no" to skip.
 

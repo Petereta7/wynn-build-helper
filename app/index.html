@@ -225,43 +225,94 @@ label.deep input[type=checkbox] { width: auto; flex: 0 0 auto; margin-top: 3px; 
   .spinner, .thinking::after { animation: none; }
 }
 /* ---------- the forge (live view of the search) ---------- */
-.forge { max-width: 1000px; margin: 0 auto; padding: 22px 26px; display: flex; flex-direction: column; gap: 18px; }
+.forge { position: relative; overflow: hidden; isolation: isolate; max-width: 1000px; margin: 0 auto; padding: 22px 26px; display: flex; flex-direction: column; gap: 18px; }
+.forge > .fx { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; }
+.forge > *:not(.fx):not(.goldflash):not(.stamp) { position: relative; z-index: 1; }
 .forge-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
 .forge-head h2 { font-family: var(--display); color: var(--legendary); margin: 0; font-size: 26px; }
 .forge-head .sub { color: var(--muted); font-size: 14px; }
 .phases { display: flex; gap: 6px; flex-wrap: wrap; }
-.phase { font-size: 12.5px; padding: 4px 10px; border: 1px solid var(--line); border-radius: 999px; color: var(--faint); }
-.phase.now { color: var(--text); border-color: var(--legendary); box-shadow: inset 0 0 0 1px var(--legendary); }
+.phase { font-size: 12.5px; padding: 4px 10px; border: 1px solid var(--line); border-radius: 999px; color: var(--faint); transition: color .4s, border-color .4s, box-shadow .4s; }
+.phase.now { color: var(--text); border-color: var(--legendary); box-shadow: inset 0 0 0 1px var(--legendary), 0 0 12px -2px var(--legendary); }
 .phase.done { color: var(--muted); }
 .phase.done::before { content: "✓ "; color: var(--set); }
+.ptrack { height: 3px; border-radius: 3px; background: rgba(255, 255, 255, .07); margin-top: -8px; }
+.pfill { height: 100%; width: 3%; border-radius: 3px; background: linear-gradient(90deg, rgba(85, 255, 255, 0), var(--legendary)); position: relative; transition: width 1.1s cubic-bezier(.3, .7, .2, 1); }
+.pfill .comet { position: absolute; right: -5px; top: 50%; width: 10px; height: 10px; margin-top: -5px; border-radius: 50%; background: #fff;
+  box-shadow: 0 0 10px 3px var(--legendary), 0 0 22px 8px rgba(85, 255, 255, .35); animation: cometpulse 1.4s ease-in-out infinite; }
+.pfill.zoom .comet { animation: cometflare .9s ease; }
+@keyframes cometpulse { 50% { transform: scale(.7); } }
+@keyframes cometflare { 30% { transform: scale(2.3); box-shadow: 0 0 18px 8px var(--legendary), 0 0 44px 18px rgba(85, 255, 255, .45); } }
 .scoreline { display: flex; gap: 34px; align-items: flex-end; flex-wrap: wrap; }
-.score .v { font-family: var(--display); font-size: 46px; line-height: 1.05; color: var(--unique); font-variant-numeric: tabular-nums; display: inline-block; }
+.score { position: relative; }
+.score .v { font-family: var(--display); font-size: 46px; line-height: 1.05; color: var(--unique); font-variant-numeric: tabular-nums; display: inline-flex; }
 .score .v.wait { font-size: 22px; color: var(--muted); }
 .score .k, .checked .k { color: var(--muted); font-size: 13px; }
 .checked .v { font-family: var(--mono); font-size: 22px; color: var(--text); font-variant-numeric: tabular-nums; }
+.dg { display: inline-block; height: 1.05em; overflow: hidden; }
+.dg .col { display: flex; flex-direction: column; transition: transform .75s cubic-bezier(.2, .9, .25, 1.06); }
+.dg .col > span { height: 1.05em; line-height: 1.05em; }
 .score .v.bump { animation: bump .55s ease; }
+.score .v.gold { animation: goldflash 1.1s ease; }
 @keyframes bump { 30% { transform: scale(1.07); text-shadow: 0 0 18px currentColor; } }
+@keyframes goldflash { 25% { color: #ffd36b; text-shadow: 0 0 24px #ffb84d, 0 0 50px rgba(255, 184, 77, .5); transform: scale(1.1); } }
+.floater { position: absolute; left: 100%; top: 6px; margin-left: 12px; font-family: var(--display); font-weight: 700; font-size: 22px; color: var(--set);
+  white-space: nowrap; pointer-events: none; text-shadow: 0 0 12px rgba(85, 255, 85, .6); animation: floatup 1.7s ease-out forwards; }
+.floater.big { color: #ffd36b; text-shadow: 0 0 14px rgba(255, 190, 80, .8); font-size: 26px; }
+@keyframes floatup { 0% { opacity: 0; transform: translateY(14px) scale(.8); } 15% { opacity: 1; transform: translateY(0) scale(1.12); } 100% { opacity: 0; transform: translateY(-40px) scale(1); } }
 .reels { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
-.reel { border: 1px solid var(--line); border-radius: var(--r-md); background: rgba(0, 0, 0, .28); padding: 8px 12px 10px; overflow: hidden; transition: border-color .4s, box-shadow .4s; }
+.reel { --rc: #3a3f63; position: relative; border: 1px solid var(--line); border-radius: var(--r-md); background: rgba(0, 0, 0, .3); padding: 8px 12px 10px; overflow: hidden;
+  transition: border-color .5s, box-shadow .5s; }
+.reel.locked { border-color: var(--rc); border-color: color-mix(in srgb, var(--rc) 50%, var(--line)); box-shadow: 0 0 14px -6px var(--rc), inset 0 0 20px -12px var(--rc); }
+.reel.fresh { border-color: var(--rc); box-shadow: 0 0 26px 0 var(--rc), inset 0 0 24px -8px var(--rc); }
 .reel .slot { font-size: 11.5px; text-transform: uppercase; letter-spacing: .08em; color: var(--faint); }
-.reel .item { font-family: var(--display); font-size: 17px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; height: 26px; line-height: 26px; }
-.reel.spin .item { animation: roll .09s linear infinite; filter: blur(.5px); opacity: .8; }
-@keyframes roll { from { transform: translateY(-28%); } to { transform: translateY(28%); } }
-.reel.fresh { border-color: var(--set); box-shadow: 0 0 18px rgba(85, 255, 85, .35); }
+.reel .window { height: 28px; overflow: hidden; position: relative; }
+.reel .ln { height: 28px; line-height: 28px; font-family: var(--display); font-size: 17px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.reel .strip.spinning { animation: reelspin .42s linear infinite; filter: blur(1.2px); }
+.reel .strip.landing { filter: blur(.7px); }
+@keyframes reelspin { from { transform: translateY(0); } to { transform: translateY(-50%); } }
 .reel .none { color: var(--faint); font-style: italic; }
-.wcards { display: flex; gap: 8px; flex-wrap: wrap; }
-.wcard { font-size: 13px; padding: 5px 10px; border: 1px solid var(--line); border-radius: var(--r-sm); background: rgba(0, 0, 0, .2); display: flex; gap: 6px; align-items: center; }
+.reel.flash::before { content: ""; position: absolute; inset: 0; pointer-events: none; background: radial-gradient(circle at 50% 65%, rgba(255, 255, 255, .55), transparent 70%); animation: fadeout .55s ease-out forwards; }
+.reel.shimmer::after { content: ""; position: absolute; top: 0; bottom: 0; width: 40%; left: -50%; pointer-events: none; background: linear-gradient(100deg, transparent, rgba(255, 255, 255, .4), transparent); animation: sweep 1s ease-out forwards; }
+.reel.punch { animation: punch .38s cubic-bezier(.3, 1.6, .5, 1); }
+@keyframes fadeout { from { opacity: 1; } to { opacity: 0; } }
+@keyframes sweep { to { left: 120%; } }
+@keyframes punch { 40% { transform: scale(1.06); } }
+.wcards { display: flex; gap: 8px; flex-wrap: wrap; perspective: 600px; }
+.wcard { position: relative; overflow: hidden; font-size: 13px; padding: 5px 10px; border: 1px solid var(--line); border-radius: var(--r-sm); background: rgba(0, 0, 0, .25);
+  display: flex; gap: 6px; align-items: center; transition: opacity .3s, border-color .3s, box-shadow .3s; }
+.wcard.enter { animation: cardin .4s ease-out; }
 .wcard.queued { opacity: .45; }
-.wcard.running { border-color: var(--legendary); animation: pulse 1.2s ease-in-out infinite; }
+.wcard.running { border-color: var(--legendary); box-shadow: 0 0 12px -4px var(--legendary); }
+.wcard.running::after { content: ""; position: absolute; top: 0; bottom: 0; width: 45%; left: -50%; background: linear-gradient(100deg, transparent, rgba(85, 255, 255, .25), transparent); animation: sweep 1.3s linear infinite; }
 .wcard.done .st { color: var(--set); }
-.wcard .crown { color: var(--unique); }
 .wcard .tag { color: var(--faint); font-size: 11px; }
-@keyframes pulse { 50% { box-shadow: 0 0 12px rgba(85, 255, 255, .35); } }
+.wcard .crown { display: none; color: var(--unique); text-shadow: 0 0 8px rgba(255, 255, 85, .7); }
+.wcard.lead { border-color: var(--unique); box-shadow: 0 0 14px -4px var(--unique); }
+.wcard.lead .crown { display: inline-block; }
+.wcard.lead.hop .crown { animation: hop .65s cubic-bezier(.3, 1.8, .5, 1); }
+.wcard.flip { animation: flip .55s ease; }
+@keyframes cardin { from { opacity: 0; transform: translateY(8px) scale(.94); } }
+@keyframes hop { 0% { transform: translateY(0) scale(.4); } 45% { transform: translateY(-9px) scale(1.3); } 100% { transform: none; } }
+@keyframes flip { 50% { transform: rotateX(90deg); } }
 .forge-foot { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
 .forge-foot .busy-sub { flex: 1 1 300px; }
-@media (max-width: 700px) { .reels { grid-template-columns: repeat(2, minmax(0, 1fr)); } .score .v { font-size: 36px; } .forge { padding: 18px 16px; } }
-@media (prefers-reduced-motion: reduce) { .reel.spin .item, .wcard.running, .score .v.bump { animation: none; filter: none; } }
-
+.forge.shake { animation: shake .5s cubic-bezier(.36, .07, .19, .97); }
+@keyframes shake { 10%, 90% { transform: translateX(-1px); } 20%, 80% { transform: translateX(3px); } 30%, 50%, 70% { transform: translateX(-6px); } 40%, 60% { transform: translateX(6px); } }
+.forge > .goldflash { position: absolute; inset: 0; z-index: 2; pointer-events: none; background: radial-gradient(circle at 50% 50%, rgba(255, 211, 107, .6), rgba(255, 160, 60, .18) 45%, transparent 75%); animation: fadeout 1s ease-out forwards; }
+.forge > .stamp { position: absolute; left: 50%; top: 50%; z-index: 3; font-family: var(--display); font-weight: 800; font-size: 56px; letter-spacing: .06em; color: #ffd36b; white-space: nowrap;
+  text-shadow: 0 0 20px rgba(255, 180, 60, .8), 0 4px 0 #7a4a12; border: 4px solid #ffd36b; padding: 6px 22px; border-radius: 10px; background: rgba(20, 10, 0, .6);
+  box-shadow: 0 0 30px rgba(255, 180, 60, .45); transform: translate(-50%, -50%) rotate(-6deg); animation: stamp .55s cubic-bezier(.2, 1.6, .4, 1); }
+@keyframes stamp { from { opacity: 0; transform: translate(-50%, -50%) rotate(-6deg) scale(2.4); } }
+.rise > * { animation: rise .65s cubic-bezier(.2, .9, .3, 1) both; }
+.rise > *:nth-child(2) { animation-delay: .08s; } .rise > *:nth-child(3) { animation-delay: .16s; } .rise > *:nth-child(n+4) { animation-delay: .22s; }
+@keyframes rise { from { opacity: 0; transform: translateY(26px); } }
+@media (max-width: 700px) { .reels { grid-template-columns: repeat(2, minmax(0, 1fr)); } .score .v { font-size: 36px; } .forge { padding: 18px 16px; } .forge > .stamp { font-size: 32px; } }
+@media (prefers-reduced-motion: reduce) {
+  .forge *, .forge, .rise > * { animation: none !important; transition: none !important; }
+  .forge > .fx { display: none; }
+  .reel .strip.spinning, .reel .strip.landing { filter: none; }
+}
 </style>
 </head>
 <body>
@@ -389,6 +440,7 @@ label.deep input[type=checkbox] { width: auto; flex: 0 0 auto; margin-top: 3px; 
       <label class="deep"><input type="checkbox" id="s-autoupd" checked> <span><b>Check for updates when the app opens.</b> Updates come only from this app's GitHub page, and you're always asked before one is installed. Your API key, settings and saved builds are never changed.</span></label>
       <button class="btn-quiet" id="checkUpd" type="button" style="margin-top:8px">Check for updates now</button>
     </div>
+    <label class="deep"><input type="checkbox" id="s-sound"> <span><b>Sounds</b>: an anvil clang when the search finds a better build, and a big one when your build is ready.</span></label>
     <label class="deep"><input type="checkbox" id="s-popup" checked> <span><b>Pop-up when a build is ready</b>: a small white box in the top-left corner of your screen, on top of other windows, that disappears by itself.</span></label>
     <div class="btns">
       <button class="btn-quiet" id="quitApp" type="button">Close the app</button>
@@ -446,6 +498,7 @@ function greet() {
 }
 async function sendChat(text) {
   if (!text.trim() || busy) return;
+  soundUnlock();
   addMsg("you", text);
   $("#input").value = ""; autosize();
   setBusy(true);
@@ -492,123 +545,357 @@ async function pollProgress() {
 /* ---------- the forge: a live view of the search ---------- */
 const SLOTS = ["Helmet", "Chestplate", "Leggings", "Boots", "Ring 1", "Ring 2", "Bracelet", "Necklace", "Weapon"];
 const REDUCED = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-let F = null;
+const RH = 28;                                     // height of one reel line (px)
+const TIER_COL = { Mythic: "#c64bd6", Fabled: "#ff5555", Legendary: "#55ffff", Rare: "#ff55ff", Unique: "#ffff55", Set: "#55ff55", Crafted: "#2bc4c4", Normal: "#e8e8e8" };
+const BIG_TIERS = { Mythic: 1, Fabled: 1 };
+let F = null, RISE_NEXT = false;
 function fmtBig(x) { return Math.abs(x) >= 100 ? Math.round(x).toLocaleString("en-US") : (Math.round(x * 10) / 10).toLocaleString("en-US"); }
+
+/* ---- sound: made on the fly with Web Audio (no sound files) ---- */
+const SND = { ctx: null, on: false, last: 0, lastTick: 0 };
+function soundUnlock() {
+  if (!SND.on) return;
+  try {
+    if (!SND.ctx) SND.ctx = new (window.AudioContext || window.webkitAudioContext)();
+    if (SND.ctx.state === "suspended") SND.ctx.resume();
+  } catch (e) {}
+}
+function clang(big) {
+  if (!SND.on || !SND.ctx) return;
+  const ctx = SND.ctx, t = ctx.currentTime;
+  if (!big && t - SND.last < 0.55) return;
+  SND.last = t;
+  const out = ctx.createGain(); out.gain.value = big ? 0.32 : 0.16; out.connect(ctx.destination);
+  const base = big ? 196 : 520 * (0.94 + Math.random() * 0.12);
+  const partials = big ? [1, 2.32, 2.76, 4.07, 5.4, 6.8, 8.9] : [1, 2.32, 2.76, 4.07, 5.4];
+  partials.forEach((m, i) => {
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = "sine"; o.frequency.value = base * m;
+    const dur = (big ? 2.6 : 1.1) / (1 + i * 0.35);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(1 / (i + 1), t + 0.004);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(out); o.start(t); o.stop(t + dur + 0.05);
+  });
+  const len = Math.floor(ctx.sampleRate * (big ? 0.09 : 0.05)), buf = ctx.createBuffer(1, len, ctx.sampleRate), d = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3);
+  const n = ctx.createBufferSource(), ng = ctx.createGain(), hp = ctx.createBiquadFilter();
+  hp.type = "highpass"; hp.frequency.value = big ? 900 : 2400; ng.gain.value = big ? 1.0 : 0.55;
+  n.buffer = buf; n.connect(hp); hp.connect(ng); ng.connect(out); n.start(t);
+  if (big) {                                       // a rising shimmer after the strike
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = "triangle"; o.frequency.setValueAtTime(880, t + 0.05); o.frequency.exponentialRampToValueAtTime(1760, t + 0.9);
+    g.gain.setValueAtTime(0.0001, t + 0.05); g.gain.exponentialRampToValueAtTime(0.08, t + 0.15); g.gain.exponentialRampToValueAtTime(0.0001, t + 1.2);
+    o.connect(g); g.connect(out); o.start(t + 0.05); o.stop(t + 1.3);
+  }
+}
+function tickSound() {
+  if (!SND.on || !SND.ctx) return;
+  const ctx = SND.ctx, t = ctx.currentTime;
+  if (t - SND.lastTick < 0.04) return;
+  SND.lastTick = t;
+  const o = ctx.createOscillator(), g = ctx.createGain();
+  o.type = "square"; o.frequency.value = 2600 + Math.random() * 600;
+  g.gain.setValueAtTime(0.025, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.03);
+  o.connect(g); g.connect(ctx.destination); o.start(t); o.stop(t + 0.04);
+}
+
+/* ---- building the view ---- */
 function showBusy(note) {
   if (F && document.getElementById("forge")) return;
   forgeStop();
   $("#main").innerHTML = `<section class="tip forge" id="forge" aria-live="polite">
+    <canvas class="fx" id="fFx" aria-hidden="true"></canvas>
     <div class="forge-head"><h2>Forging your build</h2><span class="sub" id="fSub">${esc(note)}</span></div>
     <div class="phases" id="fPhases"></div>
+    <div class="ptrack"><div class="pfill" id="fFill"><span class="comet"></span></div></div>
     <div class="scoreline">
       <div class="score"><div class="v wait" id="fScore">Getting ready…</div><div class="k" id="fLabel">best so far</div></div>
       <div class="checked"><div class="v" id="fChecked">0</div><div class="k">builds checked</div></div>
     </div>
-    <div class="reels" id="fReels">${SLOTS.map((sl, i) => `<div class="reel spin" data-i="${i}"><div class="slot">${sl}</div><div class="item">…</div></div>`).join("")}</div>
+    <div class="reels" id="fReels">${SLOTS.map((sl, i) => `<div class="reel" data-i="${i}"><div class="slot">${sl}</div>
+      <div class="window"><div class="strip"><div class="ln">…</div></div></div></div>`).join("")}</div>
     <div class="wcards" id="fWeapons"></div>
     <div class="pbar"><div id="busyBar"></div></div>
     <div class="forge-foot"><div id="busyProgress" class="busy-sub"></div>
       <button class="btn-quiet" id="stopBtn" type="button">Stop and keep the best so far</button></div>
   </section>`;
   $("#stopBtn").addEventListener("click", async () => { await api("/api/stop", {}); $("#stopBtn").textContent = "Stopping…"; $("#stopBtn").disabled = true; });
-  F = { id: null, needFull: true, pools: {}, phase: -1, reels: SLOTS.map(() => ({ locked: null, spinUntil: 0, freshUntil: 0, shownKey: null })),
-        score: null, scoreShown: null, checked: 0, checkedShown: 0, best: null };
-  F.spinTimer = setInterval(forgeSpin, 85);
+  F = { id: null, needFull: true, pools: {}, phase: -2, best: null, scoreShown: null, checked: 0, checkedShown: 0,
+        reels: SLOTS.map(() => ({ locked: null, busyUntil: 0, spinning: false })), cards: {}, leadKey: null,
+        sparks: [], embers: [], emberAcc: 0, bps: 0, lastEvals: 0, lastT: performance.now(), timers: [], finishing: false };
+  document.querySelectorAll("#fReels .reel").forEach((el, i) => reelSpin(i));
+  F.spinTimer = setInterval(forgeIdle, 120);
   F.pollTimer = setInterval(forgePoll, 350);
+  if (!REDUCED) F.raf = requestAnimationFrame(fxLoop);
   forgePoll();
 }
 function forgeStop() {
   if (!F) return;
   clearInterval(F.spinTimer); clearInterval(F.pollTimer); cancelAnimationFrame(F.raf || 0);
+  F.timers.forEach(clearTimeout);
   F = null;
 }
-function reelHTML(x) {
-  if (!x) return "…";
-  if (x.none) return '<span class="none">(empty)</span>';
-  return `<span class="t-${esc(x.tier || "Normal")}">${esc(x.name)}</span>`;
+function later(fn, ms) { if (F) F.timers.push(setTimeout(fn, ms)); }
+function reelEl(i) { return document.querySelector(`#fReels .reel[data-i="${i}"]`); }
+function lineHTML(x) {
+  if (!x) return '<div class="ln">…</div>';
+  if (x.none) return '<div class="ln"><span class="none">(empty)</span></div>';
+  return `<div class="ln"><span class="t-${esc(x.tier || "Normal")}">${esc(x.name)}</span></div>`;
 }
-function forgeSpin() {
-  if (!F) return;
+function randomItem(i) {
+  const pool = F.pools[SLOTS[i]] || F.pools[SLOTS[i].replace("2", "1")] || [];
+  if (!pool.length) return null;
+  const p = pool[Math.floor(Math.random() * pool.length)];
+  return { name: p[0], tier: p[1] };
+}
+
+/* ---- reels: spin as a blurred strip, land with a bounce ---- */
+function reelSpin(i) {
+  const el = reelEl(i); if (!el || !F) return;
+  const st = F.reels[i], strip = el.querySelector(".strip");
+  const items = []; for (let k = 0; k < 10; k++) items.push(randomItem(i));
+  strip.style.transition = "none"; strip.style.transform = "";
+  strip.innerHTML = items.concat(items).map(lineHTML).join("");
+  strip.classList.remove("landing");
+  if (!REDUCED) strip.classList.add("spinning");
+  st.spinning = true;
+}
+function reelLand(i, item, o = {}) {
+  const el = reelEl(i); if (!el || !F) return;
+  const st = F.reels[i], strip = el.querySelector(".strip");
+  const n = o.n || 6, dur = o.dur || 520, delay = o.delay || 0;
+  st.locked = item; st.spinning = false;
+  st.busyUntil = performance.now() + delay + dur + 60;
+  el.style.setProperty("--rc", item && !item.none ? (TIER_COL[item.tier] || TIER_COL.Normal) : "#3a3f63");
+  if (REDUCED) {
+    strip.classList.remove("spinning"); strip.innerHTML = lineHTML(item);
+    el.classList.toggle("locked", !!item && !item.none);
+    return;
+  }
+  const lines = []; for (let k = 0; k < n; k++) lines.push(randomItem(i));
+  lines.push(item);
+  strip.classList.remove("spinning");
+  strip.style.transition = "none"; strip.style.transform = "translateY(0)";
+  strip.innerHTML = lines.map(lineHTML).join("");
+  void strip.offsetHeight;
+  strip.classList.add("landing");
+  strip.style.transition = `transform ${dur}ms cubic-bezier(.17,1.3,.4,1) ${delay}ms`;
+  strip.style.transform = `translateY(${-n * RH}px)`;
+  later(() => {
+    if (!F || F.reels[i].locked !== item) return;
+    strip.classList.remove("landing");
+    strip.style.transition = "none"; strip.style.transform = "";
+    strip.innerHTML = lineHTML(item);
+    el.classList.toggle("locked", !!item && !item.none);
+    tickSound();
+    if (o.punch) { el.classList.remove("punch"); void el.offsetWidth; el.classList.add("punch"); }
+    if (o.fresh) celebrate(i, item);
+  }, delay + dur);
+}
+function celebrate(i, item) {
+  const el = reelEl(i); if (!el || !F) return;
+  const big = item && BIG_TIERS[item.tier];
+  el.classList.remove("flash", "fresh", "shimmer"); void el.offsetWidth;
+  el.classList.add("flash", "fresh"); if (big) el.classList.add("shimmer");
+  later(() => el.classList.remove("flash", "shimmer"), 1000);
+  later(() => el.classList.remove("fresh"), 1700);
+  const col = item && !item.none ? (TIER_COL[item.tier] || TIER_COL.Normal) : "#9aa0c8";
+  burstAt(el, col, big ? 46 : 24, big ? 1.5 : 1);
+}
+// while the search runs, locked reels now and then flick through other items: the search trying swaps
+function forgeIdle() {
+  if (!F || F.finishing || REDUCED) return;
   const now = performance.now();
-  document.querySelectorAll("#fReels .reel").forEach((el) => {
-    const i = +el.dataset.i, st = F.reels[i];
-    const spinning = !REDUCED && (!st.locked || now < st.spinUntil);
-    el.classList.toggle("spin", spinning);
-    el.classList.toggle("fresh", now < st.freshUntil);
-    const item = el.querySelector(".item");
-    if (spinning) {
-      const pool = F.pools[SLOTS[i]] || F.pools[SLOTS[i].replace("2", "1")] || [];
-      if (pool.length) { const p = pool[Math.floor(Math.random() * pool.length)]; item.innerHTML = reelHTML({ name: p[0], tier: p[1] }); }
-      st.shownKey = null;
-    } else if (st.locked) {
-      const key = st.locked.none ? "∅" : st.locked.name;
-      if (st.shownKey !== key) { item.innerHTML = reelHTML(st.locked); st.shownKey = key; }
-      // while the search runs, reels now and then flick through other items: the search trying swaps
-      if (!REDUCED && F.phase >= 2 && F.phase < 5 && Math.random() < 0.012) st.spinUntil = now + 300 + Math.random() * 350;
-    }
+  if (!(F.phase >= 2 && F.phase < 5)) return;
+  F.reels.forEach((st, i) => {
+    if (st.locked && !st.spinning && now > st.busyUntil && Math.random() < 0.018) reelLand(i, st.locked, { n: 3, dur: 380 });
   });
 }
-function tween(from, to, ms, set, done) {
-  const t0 = performance.now();
-  const step = (t) => { const k = Math.min(1, (t - t0) / ms), e = 1 - Math.pow(1 - k, 3); set(from + (to - from) * e); if (k < 1) F && (F.raf = requestAnimationFrame(step)); else if (done) done(); };
-  F.raf = requestAnimationFrame(step);
+
+/* ---- particles: sparks when a slot improves, embers that rise faster the faster the search runs ---- */
+function burstAt(el, col, count, power) {
+  if (!F || REDUCED) return;
+  const cv = $("#fFx"); if (!cv) return;
+  const a = cv.getBoundingClientRect(), b = el.getBoundingClientRect();
+  const x = b.left - a.left + b.width / 2, y = b.top - a.top + b.height * 0.62;
+  for (let k = 0; k < count; k++) {
+    const ang = Math.random() * Math.PI * 2, sp = (1.5 + Math.random() * 4.5) * power;
+    F.sparks.push({ x, y, vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp - 1.5, life: 1, decay: 0.012 + Math.random() * 0.02,
+                    col: Math.random() < 0.25 ? "#ffffff" : col, w: 1 + Math.random() * 1.6 });
+  }
+  if (F.sparks.length > 600) F.sparks.splice(0, F.sparks.length - 600);
 }
-async function forgePoll() {
+function fxLoop() {
   if (!F) return;
+  const cv = $("#fFx");
+  if (!cv) { F.raf = requestAnimationFrame(fxLoop); return; }
+  const dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = cv.clientHeight;
+  if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
+  const g = cv.getContext("2d");
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.clearRect(0, 0, W, H);
+  g.globalCompositeOperation = "lighter";
+  // embers: more of them the faster builds are being checked
+  const rate = F.finishing ? 0 : (F.phase >= 0 ? 3 + Math.min(45, F.bps / 120) : 2);
+  F.emberAcc += rate / 60;
+  while (F.emberAcc >= 1 && F.embers.length < 110) {
+    F.emberAcc -= 1;
+    F.embers.push({ x: Math.random() * W, y: H + 6, vy: 0.9 + Math.random() * 1.6, ph: Math.random() * 6.28, r: 0.7 + Math.random() * 1.5,
+                    life: 1, decay: 0.0028 + Math.random() * 0.0035, hot: Math.random() });
+  }
+  F.embers = F.embers.filter((e) => e.life > 0);
+  for (const e of F.embers) {
+    e.y -= e.vy; e.ph += 0.03; e.x += Math.sin(e.ph) * 0.35; e.life -= e.decay;
+    const a = Math.max(0, Math.min(1, e.life * 1.4, (1 - e.life) * 6)) * 0.55;   // fade in, then out
+    const c = e.hot > 0.7 ? `rgba(255,220,140,${a})` : `rgba(255,${120 + Math.round(e.hot * 70)},50,${a})`;
+    g.fillStyle = c; g.beginPath(); g.arc(e.x, e.y, e.r, 0, 6.283); g.fill();
+    g.fillStyle = `rgba(255,150,60,${a * 0.14})`; g.beginPath(); g.arc(e.x, e.y, e.r * 3, 0, 6.283); g.fill();
+  }
+  // sparks: short glowing streaks with gravity
+  F.sparks = F.sparks.filter((s) => s.life > 0);
+  for (const s of F.sparks) {
+    const px = s.x, py = s.y;
+    s.vy += 0.12; s.vx *= 0.985; s.x += s.vx; s.y += s.vy; s.life -= s.decay;
+    g.strokeStyle = s.col; g.globalAlpha = Math.max(0, s.life); g.lineWidth = s.w;
+    g.beginPath(); g.moveTo(px - s.vx * 1.5, py - s.vy * 1.5); g.lineTo(s.x, s.y); g.stroke();
+  }
+  g.globalAlpha = 1;
+  F.raf = requestAnimationFrame(fxLoop);
+}
+
+/* ---- score: rolling digits, a floating "+x%" on every new best ---- */
+function odoSet(el, value) {
+  const str = fmtBig(value);
+  if (el.dataset.str === undefined || el.dataset.str.length !== str.length || el.classList.contains("wait")) {
+    el.className = "v";
+    el.innerHTML = [...str].map((ch) => /\d/.test(ch)
+      ? `<span class="dg"><span class="col">${"0123456789".split("").map((d) => `<span>${d}</span>`).join("")}</span></span>`
+      : `<span class="sep">${ch}</span>`).join("");
+    void el.offsetHeight;
+  }
+  el.dataset.str = str;
+  el.setAttribute("aria-label", str);
+  el.querySelectorAll(".dg, .sep").forEach((d) => d.setAttribute("aria-hidden", "true"));
+  const cols = el.querySelectorAll(".dg .col"); let k = 0;
+  for (const ch of str) if (/\d/.test(ch)) { cols[k].style.transform = `translateY(${-(+ch) * 1.05}em)`; k++; }
+}
+function floater(text, big) {
+  const box = document.querySelector("#forge .score"); if (!box) return;
+  const f = document.createElement("span"); f.className = "floater" + (big ? " big" : ""); f.textContent = text;
+  box.appendChild(f); later(() => f.remove(), 1800);
+}
+
+/* ---- weapons being built around ---- */
+function renderWeapons(ws, lead) {
+  const box = $("#fWeapons"); if (!box) return;
+  let leadKey = null;
+  ws.forEach((w) => {
+    const key = w.stage + "|" + w.name;
+    let el = F.cards[key];
+    if (!el) {
+      el = document.createElement("span"); el.className = "wcard enter";
+      el.innerHTML = `<span class="crown" title="best build so far">♛</span><span class="t-${esc(w.tier)}">${esc(w.name)}</span>` +
+        (w.stage !== "main" ? `<span class="tag">${w.stage === "quick" ? "quick look" : "full search"}</span>` : "") + `<span class="st"></span>`;
+      box.appendChild(el); F.cards[key] = el;
+      later(() => el.classList.remove("enter"), 450);
+    }
+    if (el.dataset.status !== w.status) {
+      if (w.status === "done" && el.dataset.status) { el.classList.remove("flip"); void el.offsetWidth; el.classList.add("flip"); later(() => el.classList.remove("flip"), 600); }
+      el.classList.remove("queued", "running", "done"); el.classList.add(w.status); el.dataset.status = w.status;
+      el.querySelector(".st").innerHTML = w.status === "done" ? "✓" : w.status === "running" ? '<span class="tag">building</span>' : "";
+    }
+    if (lead && w.name === lead && !leadKey) leadKey = key;
+  });
+  if (leadKey !== F.leadKey) {
+    if (F.leadKey && F.cards[F.leadKey]) F.cards[F.leadKey].classList.remove("lead", "hop");
+    if (leadKey) { const el = F.cards[leadKey]; el.classList.add("lead"); el.classList.remove("hop"); void el.offsetWidth; el.classList.add("hop"); }
+    F.leadKey = leadKey;
+  }
+}
+
+/* ---- polling the search ---- */
+async function forgePoll() {
+  if (!F || F.finishing) return;
   let L;
   try { L = await fetch("/api/live" + (F.needFull ? "?full=1" : "")).then((r) => r.json()); } catch (e) { return; }
-  if (!F || !L || !L.id) return;
-  if (L.id !== F.id) {                              // a new search (or first look): get its item lists
+  if (!F || F.finishing || !L || !L.id) return;
+  if (L.id !== F.id) {                              // a new search (or the first look): get its item lists
     const first = F.id === null; F.id = L.id;
     if (!L.pools) { F.needFull = true; return; }
-    if (!first) F.reels.forEach((st) => { st.locked = null; });
+    if (!first) { F.best = null; F.reels.forEach((st, i) => { st.locked = null; reelSpin(i); }); }
   }
-  if (L.pools && Object.keys(L.pools).length) { F.pools = L.pools; F.needFull = false; } else if (!Object.keys(F.pools).length) F.needFull = true;
-  F.phase = L.phase;
+  if (L.pools && Object.keys(L.pools).length) {
+    const had = Object.keys(F.pools).length; F.pools = L.pools; F.needFull = false;
+    if (!had) F.reels.forEach((st, i) => { if (!st.locked) reelSpin(i); });
+  } else if (!Object.keys(F.pools).length) F.needFull = true;
+  // phases and the comet along them
   const ph = L.phases || [];
-  $("#fPhases").innerHTML = (L.phase < 0 ? ['<span class="phase now">Planning your tree and upgrades</span>'] : [])
-    .concat(ph.map((p, i) => `<span class="phase${i === L.phase ? " now" : i < L.phase ? " done" : ""}">${esc(p)}</span>`)).join("");
-  if (L.phase >= 5) $("#fSub").textContent = "Writing up your report…";
+  if (L.phase !== F.phase) {
+    $("#fPhases").innerHTML = (L.phase < 0 ? ['<span class="phase now">Planning your tree and upgrades</span>'] : [])
+      .concat(ph.map((p, i) => `<span class="phase${i === L.phase ? " now" : i < L.phase ? " done" : ""}">${esc(p)}</span>`)).join("");
+    const fill = $("#fFill");
+    fill.style.width = (L.phase < 0 ? 4 : Math.min(100, ((L.phase + 0.6) / ph.length) * 100)) + "%";
+    fill.classList.remove("zoom"); void fill.offsetWidth; fill.classList.add("zoom");
+    if (L.phase >= 5) $("#fSub").textContent = "Writing up your report…";
+    const sc0 = $("#fScore");
+    if (sc0.classList.contains("wait") && !F.best) sc0.textContent = L.phase < 0 ? "Planning your ability tree…" : "Searching for the first build…";
+    F.phase = L.phase;
+  }
   if (L.label) $("#fLabel").textContent = `${L.label}, best so far`;
-  // builds checked
-  if (L.evals > F.checked) { const a = F.checkedShown; F.checked = L.evals; const el = $("#fChecked");
-    const t0 = performance.now(), b = L.evals; const go = (t) => { const k = Math.min(1, (t - t0) / 320); F && (F.checkedShown = a + (b - a) * k); el.textContent = Math.round(a + (b - a) * k).toLocaleString("en-US"); if (k < 1) requestAnimationFrame(go); }; requestAnimationFrame(go); }
-  // best build so far
+  // builds checked, and how fast (for the embers)
+  const now = performance.now();
+  if (L.evals > F.checked) {
+    const dt = (now - F.lastT) / 1000;
+    if (dt > 0.2) { F.bps = F.bps * 0.6 + 0.4 * ((L.evals - F.lastEvals) / dt); F.lastEvals = L.evals; F.lastT = now; }
+    const a = F.checkedShown, b = L.evals, el = $("#fChecked"), t0 = performance.now(); F.checked = b;
+    const go = (t) => { if (!F) return; const k = Math.min(1, (t - t0) / 320); F.checkedShown = a + (b - a) * k; el.textContent = Math.round(F.checkedShown).toLocaleString("en-US"); if (k < 1) requestAnimationFrame(go); };
+    requestAnimationFrame(go);
+  }
+  // the best build so far
   const b = L.best;
   if (b && (!F.best || b.value !== F.best.value)) {
-    const sc = $("#fScore");
-    if (b.value < 0) { sc.className = "v wait"; sc.textContent = "Reaching your minimums…"; }
+    const sc = $("#fScore"), prev = F.best;
+    if (b.value < 0) { sc.className = "v wait"; delete sc.dataset.str; sc.textContent = "Reaching your minimums…"; }
     else {
-      const from = F.scoreShown == null ? b.main * 0.6 : F.scoreShown;
-      sc.className = "v"; void sc.offsetWidth; sc.classList.add("bump");
-      tween(from, b.main, 650, (x) => { F.scoreShown = x; sc.textContent = fmtBig(x); });
+      if (prev && prev.value >= 0 && prev.main > 0) {
+        const gain = (b.main / prev.main - 1) * 100;
+        if (gain >= 0.05) floater(`+${gain >= 10 ? gain.toFixed(0) : gain.toFixed(1)}%`, gain >= 5);
+        sc.classList.remove("bump", "gold"); void sc.offsetWidth; sc.classList.add(gain >= 5 ? "gold" : "bump");
+      }
+      odoSet(sc, b.main);
     }
-    const now = performance.now();
     const items = (b.armor || []).concat([b.weapon]);
     items.forEach((x, i) => {
       const st = F.reels[i]; if (!st) return;
       const next = x ? { name: x[0], tier: x[1] } : { none: true };
-      const changed = !st.locked || (st.locked.none ? "∅" : st.locked.name) !== (next.none ? "∅" : next.name);
-      st.locked = next;
-      if (changed && F.best) { st.spinUntil = now + 380 + i * 30; st.freshUntil = now + 1600; }
+      const same = st.locked && (st.locked.none ? "∅" : st.locked.name) === (next.none ? "∅" : next.name);
+      if (!same) reelLand(i, next, { n: 6 + (i % 3), dur: 560, delay: (prev ? 0 : i * 70), fresh: !!prev });
     });
+    if (prev) clang(false);
     F.best = b;
   }
-  // weapons being built around
-  const ws = L.weapons || [];
-  const lead = b && b.weapon ? b.weapon[0] : null;
-  $("#fWeapons").innerHTML = ws.map((w) => `<span class="wcard ${w.status}">${w.name === lead ? '<span class="crown" title="best build so far">♛</span>' : ""}
-    <span class="t-${esc(w.tier)}">${esc(w.name)}</span>${w.stage !== "main" ? `<span class="tag">${w.stage === "quick" ? "quick look" : "full search"}</span>` : ""}
-    <span class="st">${w.status === "done" ? "✓" : w.status === "running" ? '<span class="tag">building</span>' : ""}</span></span>`).join("");
+  renderWeapons(L.weapons || [], b && b.weapon ? b.weapon[0] : null);
 }
+
+/* ---- the finish: reels lock left to right, a shake, a gold flash and the stamp ---- */
 function forgeFinish() {
   return new Promise((resolve) => {
     if (!F || !document.getElementById("forge")) { forgeStop(); return resolve(); }
-    const now = performance.now();
-    F.phase = 5;
-    F.reels.forEach((st, i) => { if (!st.locked) st.locked = { none: true }; st.spinUntil = REDUCED ? 0 : now + 150 + i * 75; });
+    F.finishing = true;
     clearInterval(F.pollTimer);
-    setTimeout(() => { forgeStop(); resolve(); }, REDUCED ? 0 : 1050);
+    if (REDUCED) { forgeStop(); return resolve(); }
+    F.reels.forEach((st, i) => reelLand(i, st.locked || { none: true }, { n: 5 + i, dur: 430, delay: i * 90, punch: true }));
+    const t = SLOTS.length * 90 + 480;
+    later(() => {
+      const fo = $("#forge"); if (!fo) return;
+      fo.classList.add("shake");
+      fo.insertAdjacentHTML("beforeend", '<div class="goldflash"></div><div class="stamp">BUILD FORGED</div>');
+      clang(true);
+      const st = fo.querySelector(".stamp");
+      if (st) { burstAt(st, "#ffd36b", 70, 2.1); burstAt(st, "#55ffff", 30, 1.6); burstAt(st, "#ff55ff", 30, 1.6); }
+    }, t);
+    setTimeout(() => { forgeStop(); RISE_NEXT = true; resolve(); }, t + 1250);
   });
 }
 function autosize() { const t = $("#input"); t.style.height = "auto"; t.style.height = Math.min(160, t.scrollHeight) + "px"; }
@@ -677,6 +964,7 @@ function fillForm(a) {
 }
 $("#buildForm").addEventListener("submit", async (e) => {
   e.preventDefault();
+  soundUnlock();
   if (busy) return;
   setBusy(true);
   const deep = $("#f-deep").checked;
@@ -716,6 +1004,8 @@ const pick = (re, text) => { const m = text.match(re); return m ? m : null; };
 const OPEN = ["Best whole build", "Skill points", "Powders", "Ability tree", "What it does", "Survivability", "Level-by-level plan"];
 function showReport(text) {
   LAST_REPORT = text;
+  const rise = RISE_NEXT && !REDUCED; RISE_NEXT = false;
+  requestAnimationFrame(() => { const m = $("#main"); if (rise) { m.classList.remove("rise"); void m.offsetWidth; m.classList.add("rise"); setTimeout(() => m.classList.remove("rise"), 1200); } });
   const { head, secs } = splitSections(text);
   const title = pick(/·\s*(\w+), level (\d+), goal: (\w+)/, head.join("\n"));
   const goalWords = { ability: "one ability's damage", spells: "spell damage", burst: "burst damage", melee: "highest DPS", survival: "survival", balanced: "damage and survival", healing: "healing" };
@@ -818,14 +1108,16 @@ function showEmpty() {
 }
 
 /* ---------- settings ---------- */
-function openSettings() { $("#s-popup").checked = !META || META.popup !== false; $("#s-autoupd").checked = !META || META.auto_update !== false;
+function openSettings() { $("#s-popup").checked = !META || META.popup !== false; $("#s-sound").checked = !!(META && META.sound); $("#s-autoupd").checked = !META || META.auto_update !== false;
   $("#s-version").textContent = META ? `You have version ${META.app_version}.` + (META.updates_configured ? "" : " (Updates aren't set up for this copy.)") : ""; $("#s-key").value = ""; $("#s-key").placeholder = META && META.key_hint ? `saved (${META.key_hint})` : "sk-ant-…"; $("#settings").classList.add("on"); $("#s-key").focus(); }
 $("#openSettings").addEventListener("click", openSettings);
 $("#keyLink").addEventListener("click", openSettings);
 $("#cancelSettings").addEventListener("click", () => $("#settings").classList.remove("on"));
 $("#settings").addEventListener("keydown", (e) => { if (e.key === "Escape") $("#settings").classList.remove("on"); });
 $("#saveSettings").addEventListener("click", async () => {
-  const body = { model: $("#s-model").value, popup: $("#s-popup").checked, auto_update: $("#s-autoupd").checked };
+  const body = { model: $("#s-model").value, popup: $("#s-popup").checked, auto_update: $("#s-autoupd").checked, sound: $("#s-sound").checked };
+  if (body.sound && !SND.on) { SND.on = true; soundUnlock(); setTimeout(() => clang(false), 60); }   // a sample, so you know it's on
+  SND.on = body.sound;
   if ($("#s-key").value.trim()) body.api_key = $("#s-key").value.trim();
   await api("/api/settings", body);
   $("#settings").classList.remove("on");
@@ -835,6 +1127,7 @@ $("#quitApp").addEventListener("click", async () => { try { await api("/api/quit
 
 async function loadMeta() {
   META = await api("/api/meta");
+  SND.on = !!META.sound;
   $("#dataver").textContent = `version ${META.app_version} · game data ${META.version}`;
   $("#keynote").hidden = META.has_key;
   $("#modelName").textContent = META.has_key ? (META.models[META.model] || META.model).replace(/ \(.*\)$/, "") : "Chat needs an API key";

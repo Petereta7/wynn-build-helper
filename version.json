@@ -1,4 +1,4 @@
 {
-  "version": "1.0.2",
-  "notes": "When you send a chat message or start a new chat, the old build clears so you can watch the Forge as soon as Claude starts working out a build. If Claude just answers without a new build, your last build comes back."
+  "version": "1.0.3",
+  "notes": "The Forge got flashier: slot-machine reels that land with a bounce, sparks in the item's rarity colour when a slot improves, a rolling score with a floating +% on every new best, embers that rise faster the faster the search runs, livelier weapon cards with a hopping crown, a comet along the search steps, and a big BUILD FORGED finish. Optional anvil sounds: turn them on in Settings."
 }

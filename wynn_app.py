@@ -546,7 +546,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, {
                 "classes": wh.CLASSES, "goals": wh.GOALS, "buffs": list(wh.BUFFS), "version": d.version,
                 "has_key": bool(api_key()), "model": cfg.get("model") or DEFAULT_MODEL, "models": MODELS,
-                "popup": cfg.get("popup", True), "app_version": updater.current_version().get("version", "?"),
+                "popup": cfg.get("popup", True), "sound": cfg.get("sound", False), "app_version": updater.current_version().get("version", "?"),
                 "auto_update": cfg.get("auto_update", True), "updates_configured": updater.configured(),
                 "key_hint": ("…" + api_key()[-4:]) if api_key() else ""})
         if path == "/api/items":
@@ -605,6 +605,8 @@ class Handler(BaseHTTPRequestHandler):
                 cfg["model"] = body["model"]
             if "popup" in body:
                 cfg["popup"] = bool(body["popup"])
+            if "sound" in body:
+                cfg["sound"] = bool(body["sound"])
             if "auto_update" in body:
                 cfg["auto_update"] = bool(body["auto_update"])
             save_config(cfg)
