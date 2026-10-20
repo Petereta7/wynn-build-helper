@@ -1,0 +1,4 @@
+{
+  "version": "1.0.0",
+  "notes": "First version with built-in updates. Minimum stats (health, walk speed and more), faster scoring, extra searching for better builds, a pop-up when a build is ready, and Bullwhip now counts for summoner builds."
+}

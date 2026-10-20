@@ -1,0 +1,12 @@
+# Personal files: never in the repository
+wynn_app_config.json
+wynn_data/best_builds.json
+app.log
+.window_ready
+_previous_version/
+*.updating
+__pycache__/
+*.pyc
+# Test downloads and scratch
+tests/crossval/work/
+tests/crossval/wynnbuilder/

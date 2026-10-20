@@ -1,0 +1,3 @@
+# Paste your Claude API key on the line below (it starts with sk-ant-), then save this file.
+# Get a key at https://console.anthropic.com/settings/keys
+# Keep this file private: anyone with the key can use your API credit.

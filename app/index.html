@@ -1,0 +1,735 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wynn Build Helper</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Pixelify+Sans:wght@500;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --night: #171a2c;
+  --dusk: #20243b;
+  --dusk-2: #2a2f4b;
+  --line: #363c60;
+  --text: #ebe5d4;
+  --muted: #a3a8c6;
+  --faint: #6f7597;
+  --tip-bg: #14091f;
+  --tip-edge-1: #6a3cf0;
+  --tip-edge-2: #2c1477;
+  --violet: #8b5cff;
+  --violet-strong: #a07bff;
+  --link: #6fe7f2;
+  --warn: #ff8a7a;
+  --good: #7ef08a;
+  /* Wynncraft rarity colours */
+  --normal: #ffffff; --unique: #ffff55; --rare: #ff55ff; --legendary: #55ffff;
+  --fabled: #ff5555; --mythic: #c64bd6; --set: #55ff55; --crafted: #2bc4c4;
+  --r-lg: 14px; --r-md: 10px; --r-sm: 6px;
+  --display: "Pixelify Sans", "Figtree", system-ui, sans-serif;
+  --body: "Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0; background: var(--night); color: var(--text); font: 15px/1.5 var(--body);
+  display: flex; flex-direction: column;
+  -webkit-font-smoothing: antialiased;
+}
+button, input, select, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
+a { color: var(--link); }
+
+/* ---------- top bar ---------- */
+.bar {
+  height: 56px; display: flex; align-items: center; gap: 14px; padding: 0 20px;
+  border-bottom: 1px solid var(--line); background: var(--dusk);
+}
+.brand { font-family: var(--display); font-weight: 700; font-size: 21px; letter-spacing: .3px; margin: 0; }
+.brand span { color: var(--violet-strong); }
+.bar .data { color: var(--faint); font-size: 13px; }
+.bar .spacer { flex: 1; }
+.btn-quiet {
+  background: transparent; border: 1px solid var(--line); border-radius: var(--r-sm);
+  padding: 6px 12px; color: var(--muted); cursor: pointer;
+}
+.btn-quiet:hover { color: var(--text); border-color: var(--faint); }
+
+/* ---------- layout ---------- */
+.bar { flex: none; }
+.app { display: grid; grid-template-columns: minmax(340px, 430px) 1fr; flex: 1 1 auto; min-height: 0; }
+.side { border-right: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; background: var(--dusk); }
+.main { overflow-y: auto; padding: 24px 28px 48px; min-width: 0; }
+
+.tabs { display: flex; gap: 4px; padding: 10px 12px 0; border-bottom: 1px solid var(--line); }
+.tab {
+  background: none; border: 0; padding: 10px 14px; cursor: pointer; color: var(--muted);
+  border-bottom: 2px solid transparent; font-weight: 600;
+}
+.tab[aria-selected="true"] { color: var(--text); border-bottom-color: var(--violet); }
+.pane { display: none; flex: 1; min-height: 0; flex-direction: column; }
+.pane.on { display: flex; }
+
+/* ---------- chat ---------- */
+.msgs { flex: 1; overflow-y: auto; padding: 16px 14px; display: flex; flex-direction: column; gap: 12px; }
+.msg { max-width: 92%; padding: 10px 13px; border-radius: var(--r-md); white-space: normal; word-wrap: break-word; }
+.msg p { margin: 0 0 8px; } .msg p:last-child { margin: 0; }
+.msg ul { margin: 4px 0 8px; padding-left: 20px; } .msg li { margin: 2px 0; }
+.msg.you { align-self: flex-end; background: var(--dusk-2); border: 1px solid var(--line); }
+.msg.bot { align-self: flex-start; background: transparent; padding-left: 0; }
+.msg.bot.err { color: var(--warn); }
+.msg code { font-family: var(--mono); font-size: 13px; background: var(--night); padding: 1px 5px; border-radius: 4px; }
+.thinking { color: var(--muted); font-style: italic; }
+.thinking::after { content: ""; animation: dots 1.4s steps(4) infinite; }
+@keyframes dots { 0% { content: ""; } 25% { content: "."; } 50% { content: ".."; } 75% { content: "..."; } }
+.compose { border-top: 1px solid var(--line); padding: 12px; display: flex; gap: 8px; align-items: flex-end; }
+.compose textarea {
+  flex: 1; resize: none; min-height: 44px; max-height: 160px; padding: 11px 12px; border-radius: var(--r-md);
+  background: var(--night); border: 1px solid var(--line);
+}
+.btn {
+  background: var(--violet); color: #fff; border: 0; border-radius: var(--r-md); padding: 11px 16px;
+  font-weight: 600; cursor: pointer;
+}
+.btn:hover { background: var(--violet-strong); }
+.btn:disabled { opacity: .5; cursor: progress; }
+.chat-tools { display: flex; justify-content: space-between; align-items: center; padding: 8px 14px 0; color: var(--faint); font-size: 13px; }
+.linkish { background: none; border: 0; color: var(--muted); cursor: pointer; padding: 2px 0; text-decoration: underline; text-underline-offset: 3px; }
+.keynote { margin: 14px; padding: 12px 14px; border: 1px dashed var(--line); border-radius: var(--r-md); color: var(--muted); font-size: 14px; }
+
+/* ---------- form ---------- */
+.form { overflow-y: auto; padding: 16px 16px 24px; display: flex; flex-direction: column; gap: 14px; }
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field label, .field .lbl { font-weight: 600; font-size: 14px; }
+.field .hint { color: var(--faint); font-size: 13px; }
+.row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.form input[type=text], .form input[type=number], .form select, .form textarea, .modal input, .modal select {
+  background: var(--night); border: 1px solid var(--line); border-radius: var(--r-sm); padding: 9px 10px; width: 100%;
+}
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip {
+  display: inline-flex; align-items: center; gap: 6px; padding: 4px 6px 4px 10px; border-radius: 999px;
+  background: var(--tip-bg); border: 1px solid var(--tip-edge-2); font-size: 14px;
+}
+.chip button { background: none; border: 0; color: var(--faint); cursor: pointer; padding: 0 4px; font-size: 16px; line-height: 1; }
+.chip button:hover { color: var(--text); }
+.toggle-chip { cursor: pointer; padding: 5px 10px; border-radius: 999px; border: 1px solid var(--line); background: none; color: var(--muted); font-size: 13px; }
+.toggle-chip[aria-pressed="true"] { border-color: var(--violet); color: var(--text); background: rgba(139, 92, 255, .15); }
+details.more summary { cursor: pointer; color: var(--muted); font-weight: 600; }
+details.more[open] summary { margin-bottom: 12px; }
+details.more .inner { display: flex; flex-direction: column; gap: 14px; }
+
+/* ---------- the tooltip look (results) ---------- */
+.tip {
+  position: relative; background: var(--tip-bg); border-radius: var(--r-sm);
+  border: 2px solid transparent;
+  background-image: linear-gradient(var(--tip-bg), var(--tip-bg)), linear-gradient(180deg, var(--tip-edge-1), var(--tip-edge-2));
+  background-origin: border-box; background-clip: padding-box, border-box;
+  box-shadow: 0 0 0 2px #0a0510, 0 12px 30px rgba(5, 2, 12, .45);
+}
+.hero { padding: 22px 26px; margin-bottom: 22px; }
+.hero h2 { font-family: var(--display); font-weight: 700; font-size: 30px; line-height: 1.15; margin: 0 0 4px; color: var(--legendary); }
+.hero .sub { color: var(--muted); margin: 0 0 18px; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px 22px; margin-bottom: 18px; }
+.stat .v { font-family: var(--display); font-size: 26px; font-weight: 500; line-height: 1.1; }
+.stat .k { color: var(--muted); font-size: 13px; }
+.stat.dmg .v { color: var(--fabled); } .stat.melee .v { color: var(--unique); }
+.stat.ehp .v { color: var(--set); } .stat.heal .v { color: var(--rare); } .stat.spd .v { color: var(--text); }
+.floor-warn { color: var(--warn); margin: 0 0 14px; font-size: 14px; }
+.floor-ok { color: var(--muted); margin: 0 0 14px; font-size: 14px; }
+.sp-line { font-family: var(--mono); font-size: 14px; color: var(--text); background: rgba(255,255,255,.04); padding: 8px 12px; border-radius: var(--r-sm); margin-bottom: 16px; overflow-x: auto; white-space: nowrap; }
+.actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.actions a.btn-quiet { text-decoration: none; display: inline-flex; align-items: center; }
+.upgrade { border-top: 1px solid var(--tip-edge-2); border-bottom: 1px solid var(--tip-edge-2); padding: 12px 0; margin-bottom: 16px; display: grid; grid-template-columns: repeat(4, auto) 1fr; gap: 4px 28px; align-items: baseline; }
+.up-title { grid-column: 1 / -1; font-family: var(--display); font-size: 19px; color: var(--set); }
+.up-row { display: flex; flex-direction: column; }
+.up-row span { color: var(--muted); font-size: 13px; }
+.up-row b { font-weight: 500; font-size: 16px; } .up-row i { font-style: normal; font-weight: 700; }
+.up-row i.dmg { color: var(--fabled); } .up-row i.melee { color: var(--unique); } .up-row i.ehp { color: var(--set); }
+.up-row i.spd { color: var(--text); }
+.up-note { grid-column: 1 / -1; color: var(--faint); font-size: 13px; }
+@media (max-width: 600px) { .upgrade { grid-template-columns: 1fr; } }
+.actions a.btn { text-decoration: none; }
+.notes { color: var(--faint); font-size: 13px; margin: 6px 0 18px; }
+.notes p { margin: 2px 0; }
+
+.sections { display: flex; flex-direction: column; gap: 14px; }
+.sec > summary {
+  list-style: none; cursor: pointer; padding: 12px 18px; display: flex; align-items: center; justify-content: space-between;
+  font-family: var(--display); font-weight: 500; font-size: 18px; color: var(--violet-strong);
+}
+.sec > summary::-webkit-details-marker { display: none; }
+.sec > summary::after { content: "+"; color: var(--faint); font-family: var(--mono); font-size: 18px; }
+.sec[open] > summary::after { content: "−"; }
+.sec pre {
+  margin: 0; padding: 2px 18px 16px; font: 13.5px/1.55 var(--mono); white-space: pre-wrap; word-break: break-word;
+  color: #ddd7ea;
+}
+.t-Normal { color: var(--normal); } .t-Unique { color: var(--unique); } .t-Rare { color: var(--rare); }
+.t-Legendary { color: var(--legendary); } .t-Fabled { color: var(--fabled); } .t-Mythic { color: var(--mythic); }
+.t-Set { color: var(--set); } .t-Crafted { color: var(--crafted); }
+.w { color: var(--warn); } .g { color: var(--good); }
+.e-Earth { color: #3fbf4a; } .e-Thunder { color: var(--unique); } .e-Water { color: var(--legendary); }
+.e-Fire { color: var(--fabled); } .e-Air { color: #f2f2f2; }
+
+/* ---------- empty state ---------- */
+.empty { max-width: 640px; margin: 6vh auto 0; padding: 30px 32px; }
+.empty h2 { font-family: var(--display); font-size: 28px; margin: 0 0 8px; color: var(--legendary); font-weight: 700; }
+.empty p { color: var(--muted); margin: 0 0 18px; }
+.examples { display: flex; flex-direction: column; gap: 8px; }
+.example {
+  text-align: left; background: rgba(255,255,255,.03); border: 1px solid var(--line); border-radius: var(--r-md);
+  padding: 10px 14px; cursor: pointer; color: var(--text);
+}
+.example:hover { border-color: var(--violet); }
+.busy { display: flex; align-items: center; gap: 14px; color: var(--muted); margin: 8vh auto; max-width: 520px; padding: 24px 28px; }
+.busy-text { display: flex; flex-direction: column; gap: 10px; flex: 1; }
+.busy-sub { color: var(--faint); font-size: 13px; min-height: 1.2em; }
+.pbar { height: 6px; background: rgba(255,255,255,.06); border-radius: 999px; overflow: hidden; }
+.pbar > div { height: 100%; width: 0; background: linear-gradient(90deg, var(--tip-edge-1), var(--legendary)); transition: width .6s ease; }
+.busy .btn-quiet { align-self: flex-start; }
+label.deep { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r-md); font-size: 14px; color: var(--muted); }
+label.deep b { color: var(--text); }
+label.deep input[type=checkbox] { width: auto; flex: 0 0 auto; margin-top: 3px; }
+.spinner { width: 22px; height: 22px; border: 3px solid var(--tip-edge-2); border-top-color: var(--legendary); border-radius: 50%; animation: spin 1s linear infinite; flex: none; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ---------- settings ---------- */
+.overlay { position: fixed; inset: 0; background: rgba(8, 6, 18, .7); display: none; align-items: center; justify-content: center; padding: 16px; z-index: 10; }
+.overlay.on { display: flex; }
+.modal { width: 100%; max-width: 480px; padding: 24px 26px; display: flex; flex-direction: column; gap: 14px; max-height: calc(100vh - 32px); overflow-y: auto; }
+.modal h2 { font-family: var(--display); margin: 0; font-size: 22px; color: var(--legendary); }
+.modal p { margin: 0; color: var(--muted); font-size: 14px; }
+.modal .btns { display: flex; justify-content: space-between; gap: 10px; margin-top: 6px; }
+.toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--dusk-2); border: 1px solid var(--line); padding: 8px 14px; border-radius: var(--r-md); display: none; z-index: 20; }
+.toast.on { display: block; }
+.update-bar { flex: none; display: flex; gap: 14px; align-items: center; flex-wrap: wrap; padding: 10px 18px; background: var(--dusk-2); border-bottom: 1px solid var(--line); font-size: 14px; }
+.update-bar[hidden] { display: none; }
+.update-bar b { color: var(--legendary); }
+.update-bar .notes { color: var(--muted); flex: 1 1 260px; margin: 0; white-space: pre-line; }
+.update-bar .btn, .update-bar .btn-quiet { padding: 6px 12px; }
+
+@media (max-width: 900px) {
+  html, body { height: auto; }
+  .app { grid-template-columns: 1fr; height: auto; flex: none; }
+  .side { border-right: 0; border-bottom: 1px solid var(--line); height: 70vh; }
+  .main { padding: 18px 16px 40px; overflow: visible; }
+  .hero h2 { font-size: 24px; }
+  .row { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .spinner, .thinking::after { animation: none; }
+}
+</style>
+</head>
+<body>
+<header class="bar">
+  <h1 class="brand">Wynn Build <span>Helper</span></h1>
+  <span class="data" id="dataver"></span>
+  <span class="spacer"></span>
+  <button class="btn-quiet" id="openSettings">Settings</button>
+</header>
+
+<div class="update-bar" id="updateBar" hidden role="status">
+  <span><b>Update available</b> <span id="updVer"></span></span>
+  <p class="notes" id="updNotes"></p>
+  <button class="btn" id="updInstall" type="button">Install update</button>
+  <button class="btn-quiet" id="updLater" type="button">Later</button>
+</div>
+
+<div class="app">
+  <aside class="side">
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" aria-selected="true" data-pane="talk">Talk</button>
+      <button class="tab" role="tab" aria-selected="false" data-pane="form">Fill in</button>
+    </div>
+
+    <section class="pane on" id="talk" role="tabpanel">
+      <div class="chat-tools"><span id="modelName"></span><button class="linkish" id="newChat">New chat</button></div>
+      <div class="msgs" id="msgs" aria-live="polite"></div>
+      <div class="keynote" id="keynote" hidden>
+        Add your Claude API key in <button class="linkish" id="keyLink">Settings</button> to chat.
+        The <b>Fill in</b> tab works without one and gives the same results.
+      </div>
+      <form class="compose" id="compose">
+        <textarea id="input" rows="1" placeholder="Tell me about your character…" aria-label="Message"></textarea>
+        <button class="btn" id="send" type="submit">Send</button>
+      </form>
+    </section>
+
+    <section class="pane" id="form" role="tabpanel">
+      <form class="form" id="buildForm">
+        <div class="row">
+          <div class="field"><label for="f-class">Class</label><select id="f-class"></select></div>
+          <div class="field"><label for="f-level">Combat level</label><input id="f-level" type="number" min="1" max="121" value="47"></div>
+        </div>
+        <div class="field"><label for="f-goal">What matters most</label><select id="f-goal"></select></div>
+        <div class="field" id="focusField" hidden><label for="f-focus">Which ability</label>
+          <input id="f-focus" type="text" list="abilityList" placeholder="e.g. Puppet Damage, Meteor, Bash">
+          <datalist id="abilityList"></datalist>
+          <span class="hint">The whole build is chosen to make this one ability hit as hard as possible.</span></div>
+        <div class="field">
+          <label for="f-gear">Your gear</label>
+          <input id="f-gear" type="text" list="gearList" placeholder="Type an item name and press Enter">
+          <datalist id="gearList"></datalist>
+          <div class="chips" id="gearChips"></div>
+          <span class="hint">Crafted items: paste their CR-… code from Wynnbuilder.</span>
+        </div>
+        <div class="field">
+          <label for="f-keep">Abilities to keep</label>
+          <input id="f-keep" type="text" placeholder="e.g. Arcane Transfer">
+          <span class="hint">Separate several with commas.</span>
+        </div>
+        <div class="field">
+          <span class="lbl">Minimum stats to keep (optional)</span>
+          <div class="row">
+            <div class="field"><label for="f-min-hp">Health at least</label><input id="f-min-hp" type="number" min="0" step="100" placeholder="e.g. 20000"></div>
+            <div class="field"><label for="f-min-spd">Walk speed at least (%)</label><input id="f-min-spd" type="number" step="1" placeholder="e.g. 0"></div>
+          </div>
+          <span class="hint">The best build is chosen only among builds that keep these. Walk speed 0 means no slower than normal. More in More options.</span>
+        </div>
+        <div class="field">
+          <label for="f-link">Or a Wynnbuilder link</label>
+          <input id="f-link" type="text" placeholder="https://wynnbuilder.github.io/builder/#…">
+        </div>
+        <details class="more">
+          <summary>More options</summary>
+          <div class="inner">
+            <div class="field"><label for="f-powders">Powders you already have</label>
+              <input id="f-powders" type="text" placeholder="weapon=t6 t6; chestplate=w4 w4">
+              <span class="hint">Leave the weapon out to get a recommendation.</span></div>
+            <div class="field"><label for="f-enemy">An enemy hit to survive</label>
+              <input id="f-enemy" type="text" placeholder="fire 3000"></div>
+            <div class="row">
+              <div class="field"><label for="f-min-ehp">Effective HP at least</label><input id="f-min-ehp" type="number" min="0" step="1000" placeholder="optional"></div>
+              <div class="field"><label for="f-min-mr">Mana regen at least</label><input id="f-min-mr" type="number" step="1" placeholder="optional"></div>
+              <div class="field"><label for="f-min-hpr">Health regen at least</label><input id="f-min-hpr" type="number" step="10" placeholder="optional"></div>
+            </div>
+            <div class="row">
+              <div class="field"><label for="f-tomes">Tomes</label><input id="f-tomes" type="text" placeholder="comma-separated"></div>
+              <div class="field"><label for="f-aspects">Aspects</label><input id="f-aspects" type="text" placeholder="Comet 2, Ray of Frost 1"></div>
+            </div>
+            <div class="field"><label for="f-sliders">Ability stacks</label><input id="f-sliders" type="text" placeholder="Distortion=40"></div>
+            <div class="field"><span class="lbl">Party buffs</span><div class="chips" id="buffChips"></div></div>
+            <div class="field"><label for="f-raid">Raid buffs</label><input id="f-raid" type="text" placeholder="Lightbearer-II, Seraphim-I"></div>
+            <div class="row">
+              <div class="field"><label for="f-rolls">Item rolls</label>
+                <select id="f-rolls"><option value="max">Perfect (like Wynnbuilder)</option><option value="avg">Average</option><option value="min">Worst</option><option value="base">Base values</option></select></div>
+              <div class="field"><label for="f-poison">Poison</label>
+                <select id="f-poison"><option value="wynnbuilder">Wynnbuilder's figures</option><option value="low">Cautious estimate</option></select></div>
+            </div>
+            <label><input type="checkbox" id="f-drops"> Only suggest items that drop from mobs, chests or dungeons</label>
+            <div class="field"><label for="f-levels">Items to search</label>
+              <select id="f-levels"><option value="">Every item up to my level</option><option value="10">Within 10 levels of mine</option><option value="20">Within 20 levels of mine</option><option value="30">Within 30 levels of mine</option></select></div>
+          </div>
+        </details>
+        <label class="deep"><input type="checkbox" id="f-deep" checked> <span><b>Deep search</b> for the very best build: tries more weapons and combinations. Takes several minutes (longer on older computers); untick for a quicker search of about a minute. You can stop it anytime and keep the best so far.</span></label>
+        <button class="btn" type="submit" id="runForm">Find my best build</button>
+      </form>
+    </section>
+  </aside>
+
+  <main class="main" id="main"></main>
+</div>
+
+<div class="overlay" id="settings" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+  <div class="modal tip">
+    <h2 id="settingsTitle">Settings</h2>
+    <div class="field">
+      <label for="s-key">Claude API key</label>
+      <input id="s-key" type="password" placeholder="sk-ant-…" autocomplete="off">
+      <p>Get one at <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a>.
+        It's saved in <b>api_key.txt</b> in the app folder, only on this computer; you can also paste it into that file yourself. Chatting is billed to that account, separately from a Claude subscription.</p>
+    </div>
+    <div class="field"><label for="s-model">Model</label><select id="s-model"></select></div>
+    <div class="field"><span class="lbl">Updates</span>
+      <p id="s-version" style="margin:0 0 8px"></p>
+      <label class="deep"><input type="checkbox" id="s-autoupd" checked> <span><b>Check for updates when the app opens.</b> Updates come only from this app's GitHub page, and you're always asked before one is installed. Your API key, settings and saved builds are never changed.</span></label>
+      <button class="btn-quiet" id="checkUpd" type="button" style="margin-top:8px">Check for updates now</button>
+    </div>
+    <label class="deep"><input type="checkbox" id="s-popup" checked> <span><b>Pop-up when a build is ready</b>: a small white box in the top-left corner of your screen, on top of other windows, that disappears by itself.</span></label>
+    <div class="btns">
+      <button class="btn-quiet" id="quitApp" type="button">Close the app</button>
+      <span><button class="btn-quiet" id="cancelSettings" type="button">Cancel</button>
+      <button class="btn" id="saveSettings" type="button">Save</button></span>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+let META = null, gear = [], busy = false;
+
+async function api(path, body) {
+  const opts = body === undefined ? {} : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) };
+  const r = await fetch(path, opts);
+  return r.json();
+}
+function toast(text) { const t = $("#toast"); t.textContent = text; t.classList.add("on"); setTimeout(() => t.classList.remove("on"), 2200); }
+
+/* ---------- tabs ---------- */
+document.querySelectorAll(".tab").forEach((b) => b.addEventListener("click", () => {
+  document.querySelectorAll(".tab").forEach((x) => x.setAttribute("aria-selected", x === b));
+  document.querySelectorAll(".pane").forEach((p) => p.classList.toggle("on", p.id === b.dataset.pane));
+}));
+
+/* ---------- chat ---------- */
+function md(text) {
+  const lines = esc(text).split("\n");
+  let html = "", list = false, para = [];
+  const inline = (s) => s.replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/`([^`]+)`/g, "<code>$1</code>");
+  const flush = () => { if (para.length) { html += "<p>" + inline(para.join("<br>")) + "</p>"; para = []; } };
+  for (const ln of lines) {
+    const m = ln.match(/^\s*(?:[-*•]|\d+[.)])\s+(.*)/);
+    if (m) { flush(); if (!list) { html += "<ul>"; list = true; } html += "<li>" + inline(m[1]) + "</li>"; continue; }
+    if (list) { html += "</ul>"; list = false; }
+    if (!ln.trim()) { flush(); continue; }
+    para.push(ln.replace(/^#+\s*/, ""));
+  }
+  flush(); if (list) html += "</ul>";
+  return html;
+}
+function addMsg(who, text, cls = "") {
+  const d = document.createElement("div");
+  d.className = `msg ${who} ${cls}`;
+  if (who === "bot") d.innerHTML = md(text); else d.textContent = text;
+  $("#msgs").appendChild(d); $("#msgs").scrollTop = $("#msgs").scrollHeight;
+  return d;
+}
+function greet() {
+  $("#msgs").innerHTML = "";
+  addMsg("bot", "Hi! Tell me about your character: class, level, what you want to be good at, and the gear you're wearing. You can also paste a Wynnbuilder link.\n\nFor example: \"I'm a level 47 mage with Haqherphix and Ridge, I want max damage and to keep mana bank.\"");
+}
+async function sendChat(text) {
+  if (!text.trim() || busy) return;
+  addMsg("you", text);
+  $("#input").value = ""; autosize();
+  setBusy(true);
+  const wait = addMsg("bot", "Thinking", "thinking");
+  const slow = setTimeout(async () => {
+    try { const p = (await fetch("/api/progress").then((r) => r.json())).progress; if (p) showBusy("Claude asked for a full calculation."); } catch (e) {}
+  }, 2500);
+  try {
+    const r = await api("/api/chat", { text });
+    clearTimeout(slow); wait.remove();
+    addMsg("bot", r.reply || "", r.error ? "err" : "");
+    if (r.needs_key) $("#keynote").hidden = false;
+    if (r.reports && r.reports.length) showReport(r.reports[r.reports.length - 1]);
+    if (r.args) fillForm(r.args);
+  } catch (e) {
+    clearTimeout(slow); wait.remove();
+    addMsg("bot", "The app stopped responding. Close it and open it again.", "err");
+  }
+  setBusy(false);
+}
+let progTimer = null;
+function setBusy(b) {
+  busy = b; $("#send").disabled = b; $("#runForm").disabled = b;
+  clearInterval(progTimer);
+  if (b) progTimer = setInterval(pollProgress, 1000);
+}
+function fmtTime(sec) { sec = Math.max(0, Math.round(sec)); return sec < 60 ? `${sec}s` : `${Math.floor(sec / 60)} min ${sec % 60}s`; }
+async function pollProgress() {
+  let p = null;
+  try { p = (await fetch("/api/progress").then((r) => r.json())).progress; } catch (e) { return; }
+  const line = p ? `${p.message}. ${Math.round((p.fraction || 0) * 100)}% done, ${fmtTime(p.elapsed || 0)} so far` +
+    (p.eta != null ? `, about ${fmtTime(p.eta)} left` : "") : "";
+  const bp = $("#busyProgress"); if (bp && p) { bp.textContent = line; $("#busyBar").style.width = Math.round((p.fraction || 0) * 100) + "%"; }
+  const cp = document.querySelector(".msg.thinking"); if (cp && p) cp.textContent = line;
+}
+function showBusy(note) {
+  $("#main").innerHTML = `<div class="busy tip"><div class="spinner"></div><div class="busy-text">
+    <div>Working out your build. ${esc(note)}</div>
+    <div class="pbar"><div id="busyBar"></div></div>
+    <div id="busyProgress" class="busy-sub"></div>
+    <button class="btn-quiet" id="stopBtn" type="button">Stop and keep the best so far</button></div></div>`;
+  $("#stopBtn").addEventListener("click", async () => { await api("/api/stop", {}); $("#stopBtn").textContent = "Stopping…"; $("#stopBtn").disabled = true; });
+}
+function autosize() { const t = $("#input"); t.style.height = "auto"; t.style.height = Math.min(160, t.scrollHeight) + "px"; }
+$("#input").addEventListener("input", autosize);
+$("#input").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendChat($("#input").value); } });
+$("#compose").addEventListener("submit", (e) => { e.preventDefault(); sendChat($("#input").value); });
+$("#newChat").addEventListener("click", async () => { await api("/api/chat/reset", {}); greet(); });
+
+/* ---------- form ---------- */
+function renderGear() {
+  $("#gearChips").innerHTML = gear.map((g, i) => `<span class="chip">${esc(g)}<button type="button" aria-label="Remove ${esc(g)}" data-i="${i}">×</button></span>`).join("");
+}
+$("#gearChips").addEventListener("click", (e) => { if (e.target.dataset.i !== undefined) { gear.splice(+e.target.dataset.i, 1); renderGear(); } });
+let acTimer;
+$("#f-gear").addEventListener("input", () => {
+  clearTimeout(acTimer);
+  const q = $("#f-gear").value;
+  acTimer = setTimeout(async () => {
+    if (q.length < 2) return;
+    const items = await fetch("/api/items?q=" + encodeURIComponent(q)).then((r) => r.json());
+    $("#gearList").innerHTML = items.map((i) => `<option value="${esc(i.name)}">${esc(i.tier)} ${esc(i.type)}, level ${i.level}</option>`).join("");
+  }, 150);
+});
+$("#f-gear").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    const parts = $("#f-gear").value.split(",").map((s) => s.trim()).filter(Boolean);
+    gear.push(...parts); $("#f-gear").value = ""; renderGear();
+  }
+});
+$("#f-gear").addEventListener("change", () => {           // picking from the list adds it straight away
+  const v = $("#f-gear").value.trim();
+  if (v && [...$("#gearList").options].some((o) => o.value === v)) { gear.push(v); $("#f-gear").value = ""; renderGear(); }
+});
+function formParams() {
+  const pending = $("#f-gear").value.split(",").map((s) => s.trim()).filter(Boolean);
+  return {
+    class: $("#f-class").value, level: +$("#f-level").value, goal: $("#f-goal").value, focus: $("#f-focus").value,
+    gear: gear.concat(pending), keep: $("#f-keep").value, wynnbuilder_link: $("#f-link").value.trim(),
+    powders: $("#f-powders").value, enemy: $("#f-enemy").value, tomes: $("#f-tomes").value, aspects: $("#f-aspects").value,
+    sliders: $("#f-sliders").value, raid_buffs: $("#f-raid").value, rolls: $("#f-rolls").value, poison: $("#f-poison").value,
+    drops_only: $("#f-drops").checked, deep_search: $("#f-deep").checked,
+    item_levels: $("#f-levels").value ? +$("#f-levels").value : undefined,
+    buffs: [...document.querySelectorAll("#buffChips [aria-pressed=true]")].map((b) => b.dataset.buff),
+    minimums: minimumsFromForm(),
+  };
+}
+const MIN_FIELDS = { health: "#f-min-hp", walk_speed: "#f-min-spd", ehp: "#f-min-ehp", mana_regen: "#f-min-mr", health_regen: "#f-min-hpr" };
+function minimumsFromForm() {
+  const out = {};
+  for (const [k, id] of Object.entries(MIN_FIELDS)) { const v = $(id).value.trim(); if (v !== "") out[k] = +v; }
+  return Object.keys(out).length ? out : undefined;
+}
+function fillForm(a) {
+  if (a.class) $("#f-class").value = a.class;
+  if (a.level) $("#f-level").value = a.level;
+  if (a.goal) { $("#f-goal").value = a.goal; syncFocus(); }
+  if (a.focus) $("#f-focus").value = a.focus;
+  if (a.gear) { gear = Array.isArray(a.gear) ? a.gear.slice() : String(a.gear).split(",").map((s) => s.trim()).filter(Boolean); renderGear(); }
+  const set = (id, v) => { if (v !== undefined) $(id).value = Array.isArray(v) ? v.join(", ") : v; };
+  set("#f-keep", a.keep); set("#f-link", a.wynnbuilder_link); set("#f-powders", a.powders); set("#f-enemy", a.enemy);
+  set("#f-tomes", a.tomes); set("#f-aspects", a.aspects); set("#f-sliders", a.sliders); set("#f-raid", a.raid_buffs);
+  if (a.minimums && typeof a.minimums === "object") {
+    for (const [k, id] of Object.entries(MIN_FIELDS)) $(id).value = a.minimums[k] !== undefined ? a.minimums[k] : "";
+  }
+}
+$("#buildForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if (busy) return;
+  setBusy(true);
+  const deep = $("#f-deep").checked;
+  showBusy(deep ? "Deep search: several minutes." : "Usually about a minute.");
+  try {
+    const r = await api("/api/analyze", formParams());
+    if (r.ok) showReport(r.text); else showError(r.text);
+  } catch (e2) { showError("The app stopped responding. Close it and open it again."); }
+  setBusy(false);
+});
+
+/* ---------- results ---------- */
+const TIERS = ["Mythic", "Fabled", "Legendary", "Rare", "Unique", "Set", "Crafted", "Normal"];
+function colour(line) {
+  let s = esc(line);
+  if (/^\s*!!/.test(line)) return `<span class="w">${s}</span>`;
+  s = s.replace(new RegExp(`\\b(${TIERS.join("|")})\\b(?=,)`, "g"), '<span class="t-$1">$1</span>');
+  s = s.replace(/\b(T\d) (Earth|Thunder|Water|Fire|Air)\b/g, '<span class="e-$2">$1 $2</span>');
+  s = s.replace(/(\+\s*\d+(?:\.\d+)?%)/g, '<span class="g">$1</span>');
+  s = s.replace(/(https:\/\/wynnbuilder\.github\.io\/builder\/#\S+)/g, '<a href="$1" target="_blank" rel="noopener">open in Wynnbuilder</a>');
+  s = s.replace(/\((new)\)/g, '<span class="g">(new)</span>');
+  return s;
+}
+function splitSections(text) {
+  const lines = text.replace(/\r/g, "").split("\n");
+  const head = [], secs = [];
+  let cur = null;
+  for (let i = 0; i < lines.length; i++) {
+    if (i + 1 < lines.length && /^-{3,}$/.test(lines[i + 1]) && lines[i].trim() && lines[i + 1].length === lines[i].length) {
+      cur = { title: lines[i], lines: [] }; secs.push(cur); i++; continue;
+    }
+    (cur ? cur.lines : head).push(lines[i]);
+  }
+  return { head, secs };
+}
+const pick = (re, text) => { const m = text.match(re); return m ? m : null; };
+const OPEN = ["Best whole build", "Skill points", "Powders", "Ability tree", "What it does", "Survivability", "Level-by-level plan"];
+function showReport(text) {
+  const { head, secs } = splitSections(text);
+  const title = pick(/·\s*(\w+), level (\d+), goal: (\w+)/, head.join("\n"));
+  const goalWords = { ability: "one ability's damage", spells: "spell damage", burst: "burst damage", melee: "highest DPS", survival: "survival", balanced: "damage and survival", healing: "healing" };
+  const rot = pick(/Best spell rotation: (.+?)\s+≈ ([\d,.]+) damage\/s/, text);
+  const melee = pick(/Main attack: ([\d,.]+) (?:DPS|damage\/s)/, text);
+  const ehp = pick(/Effective HP ([\d,.]+)/, text);
+  const hp = pick(/Health ([\d,.]+)/, text);
+  const heal = pick(/Healing: ([\d,.]+) HP\/s/, text);
+  const foc = pick(/Focused ability: (.+?): ([\d,.]+) (damage\/s while active|average damage per cast)/, text);
+  const put = pick(/Put in:\s+(.+)/, text);
+  const link = pick(/https:\/\/wynnbuilder\.github\.io\/builder\/#\S+/, text.split("Best whole build")[0]) || pick(/https:\/\/wynnbuilder\.github\.io\/builder\/#\S+/, text);
+  const wbLink = pick(/Whole build in Wynnbuilder: (\S+)/, text);
+  const wbGain = pick(/\+(\d+)% for your goal compared with what you wear now/, text);
+  const wbFoc = foc ? pick(new RegExp(foc[1].replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + ": ([\\d,.]+) -> ([\\d,.]+)"), text) : null;
+  const wbNums = pick(/Spell damage\/s ([\d,.]+) -> ([\d,.]+)\s+Main attack\/s ([\d,.]+) -> ([\d,.]+)\s+Effective HP ([\d,.]+) -> ([\d,.]+)/, text);
+  const wbHp = pick(/Health ([\d,.]+) -> ([\d,.]+)\s+Walk speed ([+-]\d+%) -> ([+-]\d+%)/, text);
+  const spd = pick(/Walk speed ([+-]\d+%)/, text);
+  const floorMiss = pick(/No build in range meets every minimum you set\. This is the closest one; it still misses: (.+)/, text);
+  const floorFixed = /this build meets them all\./.test(text);
+  const floorOk = pick(/Meets your minimums: (.+?)\.\s*$/m, text.split("Best whole build")[1] || "");
+  const stats = [];
+  if (foc) stats.push(`<div class="stat dmg"><div class="v">${foc[2]}</div><div class="k">${esc(foc[1])}<br>${esc(foc[3])}</div></div>`);
+  if (rot) stats.push(`<div class="stat dmg"><div class="v">${rot[2]}</div><div class="k">spell damage per second<br>${esc(rot[1])}</div></div>`);
+  if (melee) stats.push(`<div class="stat melee"><div class="v">${melee[1]}</div><div class="k">main attack damage per second</div></div>`);
+  if (ehp) stats.push(`<div class="stat ehp"><div class="v">${ehp[1]}</div><div class="k">effective HP${hp ? ` (${hp[1]} health)` : ""}</div></div>`);
+  if (spd) stats.push(`<div class="stat spd"><div class="v">${spd[1]}</div><div class="k">walk speed</div></div>`);
+  if (heal) stats.push(`<div class="stat heal"><div class="v">${heal[1]}</div><div class="k">healing per second</div></div>`);
+  const footer = [];
+  const visible = secs.filter((s) => {
+    if (s.title.startsWith("Open in Wynnbuilder")) return false;
+    return true;
+  });
+  // the assumptions after "Done in" belong to the last section's text; split them off as notes
+  const last = visible[visible.length - 1];
+  if (last) {
+    const k = last.lines.findIndex((l) => /^Done in /.test(l));
+    if (k >= 0) { footer.push(...last.lines.slice(k + 1).filter((l) => l.trim())); last.lines = last.lines.slice(0, k); }
+  }
+  if (!last || !footer.length) {
+    const op = secs.find((s) => s.title.startsWith("Open in Wynnbuilder"));
+    if (op) { const k = op.lines.findIndex((l) => /^Done in /.test(l)); if (k >= 0) footer.push(...op.lines.slice(k + 1).filter((l) => l.trim())); }
+  }
+  visible.sort((a, b) => b.title.startsWith("Best whole build") - a.title.startsWith("Best whole build"));
+  const headNotes = head.slice(1).map((l) => l.trim()).filter(Boolean);
+  const heroTitle = title ? `Level ${title[2]} ${title[1]}` : "Your build";
+  const heroSub = title ? `Built for ${goalWords[title[3]] || title[3]}` : "";
+  let html = `<section class="tip hero">
+    <h2>${esc(heroTitle)}</h2><p class="sub">${esc(heroSub)}</p>
+    ${stats.length ? `<div class="stats">${stats.join("")}</div>` : ""}
+    ${put ? `<div class="sp-line">Skill points to assign: ${esc(put[1].trim())}</div>` : ""}
+    ${floorMiss ? `<p class="floor-warn">No build meets every minimum you set. The closest one still misses: ${esc(floorMiss[1])}</p>` : ""}
+    ${!floorMiss && floorOk ? `<p class="floor-ok">Best whole build keeps your minimums: ${esc(floorOk[1])}.</p>` : ""}
+    ${(wbGain || floorFixed || floorMiss) && wbNums ? `<div class="upgrade">
+      <div class="up-title">${wbGain ? `Best whole build: +${wbGain[1]}% for your goal` : floorFixed ? "Best whole build: meets all your minimums" : "Closest build to your minimums"}</div>
+      ${wbFoc ? `<div class="up-row"><span>${esc(foc[1])}</span><b>${wbFoc[1]} → <i class="dmg">${wbFoc[2]}</i></b></div>` : ""}
+      <div class="up-row"><span>Spell damage/s</span><b>${wbNums[1]} → <i class="dmg">${wbNums[2]}</i></b></div>
+      <div class="up-row"><span>Main attack/s</span><b>${wbNums[3]} → <i class="melee">${wbNums[4]}</i></b></div>
+      <div class="up-row"><span>Effective HP</span><b>${wbNums[5]} → <i class="ehp">${wbNums[6]}</i></b></div>
+      ${wbHp ? `<div class="up-row"><span>Health</span><b>${wbHp[1]} → <i class="ehp">${wbHp[2]}</i></b></div>
+      <div class="up-row"><span>Walk speed</span><b>${wbHp[3]} → <i class="spd">${wbHp[4]}</i></b></div>` : ""}
+      <div class="up-note">All gear picked together. Details in the first panel below.</div>
+    </div>` : ""}
+    <div class="actions">
+      ${wbLink ? `<a class="btn" href="${esc(wbLink[1])}" target="_blank" rel="noopener">Open whole build in Wynnbuilder</a>` : ""}
+      ${link ? `<a class="${wbLink ? "btn-quiet" : "btn"}" href="${esc(link[0])}" target="_blank" rel="noopener">${wbLink ? "Open current build" : "Open in Wynnbuilder"}</a>
+      <button class="btn-quiet" data-copy="${esc(link[0])}">Copy link</button>` : ""}
+      <button class="btn-quiet" id="copyReport">Copy full report</button>
+    </div></section>`;
+  if (headNotes.length) html += `<div class="notes">${headNotes.map((n) => `<p>${esc(n)}</p>`).join("")}</div>`;
+  html += `<div class="sections">` + visible.map((s) => {
+    const body = s.lines.join("\n").replace(/^\n+|\n+$/g, "");
+    if (!body) return "";
+    const open = OPEN.some((o) => s.title.startsWith(o)) ? " open" : "";
+    return `<details class="tip sec"${open}><summary>${esc(s.title)}</summary><pre>${body.split("\n").map(colour).join("\n")}</pre></details>`;
+  }).join("") + `</div>`;
+  if (footer.length) html += `<div class="notes" style="margin-top:18px">${footer.map((n) => `<p>${esc(n)}</p>`).join("")}</div>`;
+  $("#main").innerHTML = html;
+  $("#main").scrollTop = 0;
+  const cr = $("#copyReport"); if (cr) cr.addEventListener("click", () => { navigator.clipboard.writeText(text); toast("Report copied"); });
+  document.querySelectorAll("[data-copy]").forEach((b) => b.addEventListener("click", () => { navigator.clipboard.writeText(b.dataset.copy); toast("Link copied"); }));
+}
+function showError(text) {
+  $("#main").innerHTML = `<section class="tip hero"><h2>That didn't work</h2><pre style="white-space:pre-wrap;font:14px/1.5 var(--mono);margin:0;color:var(--warn)">${esc(text.trim())}</pre></section>`;
+}
+function showEmpty() {
+  const ex = [
+    "I'm a level 47 mage with Haqherphix, Ridge and Phosphene. I want max damage and to keep mana bank.",
+    "Level 106 warrior, I keep dying in raids. Make me tankier.",
+    "What should a level 80 archer use for main attack damage?",
+  ];
+  $("#main").innerHTML = `<section class="tip empty">
+    <h2>Your build will show up here</h2>
+    <p>Describe your character in the chat, or use the Fill in tab. You'll get the best ability tree, skill points, powders, gear upgrades and a plan for your next levels.</p>
+    <div class="examples">${ex.map((t) => `<button class="example">${esc(t)}</button>`).join("")}</div>
+  </section>`;
+  document.querySelectorAll(".example").forEach((b) => b.addEventListener("click", () => {
+    if (META && !META.has_key) { $("#input").value = b.textContent; toast("Add your API key in Settings to send this"); return; }
+    sendChat(b.textContent);
+  }));
+}
+
+/* ---------- settings ---------- */
+function openSettings() { $("#s-popup").checked = !META || META.popup !== false; $("#s-autoupd").checked = !META || META.auto_update !== false;
+  $("#s-version").textContent = META ? `You have version ${META.app_version}.` + (META.updates_configured ? "" : " (Updates aren't set up for this copy.)") : ""; $("#s-key").value = ""; $("#s-key").placeholder = META && META.key_hint ? `saved (${META.key_hint})` : "sk-ant-…"; $("#settings").classList.add("on"); $("#s-key").focus(); }
+$("#openSettings").addEventListener("click", openSettings);
+$("#keyLink").addEventListener("click", openSettings);
+$("#cancelSettings").addEventListener("click", () => $("#settings").classList.remove("on"));
+$("#settings").addEventListener("keydown", (e) => { if (e.key === "Escape") $("#settings").classList.remove("on"); });
+$("#saveSettings").addEventListener("click", async () => {
+  const body = { model: $("#s-model").value, popup: $("#s-popup").checked, auto_update: $("#s-autoupd").checked };
+  if ($("#s-key").value.trim()) body.api_key = $("#s-key").value.trim();
+  await api("/api/settings", body);
+  $("#settings").classList.remove("on");
+  await loadMeta(); toast("Settings saved");
+});
+$("#quitApp").addEventListener("click", async () => { try { await api("/api/quit", {}); } catch (e) {} document.body.innerHTML = '<p style="padding:40px">The app is closed. You can close this window.</p>'; });
+
+async function loadMeta() {
+  META = await api("/api/meta");
+  $("#dataver").textContent = `version ${META.app_version} · game data ${META.version}`;
+  $("#keynote").hidden = META.has_key;
+  $("#modelName").textContent = META.has_key ? (META.models[META.model] || META.model).replace(/ \(.*\)$/, "") : "Chat needs an API key";
+  $("#s-model").innerHTML = Object.entries(META.models).map(([k, v]) => `<option value="${k}"${k === META.model ? " selected" : ""}>${esc(v)}</option>`).join("");
+}
+function syncFocus() { $("#focusField").hidden = $("#f-goal").value !== "ability"; }
+async function loadAbilities() {
+  try {
+    const names = await fetch("/api/abilities?class=" + encodeURIComponent($("#f-class").value)).then((r) => r.json());
+    $("#abilityList").innerHTML = names.map((n) => `<option value="${esc(n)}"></option>`).join("");
+  } catch (e) {}
+}
+async function init() {
+  await loadMeta();
+  $("#f-class").innerHTML = META.classes.map((c) => `<option value="${c}">${c[0].toUpperCase() + c.slice(1)}</option>`).join("");
+  $("#f-class").value = "mage";
+  const goalLabels = { ability: "One ability's damage (e.g. puppets)", spells: "Spell damage", burst: "Biggest combo", melee: "Highest DPS (like Wynnbuilder)", survival: "Survival", balanced: "Damage and survival", healing: "Healing others" };
+  $("#f-goal").innerHTML = Object.keys(META.goals).map((g) => `<option value="${g}">${goalLabels[g] || g}</option>`).join("");
+  const buffNames = { totem: "Totem", fortitude: "Fortitude", chantlunatic: "Chant of the Lunatic", warscream: "War Scream", emboldeningcry: "Emboldening Cry", hauntingfanatic: "Haunting (Fanatic)", hauntinglunatic: "Haunting (Lunatic)", eldritchcall: "Eldritch Call", judgement: "Judgement", chantfanatic: "Chant of the Fanatic", weathering: "Weathering", acidrain: "Acid Rain" };
+  $("#buffChips").innerHTML = META.buffs.map((b) => `<button type="button" class="toggle-chip" aria-pressed="false" data-buff="${b}">${buffNames[b] || b}</button>`).join("");
+  $("#buffChips").addEventListener("click", (e) => { const b = e.target.closest("[data-buff]"); if (b) b.setAttribute("aria-pressed", b.getAttribute("aria-pressed") !== "true"); });
+  $("#f-goal").addEventListener("change", syncFocus);
+  $("#f-class").addEventListener("change", loadAbilities);
+  loadAbilities();
+  greet(); showEmpty();
+  setInterval(() => fetch("/api/ping").catch(() => {}), 20000);
+  if (META.updates_configured && META.auto_update !== false) checkUpdate(false);
+}
+
+/* ---------- updates ---------- */
+let UPD = null;
+async function checkUpdate(manual) {
+  try {
+    const r = await fetch("/api/update/check").then((x) => x.json());
+    if (r.error) { if (manual) toast(r.error); return; }
+    if (!r.available) { if (manual) toast(r.configured ? `You're up to date (version ${r.current})` : "Updates aren't set up for this copy"); return; }
+    UPD = r;
+    $("#updVer").textContent = `version ${r.latest} (you have ${r.current})`;
+    $("#updNotes").textContent = r.notes || "";
+    $("#updateBar").hidden = false;
+    if (manual) $("#settings").classList.remove("on");
+  } catch (e) { if (manual) toast("Couldn't check for updates"); }
+}
+$("#checkUpd").addEventListener("click", () => checkUpdate(true));
+$("#updLater").addEventListener("click", () => { $("#updateBar").hidden = true; });
+$("#updInstall").addEventListener("click", async () => {
+  if (busy) { toast("Wait for the build to finish, then install the update"); return; }
+  const btn = $("#updInstall"); btn.disabled = true; btn.textContent = "Installing…";
+  try {
+    const r = await api("/api/update/install", { version: UPD && UPD.latest });
+    if (!r.ok) { toast(r.error || "The update didn't install"); btn.disabled = false; btn.textContent = "Install update"; return; }
+    $("#updateBar").innerHTML = `<span><b>Updated to version ${esc(r.version)}.</b> Restarting the app…</span>`;
+    await api("/api/restart", {});
+    setTimeout(() => { document.body.innerHTML = '<p style="padding:40px">The app is restarting with the new version. If a new window doesn\'t open, start Wynn Build Helper again.</p>'; }, 1500);
+  } catch (e) { toast("The update didn't install"); btn.disabled = false; btn.textContent = "Install update"; }
+});
+init();
+</script>
+</body>
+</html>
