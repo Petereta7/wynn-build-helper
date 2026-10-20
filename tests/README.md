@@ -2,7 +2,7 @@
 
 ## Automatic checks on GitHub
 
-Every push to `main` runs these checks on Windows, Mac and Linux (newest Python, plus Python 3.10 on Linux, the oldest the app runs on): the app check, self-test, toggle check and speed check, and the build check for every class. **Only when every check passes** is that version copied to the `stable` branch, which is where the app's update bar looks, and kept as `release/<version>` for switching back. A version that fails never reaches anyone.
+Every push to `main` runs these checks on Windows, the only system the app is used on (newest Python, plus Python 3.10, the oldest the app runs on): the app check, self-test, toggle check and speed check, and the build check for every class. **Only when every check passes** is that version copied to the `stable` branch, which is where the app's update bar looks, and kept as `release/<version>` for switching back. A version that fails never reaches anyone.
 
 Once a week (and on demand: Actions tab → Checks → Run workflow) the helper is also compared side by side with Wynnbuilder's current code, plus three brute-force accuracy cases, to catch game or Wynnbuilder updates that change the numbers.
 

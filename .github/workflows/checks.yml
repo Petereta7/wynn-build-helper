@@ -1,4 +1,4 @@
-# Automatic checks. Every push to main runs the tests on Windows, Mac and Linux. Only when every check passes is
+# Automatic checks. Every push to main runs the tests on Windows (the app is used on Windows only). Only when every check passes is
 # that version published to the "stable" branch, which is where the app's updater looks, and kept as
 # release/<version> for switching back. A version that fails never reaches anyone's update bar.
 #
@@ -28,17 +28,13 @@ env:
 
 jobs:
   quick:
-    name: Tests (${{ matrix.os }}, Python ${{ matrix.python }})
+    name: Tests (Windows, Python ${{ matrix.python }})
     if: github.event_name != 'schedule'
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, macos-latest, ubuntu-latest]
-        python: ["3.14"]
-        include:
-          - os: ubuntu-latest
-            python: "3.10"           # the oldest Python the app runs on
-    runs-on: ${{ matrix.os }}
+        python: ["3.14", "3.10"]     # the newest Python, and the oldest the app runs on
+    runs-on: windows-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v6
@@ -58,9 +54,9 @@ jobs:
         run: python tests/speed_check.py
 
   builds:
-    name: Builds for every class (legal, never worse)
+    name: Builds for every class on Windows (legal, never worse)
     if: github.event_name != 'schedule'
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v6

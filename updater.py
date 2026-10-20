@@ -33,7 +33,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 OWNER = "Petereta7"         # GitHub user name
 REPO = "wynn-build-helper"
 # Updates come from "stable": GitHub copies a version there only after every automatic check has passed on
-# Windows, Mac and Linux (see .github/workflows/checks.yml), so a version that fails a check is never offered.
+# Windows (see .github/workflows/checks.yml), so a version that fails a check is never offered.
 BRANCH = "stable"
 
 VERSION_FILE = os.path.join(HERE, "version.json")
