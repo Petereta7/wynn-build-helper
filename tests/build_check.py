@@ -10,6 +10,7 @@ For every class it checks:
   * the ability tree is legal and fits the ability points for the level
   * any minimums asked for are met
   * crafted pieces (designed by default) can be made in game, and their crafter codes read back the same
+  * the build as a share code opens as exactly the same build (items, powders, crafts, tree, skill points)
   * the score is at least the score recorded in tests/golden/build_baseline.json (builds never get worse)
 
     python3 tests/build_check.py              (all cases; a few minutes)
@@ -141,6 +142,17 @@ def main():
         best = wh.LAST_RESULT.get("best")
         if not best or not res.get("ok"):
             continue
+        S = res.get("summary") or {}
+        if S.get("best"):                     # the build as a share code opens as exactly the same build
+            e = dict({k: S.get(k) for k in ("class", "class_title", "level", "goal", "label", "focus", "floors",
+                                             "toggles_on", "toggle_share", "settings", "rolls")},
+                     numbers=S["best"]["numbers"], items=S["best"]["items"], sp=S["best"]["sp"],
+                     owned=S["best"]["owned"], order=S["best"]["order"], link=S.get("best_link"))
+            code = app.share_code(e, "Friend")
+            back, err = app.decode_share(code)
+            same = back is not None and all(back[k] == e[k] for k in ("items", "owned", "order", "sp", "label")) \
+                and not back["shared_from"]["missing"]
+            check(f"{case['name']}: share code opens the same build", same, f"({len(code)} characters)" + (f" {err}" if err else ""))
         score = best["eval"]["main"]
         print(f"SCORE\t{case['name']}\t{score!r}", flush=True)
         was = base.get(case["name"])

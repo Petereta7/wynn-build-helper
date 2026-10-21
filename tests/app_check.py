@@ -8,6 +8,7 @@ App check: the things that would break the app for everyone if they slipped into
     on a copy of the app, and the personal files are checked afterwards
   * the app's server starts and answers the page and its data requests, for every class
   * the character library works (on a temporary copy, never your own)
+  * share codes: every class round-trips exactly; damaged or tampered codes are refused or cleaned
 
     python3 tests/app_check.py
 
@@ -301,12 +302,150 @@ def check_library():
             wynn_app.LIBRARY_PATH, wynn_app.HISTORY_PATH = saved
 
 
+def _share_entry(wynn_app, wh, d, cls, n):
+    """A saved build for this class made of real items: powdered weapon and helmet, a crafted ring, an empty slot."""
+    import random
+    rng = random.Random(n)
+    craft_cases = json.load(open(os.path.join(HERE, "golden", "craft_cases.json"), encoding="utf-8"))
+    by_name = {r.get("name"): rid for rid, r in d.recipes.items()}
+    ring = next(c for c in craft_cases if c["recipe"].startswith("Ring-") and c["recipe"] in by_name)
+    crafted_ring = wh.make_crafted(d, by_name[ring["recipe"]], ring["mats"], ring["ings"], ring["atk"])
+    pick = lambda t, **kw: rng.choice([it for it in d.items.values() if it.type == t and it.level <= 100
+                                       and all(getattr(it, k) >= v for k, v in kw.items())])
+    wpn = wh.weapon_with_powders(pick(wh.CLASS_WEAPON[cls], slots=2), [wh.Powder(rng.randrange(5), 6)] * 2)
+    helmet = wh.armor_with_powders(pick("helmet", slots=1), [wh.Powder(rng.randrange(5), 4)])
+    armor = [helmet, pick("chestplate"), None, pick("boots"), crafted_ring, pick("ring"), pick("bracelet"), pick("necklace")]
+    tree = wh.Tree(d, cls)
+    owned = set(tree.roots)
+    for _ in range(25):
+        cand = [nd.id for nd in tree.nodes if nd.id not in owned and any(p in owned for p in nd.parents)]
+        if cand:
+            owned.add(rng.choice(cand))
+    owned = sorted(owned)
+    return {"id": f"s{n}", "date": "Oct 21 09:00", "class": cls, "class_title": wh.CLASS_TITLE[cls], "level": 100,
+            "goal": "spells", "label": "Spell damage per second", "focus": None, "floors": {"hp": 9000.0},
+            "toggles_on": ["Bullwhip"], "toggle_share": {"Coursing Restraints": 0.33},
+            "numbers": {"goal": 12345.678, "spell": 12345.678, "melee": 0.0, "ehp": 54321.0, "hp": 9100.0, "spd": -7.0, "mr": 12.0},
+            "items": [wynn_app.item_card(a, wh.SLOT_LABELS[i]) for i, a in enumerate(armor)] + [wynn_app.item_card(wpn, "Weapon")],
+            "sp": {"assigned": [10, 20, 30, 40, 0], "extra": [5, 0, 0, 0, 1], "gear": [3, -2, 0, 0, 7]},
+            "owned": owned, "order": tree.validate(frozenset(owned), 100)["order"],
+            "link": "https://wynnbuilder.github.io/builder/#9_0Abc-_xyz", "settings": ["Party buffs: Warscream"], "rolls": "max"}
+
+
+def check_sharing():
+    """Share codes: a saved build for every class (real, powdered and crafted items) survives the trip exactly;
+    codes pasted inside a message or broken over lines still open; damaged or tampered codes are refused or
+    cleaned; a friend's build saves to the library once. On temporary copies, never your own files."""
+    import base64
+    import zlib
+    import wynn_app
+    import wynn_helper as wh
+    from http.server import ThreadingHTTPServer
+    wynn_app.STATE["data_checked"] = True
+    d = wynn_app.game_data()
+
+    def pack(p):          # a code made by hand (as a tampered one would be)
+        raw = zlib.compress(json.dumps(p).encode(), 9)
+        return wynn_app.SHARE_PREFIX + base64.urlsafe_b64encode(raw).decode().rstrip("=").replace("_", ".")
+    bad = []
+    codes = {}
+    for n, cls in enumerate(wh.CLASSES):
+        try:
+            e = _share_entry(wynn_app, wh, d, cls, n)
+            code = wynn_app.share_code(e, "Sparky")
+            codes[cls] = (e, code)
+            for label, text in (("alone", code), ("in a message", f"yo try this {code} it's nuts"),
+                                ("over lines", "\n".join(code[i:i + 50] for i in range(0, len(code), 50)) + "\nthanks")):
+                b, err = wynn_app.decode_share(text)
+                if b is None:
+                    bad.append(f"{cls} {label}: {err}")
+                    continue
+                want = {"items": e["items"], "owned": e["owned"], "order": e["order"], "sp": e["sp"], "link": e["link"],
+                        "settings": e["settings"], "floors": e["floors"], "toggles_on": e["toggles_on"],
+                        "toggle_share": e["toggle_share"], "label": e["label"], "level": 100, "class": cls,
+                        "numbers": {k: round(v, 2) for k, v in e["numbers"].items()}}
+                diff = [k for k, v in want.items() if b[k] != v]
+                if diff or b["shared_from"]["name"] != "Sparky" or b["shared_from"]["missing"]:
+                    bad.append(f"{cls} {label}: {diff or b['shared_from']}")
+            if "_" in code or len(code) > 1900:
+                bad.append(f"{cls}: code has '_' (italics in Discord) or is too long ({len(code)})")
+        except Exception as exc:
+            bad.append(f"{cls}: {type(exc).__name__}: {exc}")
+    check("share codes: every class, exact round trip", not bad, "; ".join(bad[:3]))
+
+    e, code = codes["mage"]
+    p = wynn_app.read_share_code(code)[0]
+    refused = []
+    for label, text in (("cut short", code[:-12]), ("garbled", code[:40] + "Q" + code[41:]), ("not a code", "hello"),
+                        ("empty", wynn_app.SHARE_PREFIX), ("huge", pack({"v": 1, "pad": "0" * 5_000_000})),
+                        ("bad class", pack(dict(p, c="paladin"))), ("bad items", pack(dict(p, i=[1, 2])))):
+        if wynn_app.decode_share(text)[0] is not None:
+            refused.append(label)
+    newer = wynn_app.decode_share(pack(dict(p, v=2)))[1]
+    t = dict(p, lk="javascript:alert(1)", nm="<b>x</b>" * 20, s=["ok", 5, "x" * 999],
+             i=["Not A Real Item", ["CR-zzzz", "t6"]] + p["i"][2:], o=p["o"] + [99999, "x"], n={"goal": "1e999", "spell": 5})
+    b, _ = wynn_app.decode_share(pack(t))
+    cleaned = (b is not None and b["link"] == "" and len(b["shared_from"]["name"]) <= 40 and b["settings"] == ["ok", "x" * 200]
+               and b["items"][0]["missing"] and b["items"][1]["missing"] and b["owned"] == e["owned"]
+               and b["numbers"]["goal"] == 0.0 and b["numbers"]["spell"] == 5.0
+               and b["shared_from"]["missing"] == ["Not A Real Item", "Crafted chestplate"]
+               and b["items"][2:] == e["items"][2:])
+    check("share codes: damaged ones refused, tampered ones cleaned", not refused and "newer version" in newer and cleaned,
+          f"accepted: {refused}" if refused else ("" if cleaned else "tampered code not cleaned"))
+
+    with tempfile.TemporaryDirectory() as tmp:
+        saved = (wynn_app.LIBRARY_PATH, wynn_app.HISTORY_PATH)
+        wynn_app.LIBRARY_PATH, wynn_app.HISTORY_PATH = os.path.join(tmp, "library.json"), os.path.join(tmp, "history.json")
+        srv = ThreadingHTTPServer(("127.0.0.1", 0), wynn_app.Handler)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        base = f"http://127.0.0.1:{srv.server_address[1]}"
+
+        def call(path, body=None):
+            data = None if body is None else json.dumps(body).encode()
+            req = urllib.request.Request(base + path, data=data, headers={"Content-Type": "application/json"})
+            with urllib.request.urlopen(req, timeout=60) as r:
+                return json.loads(r.read())
+        try:
+            e, _code = codes["shaman"]
+            wynn_app.save_history([e])
+            ok = True
+            r = call("/api/share", {"history_id": e["id"]})
+            ok &= r["ok"] and r["code"].startswith("WBH1-")
+            code = r["code"]
+            o = call("/api/share/open", {"code": "here " + code})
+            ok &= o["ok"] and o["build"]["items"] == e["items"] and "tree" in o["build"] and o["build"]["shared_from"]["name"] == ""
+            ok &= not call("/api/share/open", {"code": "WBH1-nope"})["ok"]
+            r = call("/api/library", {"action": "import", "code": code, "new_name": "Friend's shaman"})
+            cid = r["character_id"]
+            c = r["characters"][0]
+            ok &= r["ok"] and c["name"] == "Friend's shaman" and c["class"] == "shaman" and len(c["builds"]) == 1
+            ok &= c["builds"][0]["shared"] and c["current"] == c["builds"][0]["id"]
+            r = call("/api/library", {"action": "import", "code": code, "character_id": cid})       # saved once only
+            ok &= len(r["characters"][0]["builds"]) == 1
+            bid = r["characters"][0]["builds"][0]["id"]
+            full = call(f"/api/library/build?c={cid}&b={bid}")
+            ok &= full["items"] == e["items"] and full["owned"] == e["owned"]
+            r = call("/api/share", {"character_id": cid, "build_id": bid})                          # share it on
+            ok &= r["ok"] and wynn_app.decode_share(r["code"])[0]["shared_from"]["name"] == "Friend's shaman"
+            m = call("/api/library", {"action": "create", "class": "mage", "name": "Zap", "level": 50})
+            r = call("/api/library", {"action": "import", "code": code, "character_id": m["character_id"]})
+            ok &= not r["ok"] and "Shaman" in r["error"]
+            ok &= not call("/api/share", {"history_id": "gone"})["ok"]
+            check("share codes: open, save to library, share on", ok)
+        except Exception as exc:
+            check("share codes: open, save to library, share on", False, f"{type(exc).__name__}: {exc}")
+        finally:
+            srv.shutdown()
+            wynn_app.LIBRARY_PATH, wynn_app.HISTORY_PATH = saved
+
+
 def main():
     check_code()
     check_release_files()
     check_updater()
     check_server()
     check_library()
+    check_sharing()
     print(f"\n{sum(RESULTS)}/{len(RESULTS)} checks passed.")
     sys.exit(0 if all(RESULTS) else 1)
 

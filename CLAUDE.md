@@ -39,7 +39,8 @@ this repository and get updates through the app's update bar. Each friend uses t
   effects; Wynnbuilder crafter rules: profession, ingredient level <= recipe max, durability >= 1).
 - `wynn_app.py` + `app/index.html`: desktop app (local HTTP server + pywebview window). Chat with tools
   (`analyze_build`, `manage_characters`, `lookup_item`, `list_abilities`), results visuals, The Forge animation,
-  history, home page with characters and library, save-to-library banner, settings, versions, updates.
+  history, home page with characters and library, save-to-library banner, compare two builds, share codes,
+  settings, versions, updates.
 - `updater.py`: updates from GitHub branch **`stable`** (only versions that passed every check), snapshots in
   `_versions/`, switching versions via `release/<version>` branches. Never touches `PROTECTED` files.
 - `notify.py`: the little "build ready" pop-up.
@@ -61,7 +62,7 @@ Personal files, never committed or overwritten by updates: `api_key.txt` (repo h
    for friends). `tests/app_check.py` checks they match.
 4. Scan for secrets: no real `sk-ant-...` key anywhere (app_check checks too). Never commit personal files.
 5. Commit as `Petereta7 <Petereta7@users.noreply.github.com>` (never the owner's real email), push to `main`.
-   GitHub runs the checks (~35-40 min, the build check is the slow part) and, only if all pass, moves `stable`
+   GitHub runs the checks (~20 min, the build check is the slow part) and, only if all pass, moves `stable`
    and `release/<version>`, which is what the update bar sees. Don't push `stable` by hand.
 
 ## Speed-ups
@@ -96,11 +97,19 @@ Measured deep search on the owner's PC (1.6 -> 1.7): Warrior L106 7.0 -> 4.1 min
   brute force (craft_check). Crafts use best rolls like every item. On by default; "crafted": false turns off.
 - Search results are deterministic: same answer on 2 or 16 cores, Python 3.10-3.14, Windows (verified), which
   is what makes the never-worse check reliable.
+- Share codes (`WBH1-` + zlib + base64 with "." for "_", which Discord turns into italics): item names / crafter
+  codes + powders, tree, skill points, goal, the sender's numbers and settings notes. The receiver rebuilds every item
+  from its own game data (unknown items show as missing, never guessed) and cleans everything else (link must be
+  Wynnbuilder's, lengths capped, decompression capped). Numbers are labelled as the sender's. Saved builds keep
+  `settings` (party buffs, enemy hits, tomes, aspects, stacks, non-max rolls) so comparisons say what they assumed.
+  build_check checks every case's build opens identically from its code.
 - The bot sees the player's characters every turn (`characters_context()`); `analyze_build` with `character`
   fills in class, level and current gear.
 
 ## History (newest first)
 
+- 1.8.0: compare two saved builds side by side; share codes (open from Home or by pasting in the chat, save to
+  library, compare with yours); saved builds remember non-default settings; empty gear slot display fixed.
 - 1.7.0: deep search about twice as fast with identical builds (crafted items scored once per distinct item,
   faster maths, fine-tuning / deeper search / shake-ups / every top build's crafts side by side); full check
   run ~5.4 min on the owner's PC (was ~14); same-numbers reference check (one per system).
@@ -119,9 +128,8 @@ Measured deep search on the owner's PC (1.6 -> 1.7): Warrior L106 7.0 -> 4.1 min
 - Armor powder specials (Rage, Kill Streak, Concentration, Endurance, Dodge): situational, off by default.
 - Owned-items mode: build only from items the player lists as owned.
 - New item alerts: after a game data update, re-check saved builds.
-- Compare saved builds side by side / share a build with a friend.
 - Report-a-problem button (pack build, settings and report into a file).
-- Faster search / faster CI build check (currently ~35 min on GitHub).
+- Faster search / faster CI build check (currently ~20 min on GitHub).
 - Later, when the owner has them: aspects (from raids) and guild tomes.
 - Skipped by the owner (don't propose again unless asked): bank auto-organizer (against Wynncraft rules; a
   planner version was also declined), instant small edits without re-searching.
@@ -134,7 +142,7 @@ Measured deep search on the owner's PC (1.6 -> 1.7): Warrior L106 7.0 -> 4.1 min
   `.github/workflows/pc-tests.yml` on the PC: every check (tests/run_all.py), or, if the snapshot has
   `tests/pc_job.txt`, each command in it. Results land on the `results` branch as `runs/<run id>.txt`
   (fetch with `git fetch origin results:refs/remotes/origin/results`). The runner only works while the owner
-  has `run.cmd` open in their `actions-runner` folder. The full check run takes ~14 min there (vs ~30 min in a
+  has `run.cmd` open in their `actions-runner` folder. The full check run takes ~5.4 min there (vs ~30 min in a
   2-core cloud session).
 - When killing background processes, don't use `pkill -f`/`pgrep -f` with a pattern that also matches your own
   shell command; match the exact process (it has killed the shell before).

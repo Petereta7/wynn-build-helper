@@ -351,7 +351,7 @@ label.deep input[type=checkbox] { width: auto; flex: 0 0 auto; margin-top: 3px; 
 .icard .m { color: var(--muted); font-size: 12.5px; }
 .icard .pw { display: inline-flex; gap: 3px; margin-left: 6px; vertical-align: middle; }
 .icard .pw span { width: 9px; height: 9px; border-radius: 2px; border: 1px solid rgba(255, 255, 255, .35); }
-.icard.empty { --rc: #3a3f63; border-style: dashed; background: rgba(0, 0, 0, .2); }
+.icard.empty { --rc: #3a3f63; border-style: dashed; background: rgba(0, 0, 0, .2); max-width: none; margin: 0; padding: 9px 12px; }
 .icard .craftlink { display: inline-block; margin-top: 3px; font-size: 11.5px; color: var(--crafted, #2bc4c4); text-decoration: none; }
 .icard .craftlink:hover { text-decoration: underline; }
 .crafts { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; }
@@ -528,6 +528,72 @@ label.deep input[type=checkbox] { width: auto; flex: 0 0 auto; margin-top: 3px; 
 @keyframes saveout { to { opacity: 0; transform: translateY(-16px) scale(.97); height: 0; padding: 0; margin: 0; } }
 @keyframes savepulse { 0%, 100% { opacity: .25; } 50% { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .savebar, .savebar::after, .ccard, .chcard { animation: none; } }
+/* sharing builds */
+.sharebox { margin: 14px 0 0; padding: 12px 14px; border: 1px dashed var(--legendary); border-radius: var(--r-md); background: rgba(85, 255, 255, .06); }
+.sharebox .st { display: flex; gap: 10px; flex-wrap: wrap; align-items: baseline; }
+.sharebox .code { font: 12.5px/1.45 var(--mono); word-break: break-all; color: var(--text); max-height: 96px; overflow: auto; user-select: all; margin: 8px 0 10px;
+  padding: 8px 10px; border-radius: var(--r-sm); background: rgba(0, 0, 0, .35); }
+.sharebox .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.sharebox .hint, .openshare .sub { color: var(--muted); font-size: 13px; }
+.lshare:empty { display: none; }
+.openshare { margin-top: 26px; padding: 16px 18px; border: 1px solid color-mix(in srgb, var(--rare) 40%, var(--line)); border-radius: var(--r-md); background: rgba(0, 0, 0, .2); }
+.openshare h3 { font-family: var(--display); font-size: 20px; margin: 0; color: var(--rare); }
+.openshare .sub { margin: 2px 0 0; }
+.openshare .row { display: flex; gap: 8px; margin-top: 10px; }
+.openshare input { flex: 1; min-width: 0; padding: 9px 12px; border-radius: var(--r-md); border: 1px solid var(--line); background: var(--night); font: 13px var(--mono); }
+.lcard .badge.friend { background: var(--rare); color: #2a0628; }
+.savednotes { margin: 0 0 14px; padding: 8px 12px; border-radius: var(--r-md); border: 1px solid var(--line); background: rgba(255, 85, 255, .05); color: var(--muted); font-size: 13.5px; }
+.savednotes p { margin: 2px 0; }
+.shsave { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
+.shsave .lbl { color: var(--text); font-weight: 600; }
+.shsave .lbl.ok { color: var(--set); }
+.shsave select, .shsave input { padding: 8px 10px; border-radius: var(--r-md); border: 1px solid var(--line); background: var(--night); min-width: 190px; }
+/* compare builds: A in aqua, B in pink */
+.cmpv { --ca: var(--legendary); --cb: var(--rare); }
+.panel { --ca: var(--legendary); --cb: var(--rare); }
+.chead { display: grid; grid-template-columns: 1fr auto 1fr; gap: 14px; align-items: stretch; margin-top: 12px; }
+.cside { padding: 12px 14px; border-radius: var(--r-md); border: 1px solid; background: rgba(0, 0, 0, .25); min-width: 0; }
+.cside.a { border-color: color-mix(in srgb, var(--ca) 55%, var(--line)); } .cside.b { border-color: color-mix(in srgb, var(--cb) 55%, var(--line)); }
+.cside .lbl { display: block; font-size: 12px; font-weight: 800; letter-spacing: .08em; margin-bottom: 6px; }
+.cside.a .lbl { color: var(--ca); } .cside.b .lbl { color: var(--cb); }
+.cside select { width: 100%; padding: 7px 9px; border-radius: var(--r-sm); border: 1px solid var(--line); background: var(--night); font-size: 13.5px; }
+.cside .who { font-family: var(--display); font-size: 20px; margin-top: 10px; }
+.cside .what { color: var(--muted); font-size: 13px; }
+.cvs { align-self: center; font-family: var(--display); font-size: 24px; color: var(--faint); }
+.ctable { display: flex; flex-direction: column; }
+.crow { display: grid; grid-template-columns: 150px 1fr 1fr 130px; gap: 14px; align-items: center; padding: 6px 0; border-bottom: 1px solid rgba(255, 255, 255, .04); }
+.crow.chdr { font-size: 12px; font-weight: 800; letter-spacing: .08em; padding-top: 0; }
+.crow.chdr .a { color: var(--ca); } .crow.chdr .b { color: var(--cb); }
+.crow .cl { color: var(--muted); font-size: 14px; }
+.crow.goal .cl { color: var(--unique); font-weight: 700; }
+.cval { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.cval .num { font-variant-numeric: tabular-nums; font-size: 14px; color: var(--muted); }
+.cval.lead .num { color: var(--text); font-weight: 700; }
+.ctrack { height: 7px; border-radius: 4px; background: rgba(255, 255, 255, .06); overflow: hidden; }
+.ctrack span { display: block; height: 100%; width: 0; border-radius: 4px; transition: width .7s cubic-bezier(.2, .8, .2, 1); }
+.cval.a .ctrack span { background: var(--ca); } .cval.b .ctrack span { background: var(--cb); }
+.crow .cd { text-align: right; font-size: 13.5px; white-space: nowrap; }
+.cd .win { font-weight: 700; } .cd .win.a { color: var(--ca); } .cd .win.b { color: var(--cb); }
+.cd .same, .cd .cnote { color: var(--faint); } .cd .cnote { white-space: normal; font-size: 12.5px; }
+.gcmp { display: grid; grid-template-columns: 100px 1fr 1fr; gap: 6px 12px; align-items: stretch; }
+.ghd { font-size: 12px; font-weight: 800; letter-spacing: .08em; } .ghd.a { color: var(--ca); } .ghd.b { color: var(--cb); }
+.gsl { color: var(--muted); font-size: 13.5px; align-self: center; }
+.gcell { padding: 7px 10px; border: 1px solid var(--line); border-radius: var(--r-sm); background: rgba(0, 0, 0, .22); display: flex; flex-direction: column; min-width: 0; cursor: default; }
+.gcell.a:not(.same) { border-left: 3px solid var(--ca); } .gcell.b:not(.same) { border-left: 3px solid var(--cb); }
+.gcell.same { opacity: .55; }
+.gcell .gn { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gcell .gm { color: var(--faint); font-size: 12.5px; }
+.abl { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+.abl .ah { font-weight: 700; margin-bottom: 4px; } .abl .ah.a { color: var(--ca); } .abl .ah.b { color: var(--cb); }
+.achip { display: inline-block; padding: 2px 9px; margin: 4px 5px 0 0; border-radius: 999px; font-size: 13px; border: 1px solid var(--line); background: rgba(0, 0, 0, .25); }
+.achip.a { border-color: color-mix(in srgb, var(--ca) 50%, var(--line)); } .achip.b { border-color: color-mix(in srgb, var(--cb) 50%, var(--line)); }
+.abl .gray { color: var(--faint); font-size: 13px; }
+@media (max-width: 760px) {
+  .chead { grid-template-columns: 1fr; } .cvs { display: none; }
+  .crow { grid-template-columns: 1fr 1fr; } .crow .cl { grid-column: 1 / -1; } .crow .cd { grid-column: 1 / -1; text-align: left; }
+  .gcmp { grid-template-columns: 1fr 1fr; } .gsl { grid-column: 1 / -1; } .gcmp > div:first-child { display: none; }
+  .abl { grid-template-columns: 1fr; }
+}
 </style>
 </head>
 <body>
@@ -733,6 +799,13 @@ function greet() {
 }
 async function sendChat(text) {
   if (!text.trim() || busy) return;
+  if (/WBH1-/.test(text)) {                // a friend's share code pasted in the chat: open it right here
+    $("#input").value = ""; autosize();
+    addMsg("you", text.length > 160 ? text.slice(0, 150) + "…" : text);
+    const ok = await openShared(text);
+    addMsg("bot", ok ? "That's a build share code, so I opened it. You can look at it, save it to your library, or compare it with one of your builds." : "That looks like a build share code, but I couldn't read it. Ask your friend to copy the whole code again.", ok ? "" : "err");
+    return;
+  }
   soundUnlock();
   addMsg("you", text);
   $("#input").value = ""; autosize();
@@ -1350,7 +1423,7 @@ function compareHTML(S) {
 function animateBars(root) {
   requestAnimationFrame(() => requestAnimationFrame(() => {
     root.querySelectorAll(".btrack .after").forEach((el) => { el.style.left = el.dataset.left + "%"; el.style.width = el.dataset.width + "%"; });
-    root.querySelectorAll(".sktrack span[data-w]").forEach((el) => { el.style.width = el.dataset.w + "%"; });
+    root.querySelectorAll(".sktrack span[data-w], .ctrack span[data-w]").forEach((el) => { el.style.width = el.dataset.w + "%"; });
   }));
 }
 
@@ -1711,7 +1784,8 @@ function showReport(text, S) {
       ${link && !(S && S.no_gear && wbLink) ? `<a class="${wbLink ? "btn-quiet" : "btn"}" href="${esc(link[0])}" target="_blank" rel="noopener">${wbLink ? "Open your current gear" : "Open in Wynnbuilder"}</a>` : ""}
       ${wbLink || link ? `<button class="btn-quiet" data-copy="${esc(wbLink ? wbLink[1] : link[0])}">Copy ${wbLink ? "whole build " : ""}link</button>` : ""}
       <button class="btn-quiet" id="copyReport">Copy full report</button>
-    </div></section>`;
+      ${S && S.best && S.history_id ? '<button class="btn-quiet" id="shareLatest" type="button">Share with a friend</button>' : ""}
+    </div><div id="shareSlot"></div></section>`;
   if (S) html += visualsHTML(S);
   if (headNotes.length) html += `<div class="notes">${headNotes.map((n) => `<p>${esc(n)}</p>`).join("")}</div>`;
   html += `<div class="sections">` + visible.map((s) => {
@@ -1724,6 +1798,7 @@ function showReport(text, S) {
   $("#main").innerHTML = html;
   $("#main").scrollTop = 0;
   const cr = $("#copyReport"); if (cr) cr.addEventListener("click", () => { navigator.clipboard.writeText(text); toast("Report copied"); });
+  const sl = $("#shareLatest"); if (sl) sl.addEventListener("click", () => shareBuild({ history_id: S.history_id }, $("#shareSlot")));
   document.querySelectorAll("[data-copy]").forEach((b) => b.addEventListener("click", () => { navigator.clipboard.writeText(b.dataset.copy); toast("Link copied"); }));
   if (S) {
     if (reveal && !REDUCED) { mountVisuals(S, false); runReveal(S).then(() => { animateBars($("#main")); setTimeout(() => offerSave(S), 1100); }); }
@@ -1759,20 +1834,26 @@ async function showSaved(id) {
   try { h = await fetch("/api/history/" + encodeURIComponent(id)).then((r) => r.json()); } catch (e) { return; }
   if (!h || h.error) { toast("That build isn't saved any more"); refreshHistory(); return; }
   renderSaved(h, `Saved build from ${h.date}, built for ${h.focus || h.label}`, "Back to the latest build",
-              () => { if (LAST_REPORT) showReport(LAST_REPORT, LAST_SUMMARY); else showHome(); });
+              () => { if (LAST_REPORT) showReport(LAST_REPORT, LAST_SUMMARY); else showHome(); }, { share: { history_id: id } });
 }
-function renderSaved(h, sub, backLabel, back) {
+// opts: share (what /api/share needs, adds a Share button), notes (extra lines under the title),
+// actions (more buttons), after (HTML under the title box), bind (runs once the page is on screen)
+function renderSaved(h, sub, backLabel, back, opts = {}) {
   forgeStop();
   const n = h.numbers || {};
+  const notes = [...(opts.notes || [])];
+  if (h.settings && h.settings.length) notes.push(`${h.shared_from ? "Counted in your friend's numbers" : "Counted in these numbers"}: ${h.settings.join("; ")}.`);
+  const noteHTML = notes.length ? `<div class="savednotes">${notes.map((x) => `<p>${esc(x)}</p>`).join("")}</div>` : "";
   const chips = [[h.focus || h.label, n.goal, "dmg"], ["main attack DPS", n.melee, "melee"], ["spell damage/s", n.spell, "dmg"], ["effective HP", n.ehp, "ehp"],
-                 ["health", n.hp, "ehp"], ["walk speed", n.spd, "spd"]].filter(([, v], i) => i === 0 || Math.abs(v || 0) > 0.001)
+                 ["health", n.hp, "ehp"], ["walk speed", n.spd, "spd"]].filter(([, v], i) => i === 0 || (Math.abs(v || 0) > 0.001 && !(i <= 2 && v === n.goal)))     // goal already shown
     .map(([k, v, c]) => `<div class="stat ${c}"><div class="v">${k === "walk speed" ? numFmt("spd", v || 0) : fmtBig(v || 0)}</div><div class="k">${esc(k)}</div></div>`).join("");
   const floors = h.floors && Object.keys(h.floors).length ? `<p class="floor-ok">Minimums it kept: ${Object.entries(h.floors).map(([k, v]) => `${esc({ hp: "health", ehp: "effective HP", spd: "walk speed", mr: "mana regen", hpr: "health regen" }[k] || k)} ${v}`).join(", ")}</p>` : "";
   $("#main").innerHTML = `<section class="tip hero"><h2>Level ${h.level} ${esc(h.class_title)}</h2>
-    <p class="sub">${esc(sub)}</p>${floors}
+    <p class="sub">${esc(sub)}</p>${floors}${noteHTML}
     <div class="stats">${chips}</div>
     <div class="actions">${h.link ? `<a class="btn" href="${esc(h.link)}" target="_blank" rel="noopener">Open in Wynnbuilder</a><button class="btn-quiet" data-copy="${esc(h.link)}">Copy link</button>` : ""}
-      <button class="btn-quiet" id="savedBack" type="button">${esc(backLabel)}</button></div></section>` +
+      ${opts.share ? '<button class="btn-quiet" id="shareBtn" type="button">Share with a friend</button>' : ""}${opts.actions || ""}
+      <button class="btn-quiet" id="savedBack" type="button">${esc(backLabel)}</button></div><div id="shareSlot"></div>${opts.after || ""}</section>` +
     equipHTML({ items: h.items, sp: h.sp }, null, "Gear", "Hover any piece for its stats.") + craftsHTML({ items: h.items }) +
     (h.tree ? (TOGGLE_SHARE = h.toggle_share || {}, treeHTML(h.tree, h.order || [], h.toggles_on || [], "")) : "");
   $("#main").scrollTop = 0;
@@ -1781,6 +1862,8 @@ function renderSaved(h, sub, backLabel, back) {
   animateBars($("#main"));
   document.querySelectorAll("[data-copy]").forEach((b) => b.addEventListener("click", () => { navigator.clipboard.writeText(b.dataset.copy); toast("Link copied"); }));
   $("#savedBack").addEventListener("click", back);
+  if (opts.share) $("#shareBtn").addEventListener("click", () => shareBuild(opts.share, $("#shareSlot")));
+  if (opts.bind) opts.bind();
 }
 function showError(text) {
   $("#main").innerHTML = `<section class="tip hero"><h2>That didn't work</h2><pre style="white-space:pre-wrap;font:14px/1.5 var(--mono);margin:0;color:var(--warn)">${esc(text.trim())}</pre></section>`;
@@ -1814,9 +1897,12 @@ async function showHome() {
               "Level 106 warrior, I keep dying in raids. Make me tankier.", "What should a level 80 archer use for main attack damage?"];
   $("#main").innerHTML = `<div class="home-head"><h2>Your characters</h2><p class="sub">Pick a class to see its characters and their saved builds.</p></div>
     <div class="classes">${cards}</div>
+    <div class="openshare"><h3>Open a friend's build</h3><p class="sub">Paste the share code they sent you (it starts with WBH1-).</p>
+      <form class="row" id="osForm"><input id="osCode" placeholder="WBH1-…" aria-label="Share code" autocomplete="off" spellcheck="false"><button class="btn" type="submit">Open</button></form></div>
     <div class="home-ask">Or just describe a character in the chat, or use the Fill in tab:
       <div class="examples">${ex.map((t) => `<button class="example">${esc(t)}</button>`).join("")}</div></div>`;
   $("#main").scrollTop = 0;
+  $("#osForm").addEventListener("submit", async (e) => { e.preventDefault(); const v = $("#osCode").value; if (v.trim() && !(await openShared(v))) $("#osCode").focus(); });
   document.querySelectorAll(".ccard").forEach((b) => b.addEventListener("click", () => showClassPage(b.dataset.cls)));
   document.querySelectorAll(".example").forEach((b) => b.addEventListener("click", () => {
     if (META && !META.has_key) { $("#input").value = b.textContent; toast("Add your API key in Settings to send this"); return; }
@@ -1859,10 +1945,13 @@ async function showCharacter(id) {
   const lib = c.builds.length ? c.builds.map((b) => {
     const items = (b.items || []).filter(Boolean).map(([nm, t]) => `<span class="t-${esc(t)}">${esc(nm)}</span>`).join(", ");
     const cur = b.id === c.current;
-    return `<div class="lcard${cur ? " cur" : ""}"><div class="lt"><b>${esc(b.focus || b.label || "Build")}</b>${cur ? '<span class="badge">CURRENT</span>' : ""}<span class="hd">level ${b.level} · saved ${esc(b.saved || b.date || "")}</span></div>
+    const friend = b.shared ? `<span class="badge friend">FROM ${esc((b.shared_from || "A FRIEND").toUpperCase())}</span>` : "";
+    return `<div class="lcard${cur ? " cur" : ""}"><div class="lt"><b>${esc(b.focus || b.label || "Build")}</b>${cur ? '<span class="badge">CURRENT</span>' : ""}${friend}<span class="hd">level ${b.level} · saved ${esc(b.saved || b.date || "")}</span></div>
       <div class="ln">${b.numbers && b.numbers.goal != null ? fmtBig(b.numbers.goal) : ""}</div><div class="li">${items}</div>
-      <div class="lb"><button class="btn-quiet" data-view="${esc(b.id)}">View</button>${cur ? "" : `<button class="btn-quiet" data-cur="${esc(b.id)}">Make current</button>`}
-        ${b.link ? `<a class="btn-quiet" href="${esc(b.link)}" target="_blank" rel="noopener">Wynnbuilder</a>` : ""}<button class="btn-quiet" data-rm="${esc(b.id)}">Remove</button></div></div>`;
+      <div class="lb"><button class="btn-quiet" data-view="${esc(b.id)}">View</button><button class="btn-quiet" data-cmp="${esc(b.id)}">Compare</button>
+        <button class="btn-quiet" data-share="${esc(b.id)}">Share</button>${cur ? "" : `<button class="btn-quiet" data-cur="${esc(b.id)}">Make current</button>`}
+        ${b.link ? `<a class="btn-quiet" href="${esc(b.link)}" target="_blank" rel="noopener">Wynnbuilder</a>` : ""}<button class="btn-quiet" data-rm="${esc(b.id)}">Remove</button></div>
+      <div class="lshare" data-slot="${esc(b.id)}"></div></div>`;
   }).join("") : `<div class="hist-empty">No saved builds yet. Make a build for ${esc(c.name)}; when it's done you'll be asked whether to save it here.</div>`;
   $("#main").innerHTML = `<button class="crumb" id="toClass">← ${esc(c.class_title)} characters</button>
     <section class="tip char-hero" style="margin-top:10px"><h2 style="color:${col}">${esc(c.name)}</h2>
@@ -1886,6 +1975,9 @@ async function showCharacter(id) {
     if (r.ok) { LIB = r; if (ACTIVE_CHAR === c.id) ACTIVE_CHAR = null; showClassPage(c.class); }
   });
   $("#main").querySelectorAll("[data-view]").forEach((b) => b.addEventListener("click", () => viewLibraryBuild(c.id, b.dataset.view)));
+  $("#main").querySelectorAll("[data-cmp]").forEach((b) => b.addEventListener("click", () => showCompare(libRef(c.id, b.dataset.cmp), null, () => showCharacter(c.id), `Back to ${c.name}`)));
+  $("#main").querySelectorAll("[data-share]").forEach((b) => b.addEventListener("click", () =>
+    shareBuild({ character_id: c.id, build_id: b.dataset.share }, $("#main").querySelector(`[data-slot="${CSS.escape(b.dataset.share)}"]`))));
   $("#main").querySelectorAll("[data-cur]").forEach((b) => b.addEventListener("click", async () => {
     const r = await api("/api/library", { action: "current", character_id: c.id, build_id: b.dataset.cur }); if (r.ok) { LIB = r; showCharacter(c.id); }
   }));
@@ -1915,7 +2007,11 @@ async function viewLibraryBuild(cid, bid) {
   let h;
   try { h = await fetch(`/api/library/build?c=${encodeURIComponent(cid)}&b=${encodeURIComponent(bid)}`).then((r) => r.json()); } catch (e) { return; }
   if (!h || h.error) { toast("That build isn't in the library any more"); showCharacter(cid); return; }
-  renderSaved(h, `${h.character.name}'s library · saved ${h.saved || h.date}, built for ${h.focus || h.label}`, `Back to ${h.character.name}`, () => showCharacter(cid));
+  const from = h.shared_from ? ` · from ${h.shared_from.name || "a friend"}` : "";
+  renderSaved(h, `${h.character.name}'s library${from} · saved ${h.saved || h.date}, built for ${h.focus || h.label}`, `Back to ${h.character.name}`, () => showCharacter(cid), {
+    share: { character_id: cid, build_id: bid }, actions: '<button class="btn-quiet" id="cmpBtn" type="button">Compare</button>',
+    notes: h.shared_from ? sharedNotes(h) : [],
+    bind: () => $("#cmpBtn").addEventListener("click", () => showCompare(libRef(cid, bid), null, () => viewLibraryBuild(cid, bid), "Back to this build")) });
 }
 
 /* ---------- after a build: "save this build to your library?" ---------- */
@@ -1951,6 +2047,192 @@ async function offerSave(S) {
     $("#sbOpen").addEventListener("click", () => showCharacter(r.character_id));
     $("#sbClose").addEventListener("click", () => { bar.classList.add("gone"); setTimeout(() => bar.remove(), 360); });
   });
+}
+
+/* ---------- sharing builds: a one-line code a friend pastes into their app ---------- */
+let SHARED = null;                       // the friend's build on screen: { build, code }
+const libRef = (cid, bid) => `lib:${cid}:${bid}`;
+async function shareBuild(body, box) {
+  if (!box) return;
+  let r;
+  try { r = await api("/api/share", body); } catch (e) { r = { ok: false }; }
+  if (!r.ok) { toast(r.error || "Couldn't make a share code"); return; }
+  const fits = r.code.length <= 1900;
+  box.innerHTML = `<div class="sharebox"><div class="st"><b>Share code</b><span class="hint">Send it to a friend. They paste it into their app (on the Home page, or just in the chat) to open this build.</span></div>
+    <div class="code" tabindex="0">${esc(r.code)}</div>
+    <div class="row"><button class="btn" type="button" data-sc>Copy code</button><span class="hint">${r.code.length.toLocaleString("en-US")} characters${fits ? ", fits in one Discord message" : ""}</span></div></div>`;
+  box.querySelector("[data-sc]").addEventListener("click", () => { navigator.clipboard.writeText(r.code); toast("Share code copied"); });
+}
+function sharedNotes(h) {
+  const s = h.shared_from || {}, who = s.name || "your friend";
+  const out = [`The numbers are from ${who}'s app${s.app ? ` (version ${s.app})` : ""}; the items and their stats are rebuilt from your game data.`];
+  if (s.missing && s.missing.length) out.push(`Not in your game data: ${s.missing.join(", ")}. Those pieces show without stats; updating the app usually fixes this.`);
+  return out.concat(s.notes || []);
+}
+async function openShared(text) {
+  if (!homeGuard()) return false;
+  let r;
+  try { r = await api("/api/share/open", { code: text }); } catch (e) { r = { ok: false }; }
+  if (!r.ok) { toast(r.error || "Couldn't read that share code"); return false; }
+  SHARED = { build: r.build, code: text };
+  await showShared();
+  return true;
+}
+async function showShared() {
+  if (!SHARED) { showHome(); return; }
+  await loadLib();
+  const h = SHARED.build, s = h.shared_from || {};
+  const mine = (LIB.characters || []).filter((c) => c.class === h.class);
+  const hasBuilds = mine.some((c) => c.builds.length);
+  const opts = mine.map((c, i) => `<option value="${esc(c.id)}"${i === 0 ? " selected" : ""}>${esc(c.name)} (level ${c.level || "?"})</option>`).join("")
+    + `<option value=""${mine.length ? "" : " selected"}>New ${esc(h.class_title)} character…</option>`;
+  const save = `<div class="shsave" id="shSave"><span class="lbl">Save to my library:</span><select id="shChar" aria-label="Character">${opts}</select>
+      <input id="shName" placeholder="New character's name" maxlength="40"${mine.length ? " hidden" : ""} aria-label="New character's name">
+      <button class="btn" id="shYes" type="button">Save it</button></div>`;
+  renderSaved(h, `Shared build${s.name ? ` from ${s.name}` : ""}, built for ${h.focus || h.label}${h.date ? ` (made ${h.date})` : ""}`, "Close", () => { SHARED = null; showHome(); }, {
+    notes: sharedNotes(h), after: save,
+    actions: hasBuilds ? '<button class="btn-quiet" id="cmpBtn" type="button">Compare with my build</button>' : "",
+    bind: () => {
+      if (hasBuilds) $("#cmpBtn").addEventListener("click", () => showCompare("shared", null, showShared, "Back to the shared build"));
+      $("#shChar").addEventListener("change", () => { $("#shName").hidden = !!$("#shChar").value; if (!$("#shChar").value) $("#shName").focus(); });
+      $("#shYes").addEventListener("click", async () => {
+        const cid = $("#shChar").value;
+        const r = await api("/api/library", { action: "import", code: SHARED.code, character_id: cid || undefined, new_name: $("#shName").value });
+        if (!r.ok) { toast(r.error || "Couldn't save it"); return; }
+        LIB = r;
+        const c = r.characters.find((x) => x.id === r.character_id);
+        $("#shSave").innerHTML = `<span class="lbl ok">Saved to ${esc(c ? c.name : "your library")}.</span><button class="btn-quiet" id="shOpen" type="button">Open ${esc(c ? c.name : "library")}</button>`;
+        $("#shOpen").addEventListener("click", () => { SHARED = null; showCharacter(r.character_id); });
+      });
+    } });
+}
+
+/* ---------- compare two builds side by side ---------- */
+async function getBuild(ref) {
+  if (ref === "shared") return SHARED ? SHARED.build : null;
+  const [, cid, bid] = String(ref).split(":");
+  try {
+    const h = await fetch(`/api/library/build?c=${encodeURIComponent(cid)}&b=${encodeURIComponent(bid)}`).then((r) => r.json());
+    return h && !h.error ? h : null;
+  } catch (e) { return null; }
+}
+function compareOptions(cls) {
+  const out = [];
+  if (SHARED && SHARED.build.class === cls) {
+    const s = SHARED.build.shared_from || {};
+    out.push({ ref: "shared", cid: null, label: `Shared build${s.name ? ` from ${s.name}` : ""} (not saved) · ${SHARED.build.focus || SHARED.build.label}` });
+  }
+  (LIB.characters || []).filter((c) => c.class === cls).forEach((c) => c.builds.forEach((b) => out.push({
+    ref: libRef(c.id, b.id), cid: c.id, current: b.id === c.current,
+    label: `${c.name} · ${b.focus || b.label || "Build"}${b.numbers && b.numbers.goal != null ? " " + fmtBig(b.numbers.goal) : ""} · level ${b.level}${b.shared ? ` · from ${b.shared_from || "a friend"}` : ""}${b.id === c.current ? " · current" : ""}`,
+  })));
+  return out;
+}
+function defaultOther(refA, opts) {
+  const others = opts.filter((o) => o.ref !== refA);
+  const a = opts.find((o) => o.ref === refA);
+  return (a && a.cid && (others.find((o) => o.cid === a.cid && o.current) || others.find((o) => o.cid === a.cid)))
+    || others.find((o) => o.current && o.ref !== "shared") || others.find((o) => o.ref !== "shared") || others[0] || null;
+}
+async function showCompare(refA, refB, back, backLabel) {
+  if (!homeGuard()) return;
+  forgeStop();
+  await loadLib();
+  const A = await getBuild(refA);
+  if (!A) { toast("That build isn't there any more"); back(); return; }
+  const opts = compareOptions(A.class);
+  if (!refB) { const o = defaultOther(refA, opts); refB = o ? o.ref : null; }
+  const B = refB ? await getBuild(refB) : null;
+  const side = (X, ref, w) => `<div class="cside ${w}"><label class="lbl" for="cmp-${w}">Build ${w.toUpperCase()}</label>
+      <select id="cmp-${w}">${ref ? "" : '<option value="" selected>Pick a build…</option>'}${opts.map((o) => `<option value="${esc(o.ref)}"${o.ref === ref ? " selected" : ""}>${esc(o.label)}</option>`).join("")}</select>
+      ${X ? `<div class="who">${esc(X.focus || X.label || "Build")}</div><div class="what">Level ${X.level} ${esc(X.class_title)}${X.saved || X.date ? " · " + esc(X.saved || X.date) : ""}${X.shared_from ? " · from " + esc(X.shared_from.name || "a friend") : ""}</div>` : ""}</div>`;
+  let body = "";
+  if (!B) {
+    body = `<p class="hist-empty" style="margin-top:16px">Nothing to compare with yet. Save another ${esc(A.class_title)} build to your library, or open a friend's share code on the Home page.</p>`;
+  } else {
+    body = compareBody(A, B);
+  }
+  $("#main").innerHTML = `<button class="crumb" id="cmpBack">← ${esc(backLabel)}</button>
+    <section class="tip hero cmpv" style="margin-top:10px"><h2>Compare builds</h2>
+      <div class="chead">${side(A, refA, "a")}<div class="cvs">VS</div>${side(B, refB, "b")}</div>
+      ${B ? '<div class="actions" style="margin-top:12px"><button class="btn-quiet" id="cmpSwap" type="button">Swap A and B</button></div>' : ""}
+    </section>${body}`;
+  $("#main").scrollTop = 0;
+  $("#cmpBack").addEventListener("click", back);
+  $("#cmp-a").addEventListener("change", (e) => e.target.value && showCompare(e.target.value, refB, back, backLabel));
+  $("#cmp-b").addEventListener("change", (e) => e.target.value && showCompare(refA, e.target.value, back, backLabel));
+  if (B) {
+    $("#cmpSwap").addEventListener("click", () => showCompare(refB, refA, back, backLabel));
+    bindTips($("#gcmp"), (k) => itemTip((k[0] === "a" ? A : B).items[+k.slice(1)]));
+    animateBars($("#main"));
+  }
+}
+function cmpRow(label, a, b, fmt, opts = {}) {
+  const hi = Math.max(Math.abs(a), Math.abs(b)) || 1;
+  const close = Math.abs(a - b) <= 1e-6 * Math.max(1, Math.abs(a), Math.abs(b));
+  let tag;
+  if (opts.noDiff) tag = `<span class="cnote">${esc(opts.noDiff)}</span>`;
+  else if (close) tag = '<span class="same">same</span>';
+  else {
+    const w = a > b ? "a" : "b", big = Math.max(a, b), small = Math.min(a, b);
+    const pct = opts.pct !== false && small > 0 ? (big / small - 1) * 100 : null;
+    tag = `<span class="win ${w}">${w.toUpperCase()} +${pct !== null ? pct.toFixed(pct >= 10 ? 0 : 1) + "%" : fmt(big - small).replace(/^\+/, "")}</span>`;
+  }
+  const cell = (v, w) => `<div class="cval ${w}${!close && !opts.noDiff && ((w === "a") === (a > b)) ? " lead" : ""}"><span class="num">${fmt(v)}</span>
+      <span class="ctrack"><span data-w="${(Math.max(0, v) / hi) * 100}"></span></span></div>`;
+  return `<div class="crow${opts.goal ? " goal" : ""}"><div class="cl">${esc(label)}</div>${cell(a, "a")}${cell(b, "b")}<div class="cd">${tag}</div></div>`;
+}
+function compareBody(A, B) {
+  const na = A.numbers || {}, nb = B.numbers || {};
+  const sameGoal = (A.label || "") === (B.label || "") && (A.focus || "") === (B.focus || "");
+  const rows = [cmpRow(sameGoal ? (A.focus || A.label || "Goal") : "Goal score", na.goal || 0, nb.goal || 0, fmtBig,
+                       { goal: true, noDiff: sameGoal ? null : "built for different goals" })];
+  [["melee", "Main attack DPS"], ["spell", "Spell damage/s"], ["ehp", "Effective HP"], ["hp", "Health"], ["spd", "Walk speed"], ["mr", "Mana regen"]].forEach(([k, label]) => {
+    const a = na[k] || 0, b = nb[k] || 0;
+    if (sameGoal && a === (na.goal || 0) && b === (nb.goal || 0)) return;      // the goal row already shows it
+    if (Math.abs(a) > 0.001 || Math.abs(b) > 0.001) rows.push(cmpRow(label, a, b, (v) => numFmt(k, v), { pct: k !== "spd" }));
+  });
+  const notes = ["Numbers as worked out when each build was made."];
+  if (A.level !== B.level) notes.push(`Different levels: A is level ${A.level}, B is level ${B.level}.`);
+  if (!sameGoal) notes.push(`A was built for ${A.focus || A.label}, B for ${B.focus || B.label}, so their goal scores measure different things.`);
+  [["A", A], ["B", B]].forEach(([w, X]) => {
+    if (X.settings && X.settings.length) notes.push(`${w} counted: ${X.settings.join("; ")}.`);
+    if (X.shared_from) notes.push(`${w}'s numbers are from ${X.shared_from.name || "a friend"}'s app.`);
+  });
+  // gear, slot by slot
+  const tierCol = (c) => TIER_COL[c.tier] || TIER_COL.Normal;
+  const same = (x, y) => x && y && x.name === y.name && JSON.stringify(x.powders || []) === JSON.stringify(y.powders || []);
+  const gcell = (c, i, w, eq) => c
+    ? `<div class="gcell ${w}${eq ? " same" : ""}" tabindex="0" data-tipk="${w}${i}"><span class="gn" style="color:${tierCol(c)}">${esc(c.name)}</span>
+        <span class="gm">Lv ${c.level} ${esc(c.tier)}${c.powders && c.powders.length ? " · " + esc(powderList(c.powders)) : ""}${c.missing ? " · not in your game data" : ""}</span></div>`
+    : `<div class="gcell ${w} gempty${eq ? " same" : ""}" tabindex="0" data-tipk="${w}${i}"><span class="gm">(empty)</span></div>`;
+  let diffs = 0;
+  const grows = SLOTS.map((sl, i) => {
+    const x = A.items[i], y = B.items[i], eq = same(x, y) || (!x && !y);
+    if (!eq) diffs++;
+    return `<div class="gsl">${sl}</div>${gcell(x, i, "a", eq)}${gcell(y, i, "b", eq)}`;
+  }).join("");
+  // skill points you put in (+ gear bonuses)
+  const tot = (X, i) => { const s = X.sp || {}; return ((s.assigned || [])[i] || 0) + ((s.extra || [])[i] || 0) + ((s.gear || [])[i] || 0); };
+  const sk = SKILL_INFO.map(([name], i) => cmpRow(name, tot(A, i), tot(B, i), (v) => String(Math.round(v)), { pct: false })).join("");
+  // abilities
+  const names = {}; ((A.tree || B.tree || {}).nodes || []).forEach((n) => { names[n.id] = n.name; });
+  const sa = new Set(A.owned || []), sb = new Set(B.owned || []);
+  const onlyA = (A.order || A.owned || []).filter((id) => !sb.has(id)), onlyB = (B.order || B.owned || []).filter((id) => !sa.has(id));
+  const both = [...sa].filter((id) => sb.has(id)).length;
+  const chips = (ids, w) => ids.length ? ids.map((id) => `<span class="achip ${w}">${esc(names[id] || "Ability " + id)}</span>`).join("") : '<span class="gray">none</span>';
+  return `<section class="tip panel"><h3>Numbers <small>${esc(notes[0])}</small></h3>
+      <div class="ctable"><div class="crow chdr"><div></div><div class="a">A</div><div class="b">B</div><div class="cd">difference</div></div>${rows.join("")}</div>
+      ${notes.length > 1 ? `<div class="savednotes" style="margin-top:12px">${notes.slice(1).map((x) => `<p>${esc(x)}</p>`).join("")}</div>` : ""}</section>
+    <section class="tip panel"><h3>Gear <small>${diffs ? `${diffs} of 9 pieces are different` : "The same gear"}. Hover any piece for its stats.</small></h3>
+      <div class="gcmp" id="gcmp"><div></div><div class="ghd a">A</div><div class="ghd b">B</div>${grows}</div></section>
+    <section class="tip panel"><h3>Skill points <small>Total of each skill: points you assign plus what the gear gives</small></h3><div class="ctable">${sk}</div></section>
+    <section class="tip panel"><h3>Ability tree <small>${both} abilities in both</small></h3>
+      <div class="abl"><div><div class="ah a">Only in A (${onlyA.length})</div>${chips(onlyA, "a")}</div><div><div class="ah b">Only in B (${onlyB.length})</div>${chips(onlyB, "b")}</div></div></section>`;
+}
+function powderList(ps) {
+  const n = {}; ps.forEach((p) => { n[p] = (n[p] || 0) + 1; });
+  return Object.entries(n).map(([p, k]) => (k > 1 ? `${p} ×${k}` : p)).join(", ");
 }
 
 /* ---------- settings ---------- */

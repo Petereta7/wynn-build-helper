@@ -12,10 +12,15 @@ Talking to Claude needs an Anthropic API key (Settings in the app). The form wor
 """
 from __future__ import annotations
 
+import base64
 import contextlib
+import hashlib
 import io
 import json
+import math
 import os
+import re
+import zlib
 import socket
 import ssl
 import sys
@@ -372,11 +377,25 @@ def _clean_desc(text: str) -> str:
     return _re.sub(r"\n{3,}", "\n\n", t).strip()
 
 
-def item_card(it, slot: str):
+def _roll_stats(it, rolls=None) -> dict:
+    """An item's stats for these rolls ("max", "avg", "min", "base"; None = the calculator's current setting).
+    Doesn't change the calculator's setting, so it's safe while a build is running."""
+    if rolls is None or rolls == wh.ROLL_MODE:
+        return it.stats
+    if rolls == "min":
+        return it.min_stats
+    if rolls == "base":
+        return it.base_stats
+    if rolls == "avg":
+        return {k: (it.min_stats[k] + it.max_stats[k]) / 2 for k in it.max_stats}
+    return it.max_stats
+
+
+def item_card(it, slot: str, rolls=None):
     if it is None:
         return None
     stats = []
-    for k, v in it.stats.items():
+    for k, v in _roll_stats(it, rolls).items():
         if k in wh.SKILLS or not v or k in ("atkTier",):
             continue
         stats.append([STAT_NAMES.get(k, k), round(v, 1) if isinstance(v, float) and v != int(v) else int(v)])
@@ -480,6 +499,7 @@ def library_summary(lib: dict) -> dict:
     chars = []
     for c in lib["characters"]:
         builds = [{**{k: b.get(k) for k in ("id", "source", "saved", "date", "level", "label", "focus", "numbers", "goal", "link")},
+                   "shared": bool(b.get("shared_from")), "shared_from": (b.get("shared_from") or {}).get("name") or "",
                    "items": [[x["name"], x["tier"]] if x else None for x in b.get("items", [])],
                    "gear": _gear_of(b)} for b in reversed(c.get("builds", []))]
         chars.append({"id": c["id"], "name": c["name"], "class": c["class"], "class_title": wh.CLASS_TITLE.get(c["class"], c["class"]),
@@ -544,6 +564,25 @@ def library_action(body: dict) -> dict:
                 c["builds"].append(b)
                 c["current"] = b["id"]
                 c["level"] = max(c.get("level") or 1, h.get("level") or 1)
+        elif act == "import":                         # a friend's build from a share code
+            entry, err = decode_share(body.get("code"))
+            if entry is None:
+                return {"ok": False, "error": err}
+            c = find(body.get("character_id"))
+            if c is None:
+                c = {"id": _new_id(), "name": _clean_name(body.get("new_name"), f"My {entry['class_title']}"),
+                     "class": entry["class"], "level": entry["level"], "created": time.strftime("%b %d %Y"),
+                     "builds": [], "current": None}
+                chars.append(c)
+            if c["class"] != entry["class"]:
+                return {"ok": False, "error": f"That build is for a {entry['class_title']}, and {c['name']} is a "
+                                              f"{wh.CLASS_TITLE.get(c['class'], c['class'])}."}
+            src = "shared-" + hashlib.sha1(json.dumps(entry, sort_keys=True).encode()).hexdigest()[:16]
+            if not any(b.get("source") == src for b in c["builds"]):
+                b = dict(entry, id=_new_id(), source=src, saved=time.strftime("%b %d %Y %H:%M"))
+                c["builds"].append(b)
+                if not c.get("current"):
+                    c["current"] = b["id"]
         elif act in ("remove", "current"):
             c = find(body.get("character_id"))
             if c is None:
@@ -636,6 +675,221 @@ def manage_characters(inp: dict) -> str:
                         if c else ""))
 
 
+# ============================================================================== sharing builds
+# A share code is a saved build packed into one line of text ("WBH1-..."), short enough for a Discord message.
+# It holds item names (crafted pieces as their crafter codes), powders, the ability tree, skill points, the goal and
+# the numbers the sender's app worked out. The receiving app rebuilds every item from its own game data, so the
+# code can't carry made-up item stats; anything it can't find is shown as missing instead of guessed.
+
+SHARE_PREFIX = "WBH1-"
+_SHARE_CHARS = re.compile(r"[A-Za-z0-9._\-]+")
+_NUM_KEYS = ("goal", "spell", "melee", "ehp", "hp", "spd", "mr")
+_FLOOR_KEYS = ("hp", "ehp", "spd", "mr", "hpr")
+_LINK_OK = re.compile(r"https://wynnbuilder\.github\.io/builder/#[A-Za-z0-9_\-+/=.~]*")
+SHARE_DAMAGED = "That share code is incomplete or damaged. Ask your friend to copy it again (the whole thing)."
+
+
+def settings_notes(b) -> list:
+    """Settings that change a build's numbers beyond the defaults (party buffs, enemy hits, ...), in plain words.
+    Saved with each build so a comparison or a friend can see what the numbers assumed."""
+    if b is None:
+        return []
+    out = []
+    if b.buffs:
+        out.append("Party buffs: " + ", ".join(map(str, b.buffs)))
+    if b.raid_buffs:
+        out.append("Raid buffs: " + ", ".join(str(getattr(x, "name", x)) for x in b.raid_buffs))
+    if b.enemy:
+        out.append("Enemy hits counted: " + ", ".join(
+            f"{(wh.ELEM_NAMES[k] if isinstance(k, int) and k < len(wh.ELEM_NAMES) else k)} {v:g}" for k, v in b.enemy.items()))
+    if b.tomes:
+        out.append("Tomes: " + ", ".join(getattr(t, "name", str(t)) for t in b.tomes))
+    if b.aspects:
+        out.append("Aspects: " + ", ".join(f"{a.get('displayName', '?')} {t}" for a, t in b.aspects))
+    if b.sliders:
+        out.append("Ability stacks: " + ", ".join(f"{k}={v:g}" if isinstance(v, (int, float)) else f"{k}={v}"
+                                                  for k, v in b.sliders.items()))
+    if wh.ROLL_MODE != "max":
+        out.append("Item rolls: " + {"avg": "average", "min": "worst", "base": "base values"}.get(wh.ROLL_MODE, wh.ROLL_MODE))
+    return out
+
+
+def _powder_text(labels) -> str:
+    """["T6 Thunder", "T6 Thunder"] -> "t6 t6" (what parse_powders reads)."""
+    out = []
+    for p in labels or []:
+        m = re.match(r"T(\d) (\w+)$", str(p))
+        if m and m.group(2) in wh.POWDER_ELEM_NAMES:
+            out.append(wh.POWDER_ELEMS[wh.POWDER_ELEM_NAMES.index(m.group(2))] + m.group(1))
+    return " ".join(out)
+
+
+def _item_ref(card):
+    if not card:
+        return 0
+    craft = card.get("craft") or {}
+    name = "CR-" + craft["link"].split("#", 1)[1] if craft.get("link") and "#" in craft["link"] else card["name"]
+    pw = _powder_text(card.get("powders"))
+    return [name, pw] if pw else name
+
+
+def share_code(entry: dict, name: str = "") -> str:
+    """A saved build (history or library entry) as a share code."""
+    sp = entry.get("sp") or {}
+    p = {"v": 1, "c": entry["class"], "l": entry.get("level"), "g": entry.get("goal"), "lb": entry.get("label"),
+         "f": entry.get("focus"), "fl": entry.get("floors"), "t": entry.get("toggles_on"), "ts": entry.get("toggle_share"),
+         "n": {k: round(float(v), 2) for k, v in (entry.get("numbers") or {}).items() if k in _NUM_KEYS},
+         "sp": [sp.get(k) for k in ("assigned", "extra", "gear")] if sp.get("assigned") else None,
+         "o": entry.get("owned"), "i": [_item_ref(x) for x in entry.get("items", [])], "lk": entry.get("link"),
+         "s": entry.get("settings"), "r": entry.get("rolls") if entry.get("rolls") != "max" else None,
+         "nm": name or None, "d": entry.get("date"), "av": updater.current_version().get("version"),
+         "dv": getattr(game_data(), "version", None)}
+    p = {k: v for k, v in p.items() if v not in (None, "", [], {})}
+    raw = json.dumps(p, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    # base64 with "." instead of "_": underscores turn into italics in Discord messages
+    return SHARE_PREFIX + base64.urlsafe_b64encode(zlib.compress(raw, 9)).decode().rstrip("=").replace("_", ".")
+
+
+def _unpack(s: str):
+    s = s.replace(".", "_")
+    d = zlib.decompressobj()
+    raw = d.decompress(base64.urlsafe_b64decode(s + "=" * (-len(s) % 4)), 200_000)
+    if d.unconsumed_tail or not d.eof:
+        raise ValueError("incomplete")
+    return json.loads(raw.decode("utf-8"))
+
+
+def read_share_code(text):
+    """The packed data in a share code, wherever it is in the text (a pasted message may have words around it or
+    line breaks inside it). (data, "") or (None, why not)."""
+    text = str(text or "")[:20000]
+    i = text.find(SHARE_PREFIX)
+    if i < 0:
+        return None, "That isn't a build share code (they start with WBH1-)."
+    tail = text[i + len(SHARE_PREFIX):]
+    m = _SHARE_CHARS.match(tail)
+    token = m.group(0) if m else ""
+    joined = "".join(_SHARE_CHARS.findall(re.sub(r"\s+", "", tail)[:6000]))
+    tries = [token] + [joined[:n] for n in range(len(joined), len(token), -1)][:4000]
+    for cand in tries:
+        if not cand:
+            continue
+        try:
+            p = _unpack(cand)
+        except Exception:
+            continue
+        if isinstance(p, dict):
+            return p, ""
+    return None, SHARE_DAMAGED
+
+
+def _missing_card(slot, name):
+    return {"slot": slot, "name": name, "tier": "Normal", "type": "", "level": 0, "reqs": [0] * 5, "bonus": [0] * 5,
+            "stats": [], "slots": 0, "powders": [], "set": None, "major_ids": [], "missing": True,
+            "notes": ["Not in your game data, so its stats aren't shown. Updating the app usually fixes this."]}
+
+
+def _short(v, n) -> str:
+    return " ".join(str(v).split())[:n] if isinstance(v, (str, int, float)) else ""
+
+
+def decode_share(text):
+    """A share code back into a saved build, every item rebuilt from this app's game data. (build, "") or (None, why)."""
+    p, err = read_share_code(text)
+    if p is None:
+        return None, err
+    if p.get("v") != 1:
+        return None, "This share code was made by a newer version of the app. Update the app, then open it again."
+    cls = p.get("c")
+    if cls not in wh.CLASSES:
+        return None, SHARE_DAMAGED
+    d = game_data()
+    try:
+        level = max(1, min(121, int(p.get("l") or 1)))
+    except (TypeError, ValueError):
+        level = 1
+    tree = wh.Tree(d, cls)
+    ids = {n.id for n in tree.nodes}
+    owned = sorted({x for x in (p.get("o") or []) if isinstance(x, int) and x in ids})
+    try:
+        order = tree.validate(frozenset(owned), level)["order"]
+    except Exception:
+        order = owned
+    refs = p.get("i")
+    if not isinstance(refs, list) or len(refs) != 9:
+        return None, SHARE_DAMAGED
+    rolls = p.get("r") if p.get("r") in wh.ROLL_MODES else "max"
+    items, missing = [], []
+    for i, ref in enumerate(refs):
+        slot = wh.SLOT_LABELS[i] if i < 8 else "Weapon"
+        if not ref:
+            items.append(None)
+            continue
+        if isinstance(ref, list) and ref:
+            name, pw = _short(ref[0], 400), _short(ref[1] if len(ref) > 1 else "", 80)
+        else:
+            name, pw = _short(ref, 400), ""
+        crafted = name.upper().startswith("CR-")
+        it = None
+        try:
+            it = wh.crafted_from_code(d, name) if crafted else d.items.get(name.lower())
+        except Exception:
+            it = None
+        want = wh.SLOT_TYPES[i] if i < 8 else wh.CLASS_WEAPON[cls]
+        if it is None or it.type != want:
+            shown = f"Crafted {want}" if crafted else name[:60]
+            missing.append(shown)
+            items.append(_missing_card(slot, shown))
+            continue
+        powders = wh.parse_powders(pw)
+        if i == 8:
+            it = wh.weapon_with_powders(it, powders)
+        elif i < 4 and powders:
+            it = wh.armor_with_powders(it, powders)
+        items.append(item_card(it, slot, rolls))
+
+    def num(v):
+        return float(v) if isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v) else None
+    numbers = {k: num(v) for k, v in (p.get("n") or {}).items() if k in _NUM_KEYS and num(v) is not None}
+    numbers = {k: numbers.get(k, 0.0) for k in _NUM_KEYS}
+    sp = p.get("sp")
+    ok_sp = (isinstance(sp, list) and len(sp) == 3 and all(isinstance(r, list) and len(r) == 5 and
+             all(num(x) is not None and -1000 <= x <= 1000 for x in r) for r in sp))
+    sp = dict(zip(("assigned", "extra", "gear"), sp)) if ok_sp else {"assigned": [0] * 5, "extra": [0] * 5, "gear": [0] * 5}
+    floors = {k: num(v) for k, v in (p.get("fl") or {}).items() if k in _FLOOR_KEYS and num(v) is not None} \
+        if isinstance(p.get("fl"), dict) else {}
+    toggles = [_short(t, 60) for t in (p.get("t") or [])[:30] if isinstance(t, str)] if isinstance(p.get("t"), list) else []
+    share = {_short(k, 60): float(v) for k, v in (p.get("ts") or {}).items()
+             if num(v) is not None and 0 < v < 1} if isinstance(p.get("ts"), dict) else {}
+    settings = [_short(s, 200) for s in (p.get("s") or [])[:12] if isinstance(s, str)] if isinstance(p.get("s"), list) else []
+    link = _short(p.get("lk"), 3000)
+    link = link if _LINK_OK.fullmatch(link) else ""
+    goal = p.get("g") if p.get("g") in wh.GOALS else None
+    data_v = _short(p.get("dv"), 30)
+    notes = []
+    if data_v and data_v != str(getattr(d, "version", "")):
+        notes.append(f"Your friend's app has different game data ({data_v}; yours is {d.version}). Item stats shown "
+                     "are from yours; the numbers are from theirs.")
+    entry = {"class": cls, "class_title": wh.CLASS_TITLE[cls], "level": level, "goal": goal,
+             "label": _short(p.get("lb"), 100) or GOAL_LABELS.get(goal, "Score"), "focus": _short(p.get("f"), 100) or None,
+             "floors": floors, "toggles_on": toggles, "toggle_share": share, "numbers": numbers, "items": items, "sp": sp,
+             "owned": owned, "order": order, "link": link, "settings": settings, "rolls": rolls,
+             "date": _short(p.get("d"), 20),
+             "shared_from": {"name": _clean_name(p.get("nm"), ""), "app": _short(p.get("av"), 20), "data": data_v,
+                             "missing": missing, "notes": notes}}
+    return entry, ""
+
+
+def find_saved_build(body: dict):
+    """(build, character name) for {"character_id", "build_id"} (library) or {"history_id"}; (None, "") if gone."""
+    if body.get("history_id"):
+        h = next((x for x in load_history() if x.get("id") == body["history_id"]), None)
+        return h, ""
+    c = next((x for x in load_library()["characters"] if x["id"] == body.get("character_id")), None)
+    b = next((x for x in (c or {}).get("builds", []) if x["id"] == body.get("build_id")), None)
+    return b, (c["name"] if b is not None else "")
+
+
 def build_summary():
     """The last report as data for the visuals, plus its before/after baseline; saves it to history."""
     R = wh.LAST_RESULT
@@ -670,7 +924,8 @@ def build_summary():
            "focus": focus[1] if focus else None, "floors": dict(b.floors), "toggles_on": sorted(on),
            "toggle_share": dict(b.toggle_share), "mask": mask,
            "no_gear": R["no_gear"], "current": pack(R["current"]), "best": pack(R["best"]) if R.get("best") else None,
-           "best_link": R.get("best_link"), "tree": tree_static(tree)}
+           "best_link": R.get("best_link"), "tree": tree_static(tree), "settings": settings_notes(b),
+           "rolls": wh.ROLL_MODE}
     hist = load_history()
     if out["best"]:
         zero = {k: 0.0 for k in out["best"]["numbers"]}
@@ -693,7 +948,8 @@ def build_summary():
                  "focus": out["focus"], "floors": out["floors"], "toggles_on": out["toggles_on"],
                  "toggle_share": out["toggle_share"],
                  "numbers": out["best"]["numbers"], "items": out["best"]["items"], "sp": out["best"]["sp"],
-                 "owned": out["best"]["owned"], "order": out["best"]["order"], "link": out["best_link"]}
+                 "owned": out["best"]["owned"], "order": out["best"]["order"], "link": out["best_link"],
+                 "settings": out["settings"], "rolls": out["rolls"]}
         hist.append(entry)
         save_history(hist)
         out["history_id"] = entry["id"]
@@ -712,6 +968,7 @@ How to work:
 - Baseline stats: the first time they ask for a build (or a new goal), ask whether they want any minimums kept, for example "Any baseline stats you want to keep, like at least 20,000 health or no slower walk speed?". Put it in the same message as any other question you need to ask; if you have everything else, ask it on its own and wait. If they say no or don't care, run without minimums and don't ask again for follow-ups. Pass what they say as minimums (health, ehp, walk_speed in %, mana_regen, health_regen, elemental defenses). "No negative walk speed" means walk_speed 0.
 - Some abilities only give their bonus while a toggle is on. By default the calculator only counts buffs whose timing is known: Bullwhip (on), the best Mystic Mask (you always wear one), Coursing Restraints for the share of time its duration and cooldown allow, and ultimate buffs for the same share as ultimate damage. Everything else (Holy Power, Tricks, Unstable, Blood Pool, Corrupted, "next hit" effects) is off so numbers aren't inflated. If the player says they keep a buff up, pass it in toggles, with a share if it's only part of the time, e.g. "Contamination=70%, Activate Luster Purge". Pass toggles_off for buffs they say they don't keep up. The report's "Toggles and sliders" section shows what each off toggle would add; mention a big one and ask if they keep it up.
 - Characters: the player's saved characters are listed at the end of these instructions. When they mean one ("my shaman", "Sparky", "my main"), pass character with its name instead of asking for class and level: its class, level and current gear are filled in (pass gear only to change it, use_saved_gear false to start from nothing). If they say a character leveled up or was renamed, update it with manage_characters. After a build the app itself asks whether to save it to a character's library; save it with manage_characters only if they ask you to. Don't create characters unless they ask.
+- Sharing and comparing: every saved build has a Share button that makes a share code (starts with WBH1-) a friend pastes into their app (Home page, or in this chat, which opens it straight away), and a Compare button that puts two saved builds side by side (numbers, gear, skill points, abilities). Point the player to those when they ask; you can't make or read share codes yourself.
 - If they want a mix ("mostly damage but I want to survive too", "70/30 spells and tankiness"), pass the main goal plus second_goal and second_goal_weight (the share for the second goal, default 30). This is a weighted mix, softer than a minimum: use minimums when they name a number ("at least 20k health"), the mix when they describe a preference. balanced is the same idea at 50/50 for damage and effective HP.
 - If no build meets every minimum, the report says so and shows the closest one; tell them which minimum couldn't be met and suggest relaxing it.
 - The report shows health, effective HP and walk speed for the best build next to the current gear; mention any big drop in health or walk speed so they can set a minimum.
@@ -1058,6 +1315,23 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, {"ok": True, "has_key": bool(api_key())})
         if self.path == "/api/library":
             return self._send(200, library_action(body))
+        if self.path == "/api/share":                  # a saved build -> share code
+            b, name = find_saved_build(body)
+            if b is None:
+                return self._send(200, {"ok": False, "error": "That build isn't saved any more."})
+            try:
+                return self._send(200, {"ok": True, "code": share_code(b, name)})
+            except Exception as exc:
+                return self._send(200, {"ok": False, "error": f"Couldn't make a share code ({type(exc).__name__})."})
+        if self.path == "/api/share/open":             # share code -> build to look at (not saved yet)
+            entry, err = decode_share(body.get("code"))
+            if entry is None:
+                return self._send(200, {"ok": False, "error": err})
+            try:
+                entry["tree"] = tree_static(wh.Tree(game_data(), entry["class"]))
+            except Exception:
+                pass
+            return self._send(200, {"ok": True, "build": entry})
         if self.path == "/api/history/delete":
             save_history([h for h in load_history() if h.get("id") != body.get("id")])
             return self._send(200, {"ok": True})
