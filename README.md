@@ -78,11 +78,11 @@ There are trillions of possible gear combinations (about 643 trillion for a leve
 4. **Fine-tunes the best few**: ability tree, exact skill point split and powders.
 5. **Searches some more on top**: a quick look at 12 more weapons (32 in Deep search) that step 2 skipped, the full search around the most promising of them, and deeper three-item swaps plus a few shake-ups around the best builds. These only add builds to choose from; everything above is kept exactly as it was, and the answer is the best of all of them, so this step can only find better builds, never worse ones.
 
-6. **Designs crafted items** for the best builds: for each slot (weapon included) it designs the crafted item that makes the whole build best with the rest of the build on, and keeps it where it beats the normal item; then fine-tunes again around the crafts. See "Crafted items" below. Like step 5, this only adds builds to choose from.
+6. **Designs crafted items** (only when you ask for them) for the best builds: for each slot (weapon included) it designs the crafted item that makes the whole build best with the rest of the build on, and keeps it where it beats the normal item; then fine-tunes again around the crafts. See "Crafted items" below. Like step 5, this only adds builds to choose from.
 
 If you set minimum stats, a build that misses one always scores below every build that meets them all, so the search moves toward builds that qualify and then maximizes your goal among them. If nothing in range can meet them all, the report says which minimum was missed and shows the closest build.
 
-It uses every CPU core, and remembers builds it has already scored, so repeats cost nothing. The weapons, the fine-tuning of the best builds, the deeper search, the shake-ups and the crafted items for every top build all run side by side on separate cores, and each gives exactly the answer it would one at a time. **Deep search** is the default (untick it in the app, or use `--quick`, for a faster search). It tries more weapons, more starting points and three-item swaps, then shakes up the best build and searches again, and designs crafted items; on an 8-core / 16-thread PC it takes about 4 to 9 minutes at level 100+ (about twice as fast as version 1.6), less at lower levels. Progress and time left are shown, and you can stop anytime and keep the best build so far.
+It uses every CPU core, and remembers builds it has already scored, so repeats cost nothing. The weapons, the fine-tuning of the best builds, the deeper search, the shake-ups and the crafted items for every top build all run side by side on separate cores, and each gives exactly the answer it would one at a time. **Deep search** is the default (untick it in the app, or use `--quick`, for a faster search). It tries more weapons, more starting points and three-item swaps, then shakes up the best build and searches again, and designs crafted items if you asked for them; on an 8-core / 16-thread PC it takes about 4 to 9 minutes at level 100+ (about twice as fast as version 1.6), less at lower levels. Progress and time left are shown, and you can stop anytime and keep the best build so far.
 
 Every speed-up is checked to change nothing: `tests/same_numbers.py` compares every number of 2,000 random builds with a recorded reference, and `tests/search_timing.py` shows that the builds found (items, powders, tree, skill points, score) are exactly the same as before.
 
@@ -94,11 +94,10 @@ Every result says **how sure** it is: how many independent search attempts (each
 
 ## Crafted items
 
-The search designs crafted items for your build and uses them wherever they beat normal items (often accessories and mid-level gear). For each slot it picks the highest recipe you can wear (most health or damage), tier 3 materials, for weapons the best attack speed, and the six ingredients and where each goes in the 3 x 2 grid (some ingredients make their neighbours stronger or weaker). Every craft follows the game's crafting rules, the same ones Wynnbuilder's crafter checks: each ingredient usable by that profession, none above the recipe's level range, and durability left over.
+Crafted items are **off unless you ask for them**: tick "Design crafted items" in the form, tell the bot you want crafted items, or use `--crafted`. Then the search designs crafted items for your build and uses them wherever they beat normal items (often accessories and mid-level gear). For each slot it picks the highest recipe you can wear (most health or damage), tier 3 materials, for weapons the best attack speed, and the six ingredients and where each goes in the 3 x 2 grid (some ingredients make their neighbours stronger or weaker). Every craft follows the game's crafting rules, the same ones Wynnbuilder's crafter checks: each ingredient usable by that profession, none above the recipe's level range, and durability left over.
 
 The report and the "How to craft" panel show each crafted piece's recipe, materials, the ingredient grid, where each ingredient drops, and a link that opens it in Wynnbuilder's crafter. Someone has to craft it: you (you can craft an item up to your own level in that profession) or a crafter. Crafted stats use the best rolls, like every other item (Wynnbuilder does the same).
 
-Don't want crafted items? Untick "Design crafted items" in the form, tell the bot, or use `--no-crafted`.
 
 How well the designer does is checked in `tests/craft_check.py`: on small cases every possible ingredient grid is tried and the designer must find one exactly as good, and every craft it designs is checked against the crafting rules.
 
@@ -168,7 +167,7 @@ python3 wynn_helper.py --class warrior --level 60 --goal melee --min "hp=6000, w
 | `--min` | Minimum stats every suggested build must keep, e.g. `"hp=20000, walk speed=0"`. Stats: health (`hp`), effective HP (`ehp`, against `--enemy` if given), `walk speed` (%), `mana regen`, `health regen`, and `earth`/`thunder`/`water`/`fire`/`air def` |
 | `--min-hp`, `--min-ehp`, `--min-walk-speed`, `--min-mana-regen` | The same minimums one at a time |
 | `--drops-only` | Only suggest items that drop from mobs, loot chests or dungeons |
-| `--no-crafted` | Don't design crafted items for the build (they're designed by default) |
+| `--crafted` | Also design crafted items for the build (off by default; `--no-crafted` is the default) |
 | `--no-whole-build` | Skip choosing all gear together (faster) |
 | `--quick` | Faster normal search (about a minute) instead of the default deep search |
 | `--time-limit` | Stop the whole-build search after this many seconds and keep the best so far |

@@ -492,10 +492,31 @@ def live_pools_hint(build, include_never=True, min_level=1):
 def live_snapshot(full=False) -> dict:
     out = {k: v for k, v in LIVE.items() if k not in ("pools", "evals0", "worker_evals")}
     out["evals"] = (wh.EVAL_STATS["n"] - LIVE.get("evals0", 0) + LIVE.get("worker_evals", 0)) if LIVE else 0
-    out["phases"] = PHASES
+    out["phases"] = PHASES + ([CRAFT_PHASE] if LIVE.get("crafted_on") else [])
     if full:
         out["pools"] = LIVE.get("pools", {})
     return out
+
+
+CRAFT_PHASE = "Designing crafted items"
+
+
+def _live_craft_start(build):
+    """The Forge's crafting bench: a 3 x 2 grid per slot, and ingredients to shuffle through while it designs."""
+    import random as _r
+    d, level = build.data, build.level
+    pool = sorted((g for g in d.ingredients.values() if g["id"] != 4000 and not g.get("isPowder")
+                   and (g.get("lvl") or 0) <= level), key=lambda g: (g.get("lvl") or 0, g["id"]))
+    pool = _r.Random(level).sample(pool[-160:], min(60, len(pool[-160:])))   # its own random numbers, not the search's
+    LIVE["craft"] = {"pass": 0, "pool": [[g["name"], g.get("tier", 0)] for g in pool],
+                     "slots": [{"slot": wh.SLOT_LABELS[s] if s != "weapon" else "Weapon", "grid": None, "state": "waiting"}
+                               for s in CRAFT_SLOTS]}
+
+
+def _live_craft_grid(build, it):
+    ings = build.data.ingredients
+    return [None if i == 4000 else [(ings.get(i) or {}).get("name", "?"), (ings.get(i) or {}).get("tier", 0)]
+            for i in it.link_code[3]]
 
 
 def _names(a, wpn):
@@ -1129,7 +1150,7 @@ class _CraftRunner:
             self.ex = None
 
 
-def _craft_stage(build, f, kicks, out_of_time, info, runner=None):
+def _craft_stage(build, f, kicks, out_of_time, info, runner=None, live=False):
     """Starting from one finished build, design a crafted item for every slot (all for the same build), then
     try them one at a time and keep each that makes the whole build better; repeat while anything changes.
     Returns (value, armor, base weapon, weapon, spare points, tree) if any craft was kept, else None."""
@@ -1154,10 +1175,18 @@ def _craft_stage(build, f, kicks, out_of_time, info, runner=None):
     for _pass in range(3):
         if out_of_time():
             break
+        lc = LIVE.get("craft") if live else None
+        if lc is not None:
+            lc["pass"] = _pass + 1
+            for sl in lc["slots"]:
+                sl.update(grid=None, state="designing", gain=None)
         designs = runner.run([(own, list(a), wp, list(e), slot, kicks) for slot in CRAFT_SLOTS])
         info["designed"] += len(CRAFT_SLOTS)
+        if lc is not None:
+            for sl, found in zip(lc["slots"], designs):
+                sl.update(grid=_live_craft_grid(build, found[0][1]), state="trying") if found else sl.update(state="none")
         changed = False
-        for found in designs:
+        for k, found in enumerate(designs):
             for where, it in found:
                 a2, wpn2 = list(a), wpn
                 if where == "weapon":
@@ -1168,9 +1197,14 @@ def _craft_stage(build, f, kicks, out_of_time, info, runner=None):
                     a2[where] = it
                 got = full(a2, wpn2)
                 if got is not None and better(got[0], v, 1.000001):
+                    if lc is not None:
+                        lc["slots"][k].update(state="kept", gain=(got[0] / v - 1) * 100 if v > 0 else None,
+                                              grid=_live_craft_grid(build, it))
                     v, e, wp = got
                     a, wpn = a2, wpn2
                     changed = kept = True
+            if lc is not None and lc["slots"][k]["state"] == "trying":
+                lc["slots"][k]["state"] = "not better"
         if not changed:
             break
     if not kept:
@@ -1336,6 +1370,8 @@ def search_best_build(build, owned, armor0, weapon0, base_weapon0, keep=(), ap_b
     level, cls = build.level, build.tree.cls
     slots = list(range(8)) + ["weapon"]
     LIVE["phase"] = 0
+    LIVE["crafted_on"] = bool(crafted)
+    LIVE.pop("craft", None)
     LIVE["label"] = (build.focus[1] if build.goal == "ability" and build.focus else GOAL_LABELS.get(build.goal, "Score"))
     if getattr(build, "goal2", None):
         LIVE["label"] = f"{LIVE['label']} + {round(build.goal2_weight * 100)}% {GOAL_LABELS.get(build.goal2, build.goal2)}"
@@ -1575,8 +1611,9 @@ def search_best_build(build, owned, armor0, weapon0, base_weapon0, keep=(), ap_b
     craft_info = {"on": bool(crafted), "designed": 0, "found_by": None, "before": finals[0][0]}
     t_craft = time.time()
     if crafted and not out_of_time():
-        LIVE["phase"] = 4
+        LIVE["phase"] = len(PHASES)                 # "Designing crafted items"
         _PHASE[:] = [top, 1.0]
+        _live_craft_start(build)
         tops, names = [], set()
         for f in sorted(finals, key=lambda x: -x[0]):
             key = (tuple(it.name if it else None for it in f[1]), f[3].name)
@@ -1594,14 +1631,16 @@ def search_best_build(build, owned, armor0, weapon0, base_weapon0, keep=(), ap_b
                 # its own, so the results are the same as one after another).
                 from concurrent.futures import ThreadPoolExecutor
                 with ThreadPoolExecutor(max_workers=len(tops)) as tp:
-                    got_all = list(tp.map(lambda fi: _craft_stage(build, fi[0], P.get("craft_kicks", 24), out_of_time,
-                                                                   fi[1], runner), zip(tops, infos)))
+                    got_all = list(tp.map(lambda fi: _craft_stage(build, fi[0][0], P.get("craft_kicks", 24), out_of_time,
+                                                                   fi[0][1], runner, live=fi[1] == 0),
+                                          zip(zip(tops, infos), range(len(tops)))))
             else:
                 got_all = []
                 for f, inf in zip(tops, infos):
                     if out_of_time():
                         break
-                    got_all.append(_craft_stage(build, f, P.get("craft_kicks", 24), out_of_time, inf, runner))
+                    got_all.append(_craft_stage(build, f, P.get("craft_kicks", 24), out_of_time, inf, runner,
+                                                live=f is tops[0]))
             gots = [g for g in got_all if g is not None]
             craft_info["designed"] += sum(i["designed"] for i in infos)
         finally:
@@ -1633,7 +1672,7 @@ def search_best_build(build, owned, armor0, weapon0, base_weapon0, keep=(), ap_b
             powdered.append((fin2["value"], a2, wp, wpn, own, e2, free2, fin2) if fin2["value"] > v else f)
         finals = sorted(powdered, key=lambda x: -x[0])
     _PHASE[:] = [0.0, 1.0]
-    LIVE["phase"] = 5
+    LIVE["phase"] = len(PHASES) + (1 if crafted else 0)       # done
     # Last check, worked out from scratch: never hand back gear the level can't wear, or a craft that can't
     # be made.
     finals = [f for f in finals if not any(getattr(x, "craft_problems", None) for x in list(f[1]) + [f[3]])] or finals

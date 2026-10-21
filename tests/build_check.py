@@ -9,7 +9,7 @@ For every class it checks:
   * skill points, worked out from scratch: gear needs + spare points fit the level, no skill over 100
   * the ability tree is legal and fits the ability points for the level
   * any minimums asked for are met
-  * crafted pieces (designed by default) can be made in game, and their crafter codes read back the same
+  * crafted pieces (when asked for) can be made in game, and their crafter codes read back the same
   * the build as a share code opens as exactly the same build (items, powders, crafts, tree, skill points)
   * the score is at least the score recorded in tests/golden/build_baseline.json (builds never get worse)
 
@@ -36,19 +36,21 @@ import wynn_search as ws        # noqa: E402
 BASELINE = os.path.join(HERE, "golden", "build_baseline.json")
 
 # One case per class (each with a different goal), plus one with minimums and one that uses an ability buff.
+# Crafted items are off by default (the player asks for them), so the cases that test them ask for them.
 CASES = [
-    {"name": "warrior L50 melee", "class": "warrior", "level": 50, "goal": "melee"},
-    {"name": "mage L40 spells", "class": "mage", "level": 40, "goal": "spells"},
-    {"name": "archer L60 melee", "class": "archer", "level": 60, "goal": "melee"},
-    {"name": "shaman L60 spells", "class": "shaman", "level": 60, "goal": "spells"},
-    {"name": "assassin L50 balanced", "class": "assassin", "level": 50, "goal": "balanced"},
+    {"name": "warrior L50 melee", "class": "warrior", "level": 50, "goal": "melee", "crafted": True},
+    {"name": "mage L40 spells", "class": "mage", "level": 40, "goal": "spells", "crafted": True},
+    {"name": "archer L60 melee", "class": "archer", "level": 60, "goal": "melee", "crafted": True},
+    {"name": "shaman L60 spells", "class": "shaman", "level": 60, "goal": "spells", "crafted": True},
+    {"name": "assassin L50 balanced", "class": "assassin", "level": 50, "goal": "balanced", "crafted": True},
     {"name": "mage L45 survival, min 2500 health", "class": "mage", "level": 45, "goal": "survival",
-     "minimums": {"health": 2500}},
+     "minimums": {"health": 2500}, "crafted": True},
     {"name": "assassin L55 spells, Aerial Ace 50%", "class": "assassin", "level": 55, "goal": "spells",
-     "toggles": ["Aerial Ace=50%"]},
-    {"name": "warrior L50 melee, no crafted items", "class": "warrior", "level": 50, "goal": "melee", "crafted": False},
+     "toggles": ["Aerial Ace=50%"], "crafted": True},
+    # crafted items are off unless asked for: this one asks for nothing, so it checks the default too
+    {"name": "warrior L50 melee, no crafted items", "class": "warrior", "level": 50, "goal": "melee"},
     {"name": "shaman L70 spells 70% + survival 30%", "class": "shaman", "level": 70, "goal": "spells",
-     "second_goal": "survival", "second_goal_weight": 30},
+     "second_goal": "survival", "second_goal_weight": 30, "crafted": True},
 ]
 
 RESULTS = []
@@ -91,8 +93,8 @@ def problems_with(case, res):
     for it in armor + [weapon]:                  # crafted pieces: can be made in game, and the code reads back
         if not getattr(it, "crafted", False) or not getattr(it, "link_code", None):
             continue
-        if case.get("crafted") is False:
-            out.append(f"crafted {it.type} with crafted items turned off")
+        if case.get("crafted") is not True:
+            out.append(f"crafted {it.type} without asking for crafted items")
         if it.craft_problems or it.missing_durability is not None:
             out.append(f"crafted {it.type} can't be made: {it.craft_problems}")
         back = wh.crafted_from_code(wh.LAST_RESULT["build"].data, "CR-" + wh.craft_code(it))

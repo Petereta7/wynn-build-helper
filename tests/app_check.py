@@ -273,12 +273,14 @@ def check_library():
             ok_bot &= "Zap: level 25 Mage" in ctx and "Temporal Cage" in ctx and "a crafted piece" in ctx
             seen = {}
             real_run = wynn_app.wh.run
-            wynn_app.wh.run = lambda a: (seen.update(cls=a.cls, level=a.level, gear=a.gear), print("fake report"))
+            wynn_app.wh.run = lambda a: (seen.update(cls=a.cls, level=a.level, gear=a.gear, crafted=not a.no_crafted), print("fake report"))
             try:
                 out = wynn_app.run_report({"character": "Zap", "goal": "spells"})
-                ok_bot &= seen == {"cls": "mage", "level": 25, "gear": "Temporal Cage, CR-ABC"} and out["character_id"] == cid
+                ok_bot &= seen == {"cls": "mage", "level": 25, "gear": "Temporal Cage, CR-ABC", "crafted": False} and out["character_id"] == cid
                 out = wynn_app.run_report({"character": "Zap", "level": 30, "use_saved_gear": False})
                 ok_bot &= seen["level"] == 30 and not seen["gear"]
+                wynn_app.run_report({"character": "Zap", "crafted": True})       # crafted items only when asked
+                ok_bot &= seen["crafted"] is True
             finally:
                 wynn_app.wh.run = real_run
             wynn_app.save_history([{"id": "h2", "class": "mage", "class_title": "Mage", "level": 30, "goal": "melee",
@@ -439,6 +441,35 @@ def check_sharing():
             wynn_app.LIBRARY_PATH, wynn_app.HISTORY_PATH = saved
 
 
+def check_craft_table():
+    """The crafting table's numbers add up: what each ingredient adds at its spot (shown on the tiles) sums to the
+    crafted item's own stats and skill points, on 400 crafts from tests/golden/craft_cases.json."""
+    import collections
+    import wynn_app
+    import wynn_helper as wh
+    wynn_app.STATE["data_checked"] = True
+    d = wynn_app.game_data()
+    by = {r.get("name"): rid for rid, r in d.recipes.items()}
+    words = {v: k for k, v in wynn_app._SKILL_WORDS.items()}
+    words.update({v: k for k, v in wynn_app.STAT_NAMES.items()})
+    bad, n = [], 0
+    for c in json.load(open(os.path.join(HERE, "golden", "craft_cases.json"), encoding="utf-8"))[:400]:
+        if c["recipe"] not in by:
+            continue
+        it = wh.make_crafted(d, by[c["recipe"]], c["mats"], c["ings"], c["atk"])
+        cells = wynn_app.item_card(it, "x")["craft"]["cells"]
+        tot = collections.Counter()
+        for cell in cells:
+            for k, v in (cell or {}).get("stats", []):
+                tot[words.get(k, k)] += v
+        want = {k: v for k, v in it.max_stats.items() if v and k != "hp" and not k.endswith("Def")}
+        want.update({s: it.bonus[i] for i, s in enumerate(wh.SKILLS) if it.bonus[i]})
+        n += 1
+        if {k: v for k, v in tot.items() if v} != want or len(cells) != 6:
+            bad.append(c["recipe"])
+    check("crafting table adds up to the crafted item", not bad and n > 300, f"({n} crafts" + (f"; wrong: {bad[:3]})" if bad else ")"))
+
+
 def main():
     check_code()
     check_release_files()
@@ -446,6 +477,7 @@ def main():
     check_server()
     check_library()
     check_sharing()
+    check_craft_table()
     print(f"\n{sum(RESULTS)}/{len(RESULTS)} checks passed.")
     sys.exit(0 if all(RESULTS) else 1)
 

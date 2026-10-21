@@ -760,6 +760,38 @@ def _ing_prep(ing):
     return prep
 
 
+def craft_effectiveness(preps) -> list:
+    """Each grid position's effectiveness in % (3 rows x 2 columns, read left to right, top to bottom): 100,
+    plus or minus what the position effects of the other ingredients give it (Wynnbuilder craft.js)."""
+    eff = [[100, 100], [100, 100], [100, 100]]
+    for n, prep in enumerate(preps):
+        i, j = n // 2, n % 2
+        for key, value in prep[0]:
+            if key == "above":
+                for k in range(i - 1, -1, -1):
+                    eff[k][j] += value
+            elif key == "under":
+                for k in range(i + 1, 3):
+                    eff[k][j] += value
+            elif key == "left":
+                if j == 1:
+                    eff[i][0] += value
+            elif key == "right":
+                if j == 0:
+                    eff[i][1] += value
+            elif key == "touching":
+                for k in range(3):
+                    for l in range(2):
+                        if (abs(k - i) == 1 and l == j) or (k == i and abs(l - j) == 1):
+                            eff[k][l] += value
+            elif key == "notTouching":
+                for k in range(3):
+                    for l in range(2):
+                        if abs(k - i) > 1 or (abs(k - i) == 1 and abs(l - j) == 1):
+                            eff[k][l] += value
+    return [eff[0][0], eff[0][1], eff[1][0], eff[1][1], eff[2][0], eff[2][1]]
+
+
 _EFF_MULT = {}
 
 
@@ -823,34 +855,7 @@ def _make_crafted(data, recipe_id: int, mat_tiers, ing_ids, atk_spd: str = "SLOW
                 fixed[POWDER_ELEMS[p.elem] + "Def"] += plus
                 fixed[POWDER_ELEMS[(p.elem + 4) % 5] + "Def"] -= minus
     preps = [_ing_prep(ing) for ing in ings]
-    # Ingredient effectiveness grid (3 rows x 2 columns).
-    eff = [[100, 100], [100, 100], [100, 100]]
-    for n, ing in enumerate(ings):
-        i, j = n // 2, n % 2
-        for key, value in preps[n][0]:
-            if key == "above":
-                for k in range(i - 1, -1, -1):
-                    eff[k][j] += value
-            elif key == "under":
-                for k in range(i + 1, 3):
-                    eff[k][j] += value
-            elif key == "left":
-                if j == 1:
-                    eff[i][0] += value
-            elif key == "right":
-                if j == 0:
-                    eff[i][1] += value
-            elif key == "touching":
-                for k in range(3):
-                    for l in range(2):
-                        if (abs(k - i) == 1 and l == j) or (k == i and abs(l - j) == 1):
-                            eff[k][l] += value
-            elif key == "notTouching":
-                for k in range(3):
-                    for l in range(2):
-                        if abs(k - i) > 1 or (abs(k - i) == 1 and abs(l - j) == 1):
-                            eff[k][l] += value
-    flat = [eff[0][0], eff[0][1], eff[1][0], eff[1][1], eff[2][0], eff[2][1]]
+    flat = craft_effectiveness(preps)
     reqs = defaultdict(int)
     min_r, max_r = defaultdict(float), defaultdict(float)
     for n, ing in enumerate(ings):
@@ -4910,7 +4915,7 @@ def run(args):
         wb = ws.search_best_build(floor_build, chosen, armor, weapon, base_weapon, keep=keep_ids, ap_budget=budget,
                                   include_never=include_never, min_level=min_lvl,
                                   deep=getattr(args, "deep", False), time_limit=getattr(args, "time_limit", None),
-                                  log=lambda m: print("  " + m), crafted=not getattr(args, "no_crafted", False))
+                                  log=lambda m: print("  " + m), crafted=not getattr(args, "no_crafted", True))
         if wb.get("stopped"):
             print("  (Stopped early: this is the best build found so far.)")
         bs = wb.get("bonus_search") or {}
@@ -5215,8 +5220,10 @@ def make_parser():
                    help="skip choosing all gear together (faster)")
     p.add_argument("--deep", action="store_true", default=True,
                    help="deep search for the best whole build (the default)")
-    p.add_argument("--no-crafted", action="store_true",
-                   help="leave crafted items out of the whole-build search (they're designed for your build by default)")
+    p.add_argument("--crafted", dest="no_crafted", action="store_false",
+                   help="also design crafted items for your build (off by default)")
+    p.add_argument("--no-crafted", dest="no_crafted", action="store_true", default=True,
+                   help="leave crafted items out of the whole-build search (the default)")
     p.add_argument("--quick", dest="deep", action="store_false",
                    help="faster, normal search instead of deep search (about a minute)")
     p.add_argument("--time-limit", type=float, default=None,

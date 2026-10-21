@@ -184,7 +184,7 @@ def run_report(params: dict) -> dict:
     args.buffs = _as_list_text(params.get("buffs"))
     args.raid_buffs = _as_list_text(params.get("raid_buffs"))
     args.drops_only = bool(params.get("drops_only"))
-    args.no_crafted = params.get("crafted") is False          # crafted items are designed unless asked not to
+    args.no_crafted = params.get("crafted") is not True       # crafted items only when the player asks for them
     if params.get("rolls") in wh.ROLL_MODES:
         args.rolls = params["rolls"]
     if params.get("poison") in ("wynnbuilder", "low"):
@@ -377,6 +377,46 @@ def _clean_desc(text: str) -> str:
     return _re.sub(r"\n{3,}", "\n\n", t).strip()
 
 
+_SKILL_WORDS = {"str": "Strength", "dex": "Dexterity", "int": "Intelligence", "def": "Defense", "agi": "Agility"}
+_POS_WORDS = {"above": "the ingredients above it", "under": "the ingredients below it", "left": "the one on its left",
+              "right": "the one on its right", "touching": "the ones touching it", "notTouching": "the ones not touching it"}
+
+
+def craft_cells(it) -> list:
+    """The six grid positions of a crafted item for the crafting table: each ingredient with how strong its
+    position makes it (effectiveness), what it adds there (best rolls, like the item), its requirements and
+    durability, what it does to its neighbours, and where it drops. Same maths as the crafted item itself."""
+    d = game_data()
+    _k, _rid, _mats, ids, _atk = it.link_code
+    ings = [d.ingredients.get(i) for i in ids]
+    if any(g is None for g in ings):
+        return []
+    preps = [wh._ing_prep(g) for g in ings]
+    eff = wh.craft_effectiveness(preps)
+    cells = []
+    for n, (g, prep) in enumerate(zip(ings, preps)):
+        if g["id"] == 4000:
+            cells.append(None)
+            continue
+        mult = float(f"{eff[n] / 100:.2f}")
+        pm, item_ids, rolled, is_powder = prep
+        stats = []
+        for key, mn, mx in rolled:
+            lo, hi = sorted([math.floor(mn * mult), math.floor(mx * mult)])
+            if hi:
+                stats.append([_SKILL_WORDS.get(key) or STAT_NAMES.get(key, key), hi])
+        reqs = []
+        for key, value in item_ids:
+            v = wh._js_round(value) if is_powder else wh._js_round(value * mult + 1e-9)
+            if v and key.endswith("Req"):
+                reqs.append([_SKILL_WORDS.get(key[:-3], key[:-3]), v])
+        cells.append({"name": g.get("name", "?"), "tier": g.get("tier", 0), "level": g.get("lvl", 0), "eff": eff[n],
+                      "stats": stats, "reqs": reqs, "dura": (g.get("itemIDs") or {}).get("dura", 0) or 0,
+                      "pos": [[k, v, _POS_WORDS.get(k, k)] for k, v in pm], "powder": bool(is_powder),
+                      "drops": "" if is_powder else wh.ingredient_sources(d, g.get("name", ""))})
+    return cells
+
+
 def _roll_stats(it, rolls=None) -> dict:
     """An item's stats for these rolls ("max", "avg", "min", "base"; None = the calculator's current setting).
     Doesn't change the calculator's setting, so it's safe while a build is running."""
@@ -412,7 +452,10 @@ def item_card(it, slot: str, rolls=None):
         card["craft"] = {"recipe": rec.get("name", ""), "profession": (rec.get("skill") or "").capitalize(),
                          "mats": list(lc[2]), "grid": ["" if i == 4000 else (ings.get(i) or {}).get("name", "?") for i in lc[3]],
                          "durability": list(getattr(it, "durability", []) or []),
-                         "link": wh.CRAFTER_URL + wh.craft_code(it)}
+                         "link": wh.CRAFTER_URL + wh.craft_code(it),
+                         "level": [(rec.get("lvl") or {}).get("minimum", 0), (rec.get("lvl") or {}).get("maximum", 0)],
+                         "atk_spd": str(lc[4]).lower() if card.get("type") in wh.WEAPON_TYPES else "",
+                         "cells": craft_cells(it)}
     if getattr(it, "category", "") == "weapon" or slot == "Weapon":
         card["atk_spd"] = str(getattr(it, "atk_spd", "") or "").replace("_", " ").lower()
         card["damage"] = [[wh.ELEM_NAMES[i], round(lo), round(hi)] for i, (lo, hi) in enumerate(it.damage or []) if hi]
@@ -965,7 +1008,13 @@ You have a calculator (the analyze_build tool) that uses Wynnbuilder's exact for
 
 How to work:
 - To run the calculator you need the class and combat level, or a Wynnbuilder link. If either is missing, ask for it in one short question. Ask about gear too, but if they don't know or don't care, run without it.
-- Baseline stats: the first time they ask for a build (or a new goal), ask whether they want any minimums kept, for example "Any baseline stats you want to keep, like at least 20,000 health or no slower walk speed?". Put it in the same message as any other question you need to ask; if you have everything else, ask it on its own and wait. If they say no or don't care, run without minimums and don't ask again for follow-ups. Pass what they say as minimums (health, ehp, walk_speed in %, mana_regen, health_regen, elemental defenses). "No negative walk speed" means walk_speed 0.
+- Questions before a build (class, level, gear, minimums) must be short and easy to scan: one line each, a few words, no explanations or examples beyond a couple of words. If you need several, put them as a short list, e.g.
+  "Quick check before I start:
+  - Any minimums? (e.g. 20k health, no slower walk speed)
+  - Gear you're wearing? (or skip)"
+  Don't ask about crafted items; they're only used when the player brings them up.
+  Save longer explanations for when you explain a decision or a result.
+- Baseline stats: the first time they ask for a build (or a new goal), ask whether they want any minimums kept, as one short line like the example above. Put it in the same message as any other question you need to ask; if you have everything else, ask it on its own and wait. If they say no or don't care, run without minimums and don't ask again for follow-ups. Pass what they say as minimums (health, ehp, walk_speed in %, mana_regen, health_regen, elemental defenses). "No negative walk speed" means walk_speed 0.
 - Some abilities only give their bonus while a toggle is on. By default the calculator only counts buffs whose timing is known: Bullwhip (on), the best Mystic Mask (you always wear one), Coursing Restraints for the share of time its duration and cooldown allow, and ultimate buffs for the same share as ultimate damage. Everything else (Holy Power, Tricks, Unstable, Blood Pool, Corrupted, "next hit" effects) is off so numbers aren't inflated. If the player says they keep a buff up, pass it in toggles, with a share if it's only part of the time, e.g. "Contamination=70%, Activate Luster Purge". Pass toggles_off for buffs they say they don't keep up. The report's "Toggles and sliders" section shows what each off toggle would add; mention a big one and ask if they keep it up.
 - Characters: the player's saved characters are listed at the end of these instructions. When they mean one ("my shaman", "Sparky", "my main"), pass character with its name instead of asking for class and level: its class, level and current gear are filled in (pass gear only to change it, use_saved_gear false to start from nothing). If they say a character leveled up or was renamed, update it with manage_characters. After a build the app itself asks whether to save it to a character's library; save it with manage_characters only if they ask you to. Don't create characters unless they ask.
 - Sharing and comparing: every saved build has a Share button that makes a share code (starts with WBH1-) a friend pastes into their app (Home page, or in this chat, which opens it straight away), and a Compare button that puts two saved builds side by side (numbers, gear, skill points, abilities). Point the player to those when they ask; you can't make or read share codes yourself.
@@ -976,7 +1025,7 @@ How to work:
 - Otherwise pick the goal from what they say: melee whenever they ask for "DPS" or "highest DPS" (this is exactly Wynnbuilder's Average DPS: main attack damage per hit x attack speed, which is what players compare), spells only when they talk about spell damage or casting, burst for one big combo, survival (tanky / keeps dying), balanced (damage and survival), healing (support). If unclear, use melee for "damage/DPS". If they keep dying to a particular boss or element, pass that as the enemy hit.
 - Pass item and ability names exactly as the player wrote them; the calculator corrects spelling and says so. "Mana bank" means the Mage ability Arcane Transfer.
 - Crafted items are written as codes starting with CR- (and custom items CI-); pass them as gear.
-- The search also designs crafted items for the build (recipe, materials and the 6-ingredient grid, following the game's crafting rules) and uses them where they beat normal items. The report's "Crafted pieces" part says how to make each one and where its ingredients drop. When the best build has crafted pieces, say which and what they add; someone has to craft them (the player, with the profession level the report gives, or a crafter). If the player doesn't want crafted items (doesn't craft, wants only drops, can't get the ingredients), set crafted to false.
+- Crafted items are off unless the player asks for them. Set crafted to true only when they say they want crafted items in the build (e.g. "with crafted items", "I can craft", "include crafteds"); otherwise leave it out. With crafted on, the search designs crafted items for the build (recipe, materials and the 6-ingredient grid, following the game's crafting rules) and uses them where they beat normal items, and the report's "Crafted pieces" part says how to make each one and where its ingredients drop. When the best build has crafted pieces, say which and what they add; someone has to craft them (the player, with the profession level the report gives, or a crafter). If they ask whether crafted items would help, you can offer to run it with crafted on.
 - Deep search is the default and takes several minutes. Only set deep_search to false if they ask for something quick, or for small follow-up questions where a rough answer is enough.
 - Think about the build as a whole, never as the best item per slot. The report's "Best whole build" section is the calculator choosing every piece together with the rest of the build on (skill points items give and need from each other, set bonuses, elements and powders, major IDs, the ability tree re-planned for that gear). Lead with that when the player wants a new build or upgrades, and use the one-slot list only for a single quick swap.
 - Explain the synergy in plain words: why these pieces work together, for example "Ajax's +13 Strength covers the Strength the chestplate and leggings need, which frees points for Dexterity", "two Corrupted pieces turn on the set bonus", "every piece adds air damage, matching the air powders and Wind Prison". Check item details with lookup_item when you explain, so what you say is true. If a piece is there mainly to enable others, say so.
@@ -1055,8 +1104,8 @@ TOOLS = [
                 "buffs": {"type": "array", "items": {"type": "string", "enum": list(wh.BUFFS)}},
                 "raid_buffs": {"type": "array", "items": {"type": "string"}},
                 "drops_only": {"type": "boolean", "description": "Only suggest items that drop from mobs, chests or dungeons"},
-                "crafted": {"type": "boolean", "description": "Design crafted items for the build (default true). False when "
-                            "the player doesn't want crafted items."},
+                "crafted": {"type": "boolean", "description": "Design crafted items for the build too (default false). True only "
+                            "when the player asks for crafted items."},
                 "rolls": {"type": "string", "enum": wh.ROLL_MODES,
                           "description": "Item rolls: max (default, like Wynnbuilder), avg, min, base"},
                 "poison": {"type": "string", "enum": ["wynnbuilder", "low"]},

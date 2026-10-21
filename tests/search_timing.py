@@ -24,11 +24,11 @@ sys.path.insert(0, HERE)
 os.environ["WYNN_HELPER_NO_POPUP"] = "1"
 
 CLASS_CASES = [
-    {"name": "warrior L106 melee", "class": "warrior", "level": 106, "goal": "melee"},
-    {"name": "mage L106 spells", "class": "mage", "level": 106, "goal": "spells"},
-    {"name": "archer L100 melee", "class": "archer", "level": 100, "goal": "melee"},
-    {"name": "shaman L80 spells", "class": "shaman", "level": 80, "goal": "spells"},
-    {"name": "assassin L106 balanced", "class": "assassin", "level": 106, "goal": "balanced"},
+    {"name": "warrior L106 melee", "class": "warrior", "level": 106, "goal": "melee", "crafted": True},
+    {"name": "mage L106 spells", "class": "mage", "level": 106, "goal": "spells", "crafted": True},
+    {"name": "archer L100 melee", "class": "archer", "level": 100, "goal": "melee", "crafted": True},
+    {"name": "shaman L80 spells", "class": "shaman", "level": 80, "goal": "spells", "crafted": True},
+    {"name": "assassin L106 balanced", "class": "assassin", "level": 106, "goal": "balanced", "crafted": True},
 ]
 
 

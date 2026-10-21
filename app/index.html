@@ -364,6 +364,57 @@ label.deep input[type=checkbox] { width: auto; flex: 0 0 auto; margin-top: 3px; 
 .craft .ca { margin-top: 8px; font-size: 12px; }
 .craft .ca a { color: #2bc4c4; }
 .tipgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 8px; font-size: 12px; margin-top: 3px; }
+/* the crafting bench in The Forge */
+.fbench { margin: 14px 0 4px; padding: 12px 14px; border-radius: var(--r-md); border: 1px solid color-mix(in srgb, #2bc4c4 45%, var(--line)); background: rgba(10, 30, 34, .45); animation: savein .6s ease both; }
+.fbhead { margin-bottom: 8px; } .fbhead b { font-family: var(--display); color: #2bc4c4; font-size: 17px; font-weight: 600; } .fbhead span { color: var(--muted); font-size: 13px; margin-left: 8px; }
+.fbgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.fbslot { padding: 6px; border-radius: 6px; background: #1b1b1b; box-shadow: inset 2px 2px 0 #0c0c0c, inset -2px -2px 0 #3a3a3a; transition: opacity .3s, box-shadow .3s; }
+.fbslot .fbl { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0 6px; font-size: 12px; color: #cfcfcf; margin: 0 2px 4px; }
+.fbslot .fbst { color: var(--faint); font-size: 11px; white-space: nowrap; }
+.fbtiles { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; }
+.fbt { font-size: 10.5px; font-weight: 700; padding: 3px 4px; min-height: 15px; border-radius: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #888;
+  background: linear-gradient(180deg, #474747, #363636); box-shadow: inset 1px 1px 0 #5c5c5c, inset -1px -1px 0 #262626; text-shadow: 1px 1px 0 #111; }
+.fbt.e { color: #777; font-weight: 400; font-style: italic; background: #2a2a2a; }
+.fbt.land { animation: tiledrop .35s cubic-bezier(.2, 1.4, .4, 1) both; }
+.fbslot.waiting, .fbslot.none { opacity: .45; }
+.fbslot.not-better { opacity: .6; }
+.fbslot.designing .fbt { filter: blur(.3px); }
+.fbslot.kept { box-shadow: inset 2px 2px 0 #0c0c0c, inset -2px -2px 0 #3a3a3a, 0 0 0 2px #2bc4c4, 0 0 18px -4px #2bc4c4; }
+.fbslot.kept .fbst { color: #7ef08a; font-weight: 700; }
+.fbslot.trying .fbst { color: var(--unique); }
+/* the crafting table */
+.crafts:has(.bench) { grid-template-columns: 1fr; }
+.craft.bench { padding: 14px 16px; }
+.craft .ctop { display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap; margin-bottom: 10px; }
+.craft .ctop .cm { margin: 0; }
+.cbody { display: grid; grid-template-columns: minmax(240px, 380px) auto minmax(0, 1fr); gap: 16px; align-items: center; }
+.cbench { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); min-width: 0; gap: 6px; padding: 8px; border-radius: 6px; background: #1b1b1b;
+  box-shadow: inset 2px 2px 0 #0c0c0c, inset -2px -2px 0 #3a3a3a; }
+.ctile { --tc: #a8a8a8; position: relative; min-width: 0; min-height: 70px; padding: 6px 8px 5px; border-radius: 3px; cursor: default; outline: none; display: flex; flex-direction: column; gap: 1px;
+  background: linear-gradient(180deg, #4a4a4a, #383838); box-shadow: inset 2px 2px 0 #5c5c5c, inset -2px -2px 0 #262626, 0 0 0 1px #111;
+  animation: tiledrop .5s cubic-bezier(.2, 1.4, .4, 1) both; transition: transform .15s; }
+.ctile:hover, .ctile:focus-visible { transform: translateY(-2px); box-shadow: inset 2px 2px 0 #5c5c5c, inset -2px -2px 0 #262626, 0 0 0 1px var(--tc), 0 6px 14px -6px var(--tc); }
+.ctile.none { background: #2a2a2a; box-shadow: inset 2px 2px 0 #1a1a1a, inset -2px -2px 0 #3a3a3a; justify-content: center; align-items: center; }
+.ctile.none .cn { color: #777; font-style: italic; font-weight: 400; }
+.ctile .stars { color: var(--tc); font-size: 11px; letter-spacing: 1px; line-height: 1; }
+.ctile .cn { color: var(--tc); font-weight: 700; font-size: 13px; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-shadow: 1px 1px 0 #111; }
+.ctile .cs { color: #d6d6d6; font-size: 11.5px; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ctile .arrows { display: flex; gap: 5px; flex-wrap: wrap; font-size: 10.5px; font-weight: 700; margin-top: auto; }
+.ctile .arrows .pp { color: #7ef08a; } .ctile .arrows .pn { color: #ff7b7b; }
+.ctile .eff { position: absolute; top: 4px; right: 5px; font-size: 11px; font-weight: 800; padding: 0 5px; border-radius: 4px; }
+.ctile .eff.up { background: #1f5d29; color: #b9ffc2; } .ctile .eff.down { background: #5d1f1f; color: #ffc0c0; }
+.ctile .eff.flip { background: #4b1f6b; color: #f0c8ff; }
+.ctile.flipped { box-shadow: inset 2px 2px 0 #5c5c5c, inset -2px -2px 0 #262626, 0 0 0 1px #b06bff; }
+.ctile.powder .cn::before { content: "◆ "; }
+.carrow { font-size: 30px; color: #2bc4c4; text-shadow: 0 0 12px rgba(43, 196, 196, .6); }
+.cresult { border: 1px solid color-mix(in srgb, #2bc4c4 55%, var(--line)); border-radius: var(--r-md); padding: 10px 12px; background: rgba(10, 30, 34, .55);
+  font-size: 13px; cursor: default; outline: none; min-width: 0; }
+.cresult .rn { font-family: var(--display); color: #2bc4c4; font-size: 16px; margin-bottom: 4px; }
+.cresult .ok { color: var(--set); } .cresult .bad { color: #ff7b7b; } .cresult .tl { color: var(--muted); } .cresult .gray { color: var(--faint); }
+.craft .clegend { display: block; color: var(--faint); font-size: 11.5px; margin-top: 4px; }
+@keyframes tiledrop { from { opacity: 0; transform: translateY(-14px) scale(.9); } to { opacity: 1; transform: none; } }
+@media (max-width: 760px) { .cbody { grid-template-columns: 1fr; } .carrow { transform: rotate(90deg); justify-self: center; } }
+@media (prefers-reduced-motion: reduce) { .ctile { animation: none; } }
 .icard.empty .n { color: var(--faint); font-style: italic; }
 .icard .ribbon { position: absolute; top: 8px; right: -1px; background: var(--set); color: #08200d; font-size: 10.5px; font-weight: 800; letter-spacing: .06em; padding: 1px 7px 1px 8px; border-radius: 4px 0 0 4px; box-shadow: 0 0 10px rgba(85, 255, 85, .5); }
 .icard.weapon { padding: 14px 16px; }
@@ -706,7 +757,7 @@ label.deep input[type=checkbox] { width: auto; flex: 0 0 auto; margin-top: 3px; 
                 <select id="f-poison"><option value="wynnbuilder">Wynnbuilder's figures</option><option value="low">Cautious estimate</option></select></div>
             </div>
             <label><input type="checkbox" id="f-drops"> Only suggest items that drop from mobs, chests or dungeons</label>
-            <label><input type="checkbox" id="f-crafted" checked> Design crafted items for my build too (you or a crafter make them; the report shows the recipe)</label>
+            <label><input type="checkbox" id="f-crafted"> Design crafted items for my build too (you or a crafter make them; the report shows the recipe)</label>
             <div class="field"><label for="f-levels">Items to search</label>
               <select id="f-levels"><option value="">Every item up to my level</option><option value="10">Within 10 levels of mine</option><option value="20">Within 20 levels of mine</option><option value="30">Within 30 levels of mine</option></select></div>
           </div>
@@ -926,6 +977,7 @@ function showBusy(note) {
     <div class="reels" id="fReels">${SLOTS.map((sl, i) => `<div class="reel" data-i="${i}"><div class="slot">${sl}</div>
       <div class="window"><div class="strip"><div class="ln">…</div></div></div></div>`).join("")}</div>
     <div class="wcards" id="fWeapons"></div>
+    <div class="fbench" id="fBench" hidden></div>
     <div class="pbar"><div id="busyBar"></div></div>
     <div class="forge-foot"><div id="busyProgress" class="busy-sub"></div>
       <button class="btn-quiet" id="stopBtn" type="button">Stop and keep the best so far</button></div>
@@ -942,7 +994,7 @@ function showBusy(note) {
 }
 function forgeStop() {
   if (!F) return;
-  clearInterval(F.spinTimer); clearInterval(F.pollTimer); cancelAnimationFrame(F.raf || 0);
+  clearInterval(F.spinTimer); clearInterval(F.pollTimer); clearInterval(F.benchTimer); cancelAnimationFrame(F.raf || 0);
   F.timers.forEach(clearTimeout);
   F = null;
 }
@@ -1147,7 +1199,7 @@ async function forgePoll() {
     const fill = $("#fFill");
     fill.style.width = (L.phase < 0 ? 4 : Math.min(100, ((L.phase + 0.6) / ph.length) * 100)) + "%";
     fill.classList.remove("zoom"); void fill.offsetWidth; fill.classList.add("zoom");
-    if (L.phase >= 5) $("#fSub").textContent = "Writing up your report…";
+    if (L.phase >= ph.length) $("#fSub").textContent = "Writing up your report…";
     const sc0 = $("#fScore");
     if (sc0.classList.contains("wait") && !F.best) sc0.textContent = L.phase < 0 ? "Planning your ability tree…" : "Searching for the first build…";
     F.phase = L.phase;
@@ -1186,6 +1238,53 @@ async function forgePoll() {
     F.best = b;
   }
   renderWeapons(L.weapons || [], b && b.weapon ? b.weapon[0] : null);
+  if (L.craft) renderBench(L.craft);
+}
+
+/* ---- the crafting bench: while crafted items are designed, a 3 x 2 grid per slot shuffles through ingredients,
+   lands on the design, and lights up when it makes the build better ---- */
+function renderBench(C) {
+  const box = $("#fBench"); if (!box || !C.slots) return;
+  if (!F.bench) {
+    box.hidden = false;
+    box.innerHTML = `<div class="fbhead"><b>Crafting bench</b> <span id="fbPass"></span></div><div class="fbgrid">${C.slots.map((sl, k) => `<div class="fbslot waiting" data-k="${k}">
+        <div class="fbl">${esc(sl.slot)}<span class="fbst"></span></div>
+        <div class="fbtiles">${[0, 1, 2, 3, 4, 5].map(() => '<span class="fbt">·</span>').join("")}</div></div>`).join("")}</div>`;
+    F.bench = { pool: C.pool || [], shown: C.slots.map(() => null), state: C.slots.map(() => "waiting") };
+    F.benchTimer = setInterval(benchShuffle, 150);
+    if (!REDUCED) box.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+  $("#fbPass").textContent = C.pass ? (C.pass > 1 ? `round ${C.pass}: trying again around the crafts it kept` : "designing a crafted piece for every slot") : "";
+  C.slots.forEach((sl, k) => {
+    const el = box.querySelector(`.fbslot[data-k="${k}"]`); if (!el) return;
+    const key = JSON.stringify(sl.grid);
+    if (sl.grid && F.bench.shown[k] !== key) {
+      F.bench.shown[k] = key;
+      el.querySelectorAll(".fbt").forEach((t, n) => later(() => {
+        const g = sl.grid[n];
+        t.textContent = g ? g[0] : "empty"; t.style.color = g ? ING_TIER[g[1]] || ING_TIER[0] : "";
+        t.classList.toggle("e", !g); t.classList.remove("land"); void t.offsetWidth; t.classList.add("land");
+      }, n * 90));
+    }
+    if (F.bench.state[k] !== sl.state) {
+      const was = F.bench.state[k];
+      F.bench.state[k] = sl.state;
+      if (sl.state === "designing") F.bench.shown[k] = null;
+      el.className = "fbslot " + sl.state.replace(" ", "-");
+      el.querySelector(".fbst").textContent = { designing: "designing", trying: "trying it", kept: sl.gain != null && sl.gain >= 0.05 ? `kept +${sl.gain >= 10 ? sl.gain.toFixed(0) : sl.gain.toFixed(1)}%` : "kept",
+        "not better": "not better", none: "can't replace", waiting: "" }[sl.state] || "";
+      if (sl.state === "kept" && was !== "kept") { sndPing(5); if (!REDUCED) burstAt(el, "#2bc4c4", 14, 2.2); }
+    }
+  });
+}
+function benchShuffle() {
+  if (!F || !F.bench || REDUCED) return;
+  const pool = F.bench.pool; if (!pool.length) return;
+  document.querySelectorAll("#fBench .fbslot.designing .fbt").forEach((t) => {
+    if (Math.random() < 0.55) return;
+    const g = pool[Math.floor(Math.random() * pool.length)];
+    t.textContent = g[0]; t.style.color = ING_TIER[g[1]] || ING_TIER[0]; t.classList.remove("e");
+  });
 }
 
 /* ---- the finish: reels lock left to right, a shake, a gold flash and the stamp ---- */
@@ -1519,26 +1618,81 @@ function visualsHTML(S) {
   const sub = S.best ? (baseItems ? `"NEW" marks pieces that differ from ${S.baseline.kind === "gear" ? "your gear" : "your last build"}. Hover any piece for its stats.` : "Hover any piece for its stats.") : "Hover any piece for its stats.";
   return equipHTML(pack, baseItems, title, sub) + craftsHTML(pack) + '<div id="treeSlot"></div>';
 }
-function craftsHTML(pack) {
+/* ---- the crafting table: each crafted piece's 3 x 2 grid, what every ingredient adds there, and the result ---- */
+const ING_TIER = ["#a8a8a8", "#ffd84a", "#ff6bff", "#55ffff"];
+const POS_ARROW = { above: "↑", under: "↓", left: "←", right: "→", touching: "✣", notTouching: "⤧" };
+function craftList(pack) {
   const seen = {}, list = [];
   (pack.items || []).forEach((c, i) => {
     if (!c || !c.craft) return;
     if (seen[c.craft.link] !== undefined) { list[seen[c.craft.link]].slots.push(SLOTS[i]); return; }
     seen[c.craft.link] = list.length;
-    list.push({ c, slots: [SLOTS[i]] });
+    list.push({ c, i, slots: [SLOTS[i]] });
   });
+  return list;
+}
+function effBadge(eff) {
+  if (eff === 100) return "";
+  const cls = eff < 0 ? "flip" : eff > 100 ? "up" : "down";
+  return `<span class="eff ${cls}" title="${eff < 0 ? "Turned around: its minuses become pluses and its pluses minuses" : "How strong this spot makes it"}">${eff}%</span>`;
+}
+function craftTile(cell, i, n, delay) {
+  if (!cell) return `<div class="ctile none" style="animation-delay:${delay}ms"><span class="cn">empty</span></div>`;
+  const col = ING_TIER[cell.tier] || ING_TIER[0];
+  const arrows = (cell.pos || []).map(([k, v]) => `<span class="${v > 0 ? "pp" : "pn"}">${POS_ARROW[k] || "•"}${v > 0 ? "+" : ""}${v}%</span>`).join("");
+  const main = (cell.stats || []).slice(0, 2).map(([k, v]) => `${v > 0 ? "+" : ""}${v}${/ %$/.test(k) ? "%" : ""} ${esc(k.replace(/ %$/, ""))}`).join(" · ");
+  return `<div class="ctile${cell.powder ? " powder" : ""}${cell.eff < 0 ? " flipped" : ""}" tabindex="0" data-tipk="${i}-${n}" style="--tc:${col};animation-delay:${delay}ms">
+      <span class="stars">${"✫".repeat(cell.tier || 0) || "&nbsp;"}</span>${effBadge(cell.eff)}
+      <span class="cn">${esc(cell.name)}</span><span class="cs">${main || (cell.pos && cell.pos.length ? "boosts others" : "")}</span>
+      ${arrows ? `<span class="arrows">${arrows}</span>` : ""}</div>`;
+}
+function craftTip(pack, key) {
+  const [i, n] = String(key).split("-").map(Number);
+  const c = (pack.items || [])[i], cell = c && c.craft && c.craft.cells ? c.craft.cells[n] : null;
+  if (!cell) return '<div class="gray">Empty spot.</div>';
+  let h = `<div class="tn" style="color:${ING_TIER[cell.tier] || ING_TIER[0]}">${esc(cell.name)} <span class="tl">${"✫".repeat(cell.tier || 0)}</span></div>`;
+  h += cell.powder ? '<div class="tl">Powder used as an ingredient: adds its element\'s defense to armor and jewelry, or half its usual damage to a weapon</div>'
+                   : `<div class="tl">Level ${cell.level} ingredient</div>`;
+  if (cell.eff !== 100) h += `<div class="${cell.eff > 100 ? "ok" : "bad"}">This spot: ${cell.eff}% strength${cell.eff < 0 ? " (turned around: minuses become pluses)" : cell.eff > 100 ? " (boosted by its neighbours)" : " (weakened by its neighbours)"}</div>`;
+  if (cell.stats.length) h += "<hr>" + cell.stats.map(([k, v]) => statLine(k, v)).join("");
+  if (cell.reqs.length) h += "<hr>" + cell.reqs.map(([k, v]) => `<div class="${v > 0 ? "bad" : "ok"}">${v > 0 ? "+" : ""}${v} <span class="tl">${esc(k)} requirement</span></div>`).join("");
+  if (cell.dura) h += `<div class="${cell.dura < 0 ? "bad" : "ok"}">${cell.dura > 0 ? "+" : ""}${cell.dura} <span class="tl">durability</span></div>`;
+  if (cell.pos.length) h += "<hr>" + cell.pos.map(([k, v, words]) => `<div class="${v > 0 ? "aqua" : "bad"}">${v > 0 ? "+" : ""}${v}% <span class="tl">to ${esc(words)}</span></div>`).join("");
+  if (cell.drops) h += `<hr><div class="gray">Dropped by ${esc(cell.drops)}</div>`;
+  return h;
+}
+function craftsHTML(pack) {
+  const list = craftList(pack);
   if (!list.length) return "";
-  const cards = list.map(({ c, slots }) => `<div class="craft">
-      <div class="ct">${esc(slots.join(" + "))}</div>
-      <div class="cm">${esc(c.craft.profession)} · ${esc(c.craft.recipe)} · materials tier ${c.craft.mats.join(" and ")}${c.atk_spd ? " · " + esc(c.atk_spd) + " attack speed" : ""}</div>
-      <div class="cgrid">${c.craft.grid.map((g) => `<span class="${g ? "" : "e"}" title="${esc(g)}">${esc(g || "empty")}</span>`).join("")}</div>
-      <div class="ca">Durability ${c.craft.durability.join("–")} · <a href="${esc(c.craft.link)}" target="_blank" rel="noopener">open in Wynnbuilder's crafter</a></div>
-    </div>`).join("");
-  return `<section class="panel" id="craftPanel"><h3>How to craft <small>Designed for this build. Where each ingredient drops is in the report.</small></h3><div class="crafts">${cards}</div></section>`;
+  const cards = list.map(({ c, i, slots }, k) => {
+    const cr = c.craft;
+    const head = `<div class="ctop"><span class="ct">${esc(slots.join(" + "))}</span><span class="cm">${esc(cr.profession)} · recipe ${esc(cr.recipe)} · materials tier ${cr.mats.join(" and ")}${c.atk_spd ? " · " + esc(c.atk_spd) + " attack speed" : ""}</span></div>`;
+    if (!cr.cells || !cr.cells.length) {                    // builds saved before the crafting table: the names only
+      return `<div class="craft">${head}<div class="cgrid">${cr.grid.map((g) => `<span class="${g ? "" : "e"}" title="${esc(g)}">${esc(g || "empty")}</span>`).join("")}</div>
+        <div class="ca">Durability ${cr.durability.join("–")} · <a href="${esc(cr.link)}" target="_blank" rel="noopener">open in Wynnbuilder's crafter</a></div></div>`;
+    }
+    const tiles = cr.cells.map((cell, n) => craftTile(cell, i, n, k * 120 + n * 70)).join("");
+    const res = (c.stats || []).slice(0, 7).map(([kk, v]) => statLine(kk, v)).join("");
+    const dmg = c.damage && c.damage.length ? c.damage.map(([e, lo, hi]) => `<div><span style="color:${POWDER_COL[e] || "#e8e8e8"}">${esc(e)}</span> <span class="tl">damage</span> ${lo}–${hi}</div>`).join("") : "";
+    const req = c.reqs.map((r, j) => r > 0 ? `${SKILL_INFO[j][0]} ${r}` : "").filter(Boolean).join(", ");
+    const bon = c.bonus.map((b, j) => b ? `${b > 0 ? "+" : ""}${b} ${SKILL_INFO[j][0]}` : "").filter(Boolean).join(", ");
+    return `<div class="craft bench">${head}
+      <div class="cbody"><div class="cbench">${tiles}</div><div class="carrow" aria-hidden="true">➜</div>
+        <div class="cresult" tabindex="0" data-tipk="r${i}"><div class="rn">${esc(c.name)}</div>
+          ${dmg}${res}${bon ? `<div class="tl">${esc(bon)}</div>` : ""}${req ? `<div class="gray">Needs ${esc(req)}</div>` : ""}</div></div>
+      <div class="ca">Durability ${cr.durability.join("–")} · <a href="${esc(cr.link)}" target="_blank" rel="noopener">open in Wynnbuilder's crafter</a>
+        <span class="clegend">numbers on a tile = how strong that spot makes it · arrows = what it does to its neighbours · hover for details and where it drops</span></div></div>`;
+  }).join("");
+  return `<section class="panel" id="craftPanel"><h3>Crafting table <small>Designed for this build. Put the ingredients in exactly these spots: where each goes changes how strong it is.</small></h3><div class="crafts">${cards}</div></section>`;
+}
+function mountCrafts(pack) {
+  const cp = $("#craftPanel");
+  if (cp) bindTips(cp, (k) => String(k)[0] === "r" ? itemTip(pack.items[+String(k).slice(1)]) : craftTip(pack, k));
 }
 function mountVisuals(S, bars = true) {
   const pack = S.best || S.current;
   const eq = $("#equipPanel"); if (eq) bindTips(eq, (i) => itemTip(pack.items[+i]));
+  mountCrafts(pack);
   mountTree(S, "best");
   if (bars) animateBars($("#main"));
 }
@@ -1858,6 +2012,7 @@ function renderSaved(h, sub, backLabel, back, opts = {}) {
     (h.tree ? (TOGGLE_SHARE = h.toggle_share || {}, treeHTML(h.tree, h.order || [], h.toggles_on || [], "")) : "");
   $("#main").scrollTop = 0;
   bindTips($("#equipPanel"), (i) => itemTip(h.items[+i]));
+  mountCrafts({ items: h.items });
   if (h.tree) bindTips($("#treePanel"), (nid) => nodeTip(h.tree, h.order || [], h.toggles_on || [], nid));
   animateBars($("#main"));
   document.querySelectorAll("[data-copy]").forEach((b) => b.addEventListener("click", () => { navigator.clipboard.writeText(b.dataset.copy); toast("Link copied"); }));
