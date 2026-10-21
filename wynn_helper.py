@@ -461,7 +461,7 @@ def roll_range(key: str, val: float, fixed: bool):
 
 
 class Item:
-    def __init__(self, raw: dict):
+    def __init__(self, raw: dict, parse_stats: bool = True):
         self.raw = raw
         self.name = raw.get("displayName") or raw["name"]
         self.type = raw.get("type")
@@ -478,7 +478,8 @@ class Item:
         self.major_ids = raw.get("majorIds")
         fixed = bool(raw.get("fixID"))
         self.base_stats, self.min_stats, self.max_stats = {}, {}, {}
-        for k, v in raw.items():
+        # parse_stats=False: the caller sets every stat itself (crafted items), so they aren't worked out twice.
+        for k, v in (raw.items() if parse_stats else ()):
             if k in NON_STAT_KEYS and k not in ("mainAttackRange",):
                 continue
             if isinstance(v, dict) and v.get("static"):
@@ -734,8 +735,40 @@ def _js_round(x: float) -> int:
     return math.floor(x + 0.5)
 
 
+_ING_PREPS = {}
+
+
+def _ing_prep(ing):
+    """The parts of an ingredient a craft reads, worked out once: position effects that aren't 0, requirement
+    changes (not durability), and rolled IDs that count (in the ingredient's own order, so every sum is done in
+    the same order as before)."""
+    hit = _ING_PREPS.get(id(ing))
+    if hit is not None and hit[0] is ing:
+        return hit[1]
+    pm = tuple((k, v) for k, v in (ing.get("posMods") or {}).items() if v)
+    item_ids = tuple((k, v) for k, v in (ing.get("itemIDs") or {}).items() if k != "dura")
+    rolled = []
+    for key, rolls in (ing.get("ids") or {}).items():
+        if key not in ROLLED_IDS and key not in SKILLS:
+            continue
+        mx = rolls.get("maximum") if isinstance(rolls, dict) else None
+        if not mx:
+            continue
+        rolled.append((key, rolls.get("minimum", 0), mx))
+    prep = (pm, item_ids, tuple(rolled), bool(ing.get("isPowder")))
+    _ING_PREPS[id(ing)] = (ing, prep)
+    return prep
+
+
+_EFF_MULT = {}
+
+
 def make_crafted(data, recipe_id: int, mat_tiers, ing_ids, atk_spd: str = "SLOW"):
     """A crafted item with exactly the stats Wynnbuilder's crafter gives it (best rolls, like normal items)."""
+    return _make_crafted(data, recipe_id, mat_tiers, ing_ids, atk_spd)
+
+
+def _make_crafted(data, recipe_id: int, mat_tiers, ing_ids, atk_spd: str = "SLOW"):
     recipes = getattr(data, "recipes", {}) or {}
     ingtab = getattr(data, "ingredients", {}) or {}
     if recipe_id not in recipes:
@@ -789,13 +822,12 @@ def make_crafted(data, recipe_id: int, mat_tiers, ing_ids, atk_spd: str = "SLOW"
                 _, _, _, plus, minus = p.stats
                 fixed[POWDER_ELEMS[p.elem] + "Def"] += plus
                 fixed[POWDER_ELEMS[(p.elem + 4) % 5] + "Def"] -= minus
+    preps = [_ing_prep(ing) for ing in ings]
     # Ingredient effectiveness grid (3 rows x 2 columns).
     eff = [[100, 100], [100, 100], [100, 100]]
     for n, ing in enumerate(ings):
         i, j = n // 2, n % 2
-        for key, value in (ing.get("posMods") or {}).items():
-            if not value:
-                continue
+        for key, value in preps[n][0]:
             if key == "above":
                 for k in range(i - 1, -1, -1):
                     eff[k][j] += value
@@ -822,24 +854,20 @@ def make_crafted(data, recipe_id: int, mat_tiers, ing_ids, atk_spd: str = "SLOW"
     reqs = defaultdict(int)
     min_r, max_r = defaultdict(float), defaultdict(float)
     for n, ing in enumerate(ings):
-        mult = float(f"{flat[n] / 100:.2f}")        # Wynnbuilder: (eff/100).toFixed(2)
-        for key, value in (ing.get("itemIDs") or {}).items():
-            if key == "dura":
-                continue
-            reqs[key] += _js_round(value) if ing.get("isPowder") else _js_round(value * mult + 1e-9)
-        for key, rolls in (ing.get("ids") or {}).items():
-            if key not in ROLLED_IDS and key not in SKILLS:
-                continue
-            mx = rolls.get("maximum") if isinstance(rolls, dict) else None
-            if not mx:
-                continue
-            lo, hi = sorted([math.floor(rolls.get("minimum", 0) * mult), math.floor(mx * mult)])
+        mult = _EFF_MULT.get(flat[n])
+        if mult is None:                            # Wynnbuilder: (eff/100).toFixed(2)
+            mult = _EFF_MULT[flat[n]] = float(f"{flat[n] / 100:.2f}")
+        _pm, item_ids, rolled, is_powder = preps[n]
+        for key, value in item_ids:
+            reqs[key] += _js_round(value) if is_powder else _js_round(value * mult + 1e-9)
+        for key, mn, mx in rolled:
+            lo, hi = sorted([math.floor(mn * mult), math.floor(mx * mult)])
             min_r[key] += lo
             max_r[key] += hi
     for s in SKILLS:
         raw[s + "Req"] = reqs.get(s + "Req", 0)
         raw[s] = int(max_r.get(s, 0))
-    it = Item(raw)
+    it = Item(raw, parse_stats=False)
     it.crafted = True
     it.drop = None
     it.level_high = lvl_hi
@@ -1156,8 +1184,18 @@ def _sp_sig(it):
 
 
 def _sp_key(armor, weapon):
-    """Cache key for the skill points a gear set needs (items in order, weapon)."""
-    return (tuple(_sp_sig(a) for a in armor if a is not None), _sp_sig(weapon) if weapon is not None else None)
+    """Cache key for the skill points a gear set needs (items in order, weapon). Reads each item's remembered
+    number directly when it was made in this process (the common case), else works it out."""
+    ep = _SIG_EPOCH
+    out = []
+    for a in armor:
+        if a is not None:
+            s = a.__dict__.get("_spsig")
+            out.append(s[1] if s is not None and s[0] is ep else _sp_sig(a))
+    if weapon is None:
+        return tuple(out), None
+    s = weapon.__dict__.get("_spsig")
+    return tuple(out), (s[1] if s is not None and s[0] is ep else _sp_sig(weapon))
 
 
 def solve_skill_points(armor: list, weapon):
@@ -2156,7 +2194,7 @@ def level_base_hp(level: int) -> int:
 
 
 def build_stats(armor: list, weapon, skill_totals: list, tree_stats: dict, data: GameData, tomes=(),
-                level: int = 1) -> dict:
+                level: int = 1, sb=None) -> dict:
     stats = defaultdict(float)
     stats["hp"] = level_base_hp(level)
     stats["agiDef"] = 90
@@ -2164,7 +2202,7 @@ def build_stats(armor: list, weapon, skill_totals: list, tree_stats: dict, data:
     for it in worn:
         for k, v in it.stats.items():
             stats[k] += v
-    for k, v in set_bonuses(armor, weapon, data).items():
+    for k, v in (sb if sb is not None else set_bonuses(armor, weapon, data)).items():
         if k not in SKILLS:
             stats[k] += v
     for k, v in tree_stats.items():
@@ -2174,15 +2212,50 @@ def build_stats(armor: list, weapon, skill_totals: list, tree_stats: dict, data:
     return stats
 
 
+# Stat names the damage formula reads, built once (the same names, in the same order, as building them on the fly).
+_CONV_KEYS = [p + "ConvBase" for p in ELEM_PREFIX]
+_ADD_MIN = [p + "DamAddMin" for p in ELEM_PREFIX]
+_ADD_MAX = [p + "DamAddMax" for p in ELEM_PREFIX]
+_DAM_PCT = [p + "DamPct" for p in ELEM_PREFIX]
+_DAM_RAW = [p + "DamRaw" for p in ELEM_PREFIX]
+_TAG_KEYS = {tag: {"pct": [p + tag + "Pct" for p in ELEM_PREFIX], "raw": [p + tag + "Raw" for p in ELEM_PREFIX],
+                   "static": tag.lower() + "Pct", "rpct": "r" + tag + "Pct", "praw": tag.lower() + "Raw",
+                   "rraw": "r" + tag + "Raw"} for tag in ("Sd", "Md")}
+_PART_CONV_KEYS = {}
+
+
+def mult_plan(dmg_mult) -> list:
+    """The damage multipliers read once: (name, value, spell part or None, element tag or None), in the dict's
+    order, so applying them multiplies in exactly the same order as reading the dict each time."""
+    plan = []
+    for k, v in dmg_mult.items():
+        part = k.split(":", 1)[1] if ":" in k else None
+        tag = k.split(";", 1)[1] if ";" in k else None
+        plan.append((k, v, part, tag))
+    return plan
+
+
+def skill_boosts(stats) -> list:
+    return [0.0] + [skill_pct(stats.get(s, 0)) * SKILL_DAMAGE_MULT[i] for i, s in enumerate(SKILLS)]
+
+
 def spell_part_damage(stats, weapon, conversions, use_spell, ignore_speed, ignore_str, dmg_mult,
-                      part_filter=None, ignored_mults=()):
-    """Port of Wynnbuilder's calculateSpellDamage. Returns (normal_avg, crit_avg)."""
+                      part_filter=None, ignored_mults=(), plan=None, skill_boost=None):
+    """Port of Wynnbuilder's calculateSpellDamage. Returns (normal_avg, crit_avg).
+    plan / skill_boost: mult_plan(dmg_mult) and skill_boosts(stats) worked out once per build (optional)."""
     wdam = weapon.damage
     conversions = list(conversions)
-    for i, p in enumerate(ELEM_PREFIX):
-        if part_filter is not None:
-            conversions[i] += stats.get(f"{p}ConvBase:{part_filter}", 0)
-        conversions[i] += stats.get(f"{p}ConvBase", 0)
+    get = stats.get
+    if part_filter is not None:
+        pkeys = _PART_CONV_KEYS.get(part_filter)
+        if pkeys is None:
+            pkeys = _PART_CONV_KEYS[part_filter] = [f"{p}ConvBase:{part_filter}" for p in ELEM_PREFIX]
+        for i in range(6):
+            conversions[i] += get(pkeys[i], 0)
+            conversions[i] += get(_CONV_KEYS[i], 0)
+    else:
+        for i in range(6):
+            conversions[i] += get(_CONV_KEYS[i], 0)
     present = [hi > 0 for _, hi in wdam]
     neutral_conv = conversions[0] / 100
     if neutral_conv == 0:
@@ -2206,31 +2279,36 @@ def spell_part_damage(stats, weapon, conversions, use_spell, ignore_speed, ignor
         for d in damages:
             d[0] *= spd
             d[1] *= spd
-    for i, p in enumerate(ELEM_PREFIX):
+    for i in range(6):
         if present[i]:
-            damages[i][0] += stats.get(p + "DamAddMin", 0)
-            damages[i][1] += stats.get(p + "DamAddMax", 0)
-    tag = "Sd" if use_spell else "Md"
-    skill_boost = [0.0] + [skill_pct(stats.get(s, 0)) * SKILL_DAMAGE_MULT[i] for i, s in enumerate(SKILLS)]
-    static_boost = (stats.get(tag.lower() + "Pct", 0) + stats.get("damPct", 0)) / 100
+            damages[i][0] += get(_ADD_MIN[i], 0)
+            damages[i][1] += get(_ADD_MAX[i], 0)
+    tk = _TAG_KEYS["Sd" if use_spell else "Md"]
+    if skill_boost is None:
+        skill_boost = skill_boosts(stats)
+    static_boost = (get(tk["static"], 0) + get("damPct", 0)) / 100
+    rboost = (get(tk["rpct"], 0) + get("rDamPct", 0)) / 100
     total_min = total_max = 0.0
     saved = []
-    for i, p in enumerate(ELEM_PREFIX):
-        saved.append(damages[i][:])
-        total_min += damages[i][0]
-        total_max += damages[i][1]
-        boost = 1 + skill_boost[i] + static_boost + (stats.get(p + tag + "Pct", 0) + stats.get(p + "DamPct", 0)) / 100
+    pct_keys = tk["pct"]
+    for i in range(6):
+        di = damages[i]
+        saved.append(di[:])
+        total_min += di[0]
+        total_max += di[1]
+        boost = 1 + skill_boost[i] + static_boost + (get(pct_keys[i], 0) + get(_DAM_PCT[i], 0)) / 100
         if i > 0:
-            boost += (stats.get("r" + tag + "Pct", 0) + stats.get("rDamPct", 0)) / 100
-        damages[i][0] *= boost
-        damages[i][1] *= boost
+            boost += rboost
+        di[0] *= boost
+        di[1] *= boost
     elem_min = total_min - saved[0][0]
     elem_max = total_max - saved[0][1]
-    prop_raw = stats.get(tag.lower() + "Raw", 0) + stats.get("damRaw", 0)
-    rainbow_raw = stats.get("r" + tag + "Raw", 0) + stats.get("rDamRaw", 0)
-    for i, p in enumerate(ELEM_PREFIX):
+    prop_raw = get(tk["praw"], 0) + get("damRaw", 0)
+    rainbow_raw = get(tk["rraw"], 0) + get("rDamRaw", 0)
+    raw_keys = tk["raw"]
+    for i in range(6):
         s = saved[i]
-        raw = (stats.get(p + tag + "Raw", 0) + stats.get(p + "DamRaw", 0)) if present[i] else 0
+        raw = (get(raw_keys[i], 0) + get(_DAM_RAW[i], 0)) if present[i] else 0
         lo_b = hi_b = raw
         if total_max > 0:
             lo_b += ((s[1] / total_max) if total_min == 0 else (s[0] / total_min)) * prop_raw
@@ -2243,20 +2321,19 @@ def spell_part_damage(stats, weapon, conversions, use_spell, ignore_speed, ignor
     str_boost = 1 if ignore_str else 1 + skill_boost[1]
     mult = 1.0
     elem_mult = [1.0] * 6
-    for k, v in dmg_mult.items():
-        if ":" in k and k.split(":", 1)[1] != part_filter:
+    for k, v, part, tag in (plan if plan is not None else mult_plan(dmg_mult)):
+        if part is not None and part != part_filter:
             continue                      # multiplier for one specific spell part
         if k in ignored_mults:
             continue
-        if ";" in k:                      # element-specific (or 'm' = main attack only)
-            tag = k.split(";", 1)[1]
+        if tag is not None:               # element-specific (or 'm' = main attack only)
             if tag == "m" and not use_spell:
                 mult *= 1 + v / 100
             elif tag in ELEM_PREFIX:
                 elem_mult[ELEM_PREFIX.index(tag)] *= 1 + v / 100
         else:
             mult *= 1 + v / 100
-    crit_mult = 0 if ignore_str else 1 + stats.get("critDamPct", 0) / 100
+    crit_mult = 0 if ignore_str else 1 + get("critDamPct", 0) / 100
     norm = crit = 0.0
     for i, (lo, hi) in enumerate(damages):
         lo, hi = lo * elem_mult[i], hi * elem_mult[i]
@@ -2299,6 +2376,10 @@ def parse_enemy_arg(text: str) -> dict:
     return out
 
 
+_DEF_KEYS = [e + "Def" for e in POWDER_ELEMS]
+_DEF_PCT_KEYS = [e + "DefPct" for e in POWDER_ELEMS]
+
+
 def defense_stats(stats, weapon, def_mults: dict, enemy=None) -> dict:
     """Wynnbuilder's getDefenseStats: total HP, effective HP (with/without agility dodge), regen, defenses."""
     def_pct = skill_pct(stats.get("def", 0)) * 0.867
@@ -2313,16 +2394,14 @@ def defense_stats(stats, weapon, def_mults: dict, enemy=None) -> dict:
     ehp = total_hp / (1 - def_pct) / mult
     hpr = raw_to_pct(stats.get("hprRaw", 0), stats.get("hprPct", 0) / 100)
     elem_def = []
-    for e in POWDER_ELEMS:
-        raw = stats.get(e + "Def", 0)
-        pct = (stats.get(e + "DefPct", 0) + stats.get("rDefPct", 0)) / 100
-        elem_def.append(raw + raw * pct if raw > 0 else (raw - raw * pct if raw < 0 else 0.0))
-    # Wynnbuilder's display lets a negative raw defense with a big % bonus turn positive; its own rawToPct
-    # (and the game) stops negative defense at 0, so the capped value is used for real hits.
     elem_eff = []
-    for e in POWDER_ELEMS:
-        raw = stats.get(e + "Def", 0)
-        pct = (stats.get(e + "DefPct", 0) + stats.get("rDefPct", 0)) / 100
+    rdef = stats.get("rDefPct", 0)
+    for i in range(5):
+        raw = stats.get(_DEF_KEYS[i], 0)
+        pct = (stats.get(_DEF_PCT_KEYS[i], 0) + rdef) / 100
+        elem_def.append(raw + raw * pct if raw > 0 else (raw - raw * pct if raw < 0 else 0.0))
+        # Wynnbuilder's display lets a negative raw defense with a big % bonus turn positive; its own rawToPct
+        # (and the game) stops negative defense at 0, so the capped value is used for real hits.
         elem_eff.append(raw_to_pct(raw, pct))
     out = {"hp": total_hp, "ehp_agi": ehp_agi, "ehp": ehp, "hpr": hpr, "def_pct": def_pct * 100,
            "agi_pct": agi_pct * 100, "elem_def": elem_def, "elem_def_eff": elem_eff}
@@ -2343,16 +2422,19 @@ def defense_stats(stats, weapon, def_mults: dict, enemy=None) -> dict:
     return out
 
 
-def evaluate_spells(spells, stats, weapon, dmg_mult) -> dict:
-    """Average expected damage of each spell's headline number (crit chance from Dexterity)."""
+def evaluate_spells(spells, stats, weapon, dmg_mult, heal_items=None) -> dict:
+    """Average expected damage of each spell's headline number (crit chance from Dexterity).
+    heal_items: the stats' healMult.* entries in order, if already collected."""
     crit_chance = skill_pct(stats.get("dex", 0))
     heal_mult = 1.0
-    for k, v in stats.items():
-        if isinstance(k, str) and k.startswith("healMult."):
-            heal_mult *= 1 + v / 100
+    if heal_items is None:
+        heal_items = [(k, v) for k, v in stats.items() if isinstance(k, str) and k.startswith("healMult.")]
+    for _k, v in heal_items:
+        heal_mult *= 1 + v / 100
     heal_mult *= 1 + stats.get("healPct", 0) / 100
     heal_base = max(5.0, stats.get("hp", 0) + stats.get("hpBonus", 0)) * heal_mult
     out = {}
+    plan, sboost = mult_plan(dmg_mult), skill_boosts(stats)
     for bs, sp in spells.items():
         parts = sp.get("parts", [])
         use_spell = sp.get("scaling", "spell") == "spell"
@@ -2363,7 +2445,8 @@ def evaluate_spells(spells, stats, weapon, dmg_mult) -> dict:
                 n, c = spell_part_damage(stats, weapon, part["multipliers"], use_spell, ignore_speed,
                                          not part.get("use_str", True), dmg_mult,
                                          part_filter=f"{bs}.{part['name']}",
-                                         ignored_mults=tuple(part.get("ignored_mults") or ()))
+                                         ignored_mults=tuple(part.get("ignored_mults") or ()),
+                                         plan=plan, skill_boost=sboost)
                 values[part["name"]] = n * (1 - crit_chance) + c * crit_chance
             elif "hits" in part:
                 total = heal_total = 0.0
@@ -3033,7 +3116,7 @@ class Build:
                   for i in range(5)]
         spells, tstats, dmult, deferred, _inter = self.tree.spells(
             owned, self.extra_abilities(armor, weapon, rb_majids), tog, self.sliders, self.slider_mode)
-        stats = build_stats(armor, weapon, totals, tstats, self.data, self.tomes, level=self.level)
+        stats = build_stats(armor, weapon, totals, tstats, self.data, self.tomes, level=self.level, sb=sb)
         for k, v in rb_stats.items():
             if k not in SKILLS:
                 stats[k] += v
@@ -3083,11 +3166,17 @@ class Build:
             spells = {k: v for k, v in spells.items() if k == 0}
         elif fast and self.goal == "ability" and self.focus and not self.goal2:
             spells = {k: v for k, v in spells.items() if k == self.focus[0]}
-        res = evaluate_spells(spells, stats, weapon, dmult)
+        heal_items, def_items = [], []
+        for k, v in stats.items():                    # one pass for both kinds of multiplier (same order)
+            if isinstance(k, str) and k[:5] in ("healM", "defMu"):
+                if k.startswith("healMult."):
+                    heal_items.append((k, v))
+                elif k.startswith("defMult."):
+                    def_items.append((k, v))
+        res = evaluate_spells(spells, stats, weapon, dmult, heal_items)
         def_mults = {}
-        for k, v in stats.items():
-            if isinstance(k, str) and k.startswith("defMult."):
-                def_mults[k[8:]] = def_mults.get(k[8:], 0) + v
+        for k, v in def_items:
+            def_mults[k[8:]] = def_mults.get(k[8:], 0) + v
         for k, v in buff_mults(self.buffs, 1).items():
             def_mults[k] = max(def_mults.get(k, 0), v) if k in NONSTACKING_MULTS else def_mults.get(k, 0) + v
         defense = defense_stats(stats, weapon, def_mults, self.enemy)

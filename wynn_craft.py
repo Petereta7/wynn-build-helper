@@ -52,6 +52,14 @@ def usable_ingredients(data, recipe) -> list:
             if skill in (ing.get("skills") or ()) and (ing.get("lvl") or 0) <= top]
 
 
+def stat_key(it):
+    """Everything about a crafted item that scoring a build can see (requirements, skill points, every stat
+    roll, damage, attack speed, powder slots, powders used as ingredients). Equal keys = equal items."""
+    return (it.category, it.type, tuple(it.reqs), tuple(it.bonus), tuple(sorted(it.max_stats.items())),
+            tuple(sorted(it.min_stats.items())), tuple(map(tuple, it.damage)) if it.damage else None,
+            it.atk_spd, it.slots, tuple(getattr(it, "ingred_powders", None) or ()))
+
+
 def _gt(a, b) -> bool:
     """a is really better than b (not just rounding; two impossible grids are equal)."""
     return a > b + 1e-12 * max(1.0, abs(b))
@@ -74,6 +82,7 @@ class Designer:
         self.top, self.n_boost, self.kicks = top, boosters, kicks
         self.rng = random.Random(seed)
         self.memo = {}
+        self.by_item = {}
         self.evals = 0
         self.pool = pool          # only these ingredients (tests); default: every usable one
 
@@ -88,8 +97,15 @@ class Designer:
             if it.craft_problems:
                 v = None
             else:
-                self.evals += 1
-                v = self.score(it)
+                # Different grids often make exactly the same item (the same ingredients in another order, when
+                # none of them changes its neighbours). The same item always gets the same score, so it's scored
+                # once (about 4 grids in 10).
+                sk = stat_key(it)
+                v = self.by_item.get(sk)
+                if v is None:
+                    self.evals += 1
+                    v = self.score(it)
+                    self.by_item[sk] = -1e300 if v is None else v
             self.memo[key] = v = (-1e300 if v is None else v)
         return v
 

@@ -29,7 +29,8 @@ QUICK = [("App, updater and release files", ["app_check.py"]),
          ("Ability buffs, every class", ["toggle_check.py"]),
          ("Fast skill points = reference", ["speed_check.py"]),
          ("Crafted item designer", ["craft_check.py"]),
-         ("Goal mix, mana check, armor powders", ["goal_check.py"])]
+         ("Goal mix, mana check, armor powders", ["goal_check.py"]),
+         ("Same numbers as the reference (2,000 builds)", ["same_numbers.py", "--check"])]
 
 
 def main():
@@ -42,7 +43,10 @@ def main():
     cases = [c["name"] for c in build_check.CASES]
 
     jobs = [(name, [sys.executable, os.path.join(HERE, args[0])] + args[1:], 1) for name, args in QUICK]
-    per_case = max(1, (total - len(QUICK)) // max(1, len(cases)))
+    # Each build case gets about three times its even share of the cores: early on the cases share the CPU,
+    # and the last ones still running can use the cores the finished ones left (instead of one core each).
+    # The answers don't depend on it; each search worker needs about 65 MB of memory.
+    per_case = min(total, max(2, -(-total * 3 // max(1, len(cases)))))
     jobs += [(f"Build: {c}", [sys.executable, os.path.join(HERE, "build_check.py"), "--case", c], per_case) for c in cases]
     if full:
         jobs.append(("Side by side with Wynnbuilder", [sys.executable, os.path.join(HERE, "crossval", "run_all.py")], 1))

@@ -56,6 +56,8 @@ jobs:
         run: python tests/craft_check.py
       - name: Goal mix, mana check, armor powders
         run: python tests/goal_check.py
+      - name: Same numbers as the reference (2,000 random builds)
+        run: python tests/same_numbers.py --check
 
   builds:
     name: Builds for every class on Windows (legal, never worse)

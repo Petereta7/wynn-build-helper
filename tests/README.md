@@ -117,3 +117,21 @@ python3 tests/goal_check.py
 ```
 
 A main goal mixed with a second one scores exactly main^(1-w) x second^w (every class); goals that can't be mixed fall back to the main goal; the search's shortcuts and item filter never drop what the second goal needs; the mana check's numbers match the spell damage they describe; and armor powders are added where they help (never on a damage-only build), with the element of an enemy hit chosen against it. Under a minute.
+
+## 10. Same numbers (speed-ups must not change anything)
+
+```
+python3 tests/same_numbers.py --check
+```
+
+Scores 2,000 random builds (every class and goal, with buffs, minimums, enemy hits, goal mixes and powders) and compares every number with `tests/golden/same_numbers.json`, digit for digit. A change that's only meant to make things faster must pass this unchanged. After a change that's meant to change numbers (an accuracy fix), `--record` saves the new reference. Needs Python 3.12 or newer (3.12 made adding up decimals more precise, so older Pythons differ in the last digits); older ones skip it. About 15 seconds.
+
+## 11. Search timing
+
+```
+python3 tests/search_timing.py            (deep search, one build per class)
+python3 tests/search_timing.py --quick    (the quicker search)
+python3 tests/search_timing.py --cases build
+```
+
+How long each build takes, part by part (main search, fine-tuning, extra search, crafted items...), and a fingerprint of the build it finds (items, powders, tree, skill points, score). Run it before and after a speed-up: every fingerprint must stay the same.

@@ -858,23 +858,102 @@ def _refined_sweep(build, own, a, wp, pools, e, fast=True, top=4, passes=3, wpn=
     return v, a, e, wp
 
 
-def _kicks(build, cur_own, pools, best, base_extra, n, out_of_time):
-    """Deep search: shake up 2-3 slots of the best build at random and search again from there."""
+def _kick_draws(build, pools, n):
+    """The random shake-ups (which slots, which items) the kicks will use, in order. They come from their own
+    random sequence and don't depend on how the searches turn out, so they can be worked out up front."""
     import random
-    v0, a0, wpn, wp, e0 = best
     rng = random.Random(len(pools[0]) * 7919 + build.level)
-    found = best
+    draws = []
     for _ in range(n):
-        if out_of_time():
-            break
-        a = list(found[1])
+        picks = []
         for sl in rng.sample(range(8), rng.choice([2, 3])):
             if pools[sl]:
-                a[sl] = rng.choice(pools[sl][: max(10, len(pools[sl]) // 3)])
-        res = _local_search(build, cur_own, pools, wpn, wp, [a], found[4], EFFORT[2], out_of_time)
+                picks.append((sl, rng.choice(pools[sl][: max(10, len(pools[sl]) // 3)])))
+        draws.append(picks)
+    return draws
+
+
+def _kicks(build, cur_own, pools, best, base_extra, n, out_of_time):
+    """Deep search: shake up 2-3 slots of the best build at random and search again from there; keep the result
+    whenever it beats the best so far.
+
+    On several CPU cores the kicks run in batches side by side, each starting from the best build so far. A kick
+    that finds something better changes where the later kicks start, so those are redone from the new best.
+    The answer is exactly the same as doing them one after another."""
+    v0, a0, wpn, wp, e0 = best
+    draws = _kick_draws(build, pools, n)
+
+    def start(found, picks):
+        a = list(found[1])
+        for sl, it in picks:
+            a[sl] = it
+        return a
+    found = best
+    workers = min(n, cpu_cores())
+    if workers > 1 and _W.get("build") is None:          # (not inside a worker process)
+        ex = _side_pool(build, workers, pools)
+        if ex is not None:
+            try:
+                i = 0
+                while i < n and not out_of_time():
+                    batch = list(range(i, min(n, i + workers)))
+                    futs = [ex.submit(_kick_job, (cur_own, wpn, wp, start(found, draws[j]), found[4])) for j in batch]
+                    nxt = batch[-1] + 1
+                    for j, fu in zip(batch, futs):
+                        res = fu.result()
+                        if res and res[0][0] > found[0]:
+                            found = res[0]
+                            nxt = j + 1                 # later kicks started from the old best: redo them
+                            break
+                    for fu in futs:
+                        fu.cancel()
+                    i = nxt
+                return found
+            finally:
+                ex.wbh_done.set()
+                ex.shutdown(wait=True, cancel_futures=True)
+    for picks in draws:
+        if out_of_time():
+            break
+        res = _local_search(build, cur_own, pools, wpn, wp, [start(found, picks)], found[4], EFFORT[2], out_of_time)
         if res and res[0][0] > found[0]:
             found = res[0]
     return found
+
+
+def _kick_job(job):
+    cur_own, wpn, wp, a, e = job
+    return _local_search(_W["build"], cur_own, _W["pools"], wpn, wp, [a], e, EFFORT[2], _stopped)
+
+
+def _side_pool(build, workers, pools):
+    """A pool of worker processes that already have the item lists (so they aren't sent with every job)."""
+    try:
+        import multiprocessing as mp
+        import threading
+        from concurrent.futures import ProcessPoolExecutor
+        ctx = mp.get_context("spawn")
+        stop_event = ctx.Event()
+
+        done = threading.Event()
+
+        def watch():                           # pass the app's Stop button on to the worker processes
+            while not done.wait(0.2):
+                if STOP["flag"]:
+                    stop_event.set()
+                    return
+        ex = ProcessPoolExecutor(max_workers=workers, mp_context=ctx, initializer=_worker_init_pools,
+                                 initargs=(_build_spec(build), stop_event, pools))
+        ex.wbh_done = done
+        threading.Thread(target=watch, daemon=True).start()
+        return ex
+    except Exception:
+        return None
+
+
+def _worker_init_pools(spec, stop_event, pools):
+    _worker_init(spec, stop_event, None)
+    _W["pools"] = pools
 
 
 def cpu_cores() -> int:
@@ -885,6 +964,82 @@ def cpu_cores() -> int:
     except ValueError:
         n = 0
     return max(1, n or os.cpu_count() or 1)
+
+
+# ---- fine-tuning finished builds
+
+def _polish_one(build, pools, ap_budget, keep, v, a, wpn, wp, e, own0):
+    """Fine-tune one build: ability tree, weapon powders, close contenders per slot, exact skill points.
+    Depends only on its inputs, so it gives the same answer in any process."""
+    own = own0
+    if ap_budget and not _stopped():
+        new_own, _ = wh.best_tree(build, a, wp, ap_budget, keep=keep, extra_points=e, beam_width=30)
+        if build.evaluate(new_own, a, wp, e)["value"] > build.evaluate(own, a, wp, e)["value"]:
+            own = frozenset(new_own)
+    pw, _ = wh.best_weapon_powders(build, own, a, wpn, e)
+    wp = wh.weapon_with_powders(wpn, pw)
+    if not _stopped():
+        _v, a, e, wp = _refined_sweep(build, own, a, wp, pools, e, wpn=wpn)
+    e, free = refine_points(build, own, a, wp, e, fast=False)
+    e, free = _legal_points(build, a, wp, e)
+    fin = build.evaluate(own, a, wp, e)
+    return (fin["value"], a, wp, wpn, own, e, free, fin)
+
+
+def _par_job(job):
+    name, args = job
+    return globals()[name](_W["build"], *args)
+
+
+def _run_side_by_side(build, name, jobs):
+    """Run module function `name`(build, *job) for every job: side by side on separate CPU cores when there's
+    more than one, else here. Each job is worked out on its own from its inputs, so the results (returned in
+    the same order) are exactly the same either way."""
+    jobs = list(jobs)
+    workers = min(len(jobs), cpu_cores())
+    if workers > 1:
+        import threading
+        done = threading.Event()
+        try:
+            import multiprocessing as mp
+            from concurrent.futures import ProcessPoolExecutor
+            ctx = mp.get_context("spawn")
+            stop_event = ctx.Event()
+
+            def watch():                       # pass the app's Stop button on to the worker processes
+                while not done.wait(0.2):
+                    if STOP["flag"]:
+                        stop_event.set()
+                        return
+            threading.Thread(target=watch, daemon=True).start()
+            with ProcessPoolExecutor(max_workers=workers, mp_context=ctx, initializer=_worker_init,
+                                     initargs=(_build_spec(build), stop_event, None)) as ex:
+                return list(ex.map(_par_job, [(name, tuple(j)) for j in jobs]))
+        except Exception:
+            pass
+        finally:
+            done.set()
+    fn = globals()[name]
+    return [fn(build, *j) for j in jobs]
+
+
+def _stopped() -> bool:
+    """The search was stopped (here, or in the app when this is a worker process)."""
+    ev = _W.get("stop")
+    return STOP["flag"] or (ev is not None and ev.is_set())
+
+
+def _polish_many(build, pools, ap_budget, keep, jobs):
+    """Fine-tune several builds (side by side when possible)."""
+    return _run_side_by_side(build, "_polish_one", [(pools, ap_budget, keep) + tuple(j) for j in jobs])
+
+
+def _depth_one(build, own, pools, wpn, wp, a, e, dp, kicks):
+    """Search deeper around one finished build: three-item swaps, then a few shake-ups."""
+    res = _local_search(build, own, pools, wpn, wp, [a], e, dp, _stopped)
+    if res and not _stopped():
+        res = [_kicks(build, own, pools, res[0], e, kicks, _stopped)]
+    return res
 
 
 # ---- crafted items
@@ -946,7 +1101,7 @@ class _CraftRunner:
 
     def __init__(self, build, parallel=True):
         self.build, self.ex = build, None
-        workers = min(len(CRAFT_SLOTS), cpu_cores()) if parallel else 1
+        workers = cpu_cores() if parallel else 1
         if workers > 1:
             try:
                 import multiprocessing as mp
@@ -1167,6 +1322,12 @@ def search_best_build(build, owned, armor0, weapon0, base_weapon0, keep=(), ap_b
     Returns the same dict shape as optimize_whole_build.
     """
     t_start = time.time()
+    timings, t_last = {}, [t_start]
+
+    def _tmark(label):                     # seconds spent in each stage (tests/search_timing.py shows them)
+        now = time.time()
+        timings[label] = round(now - t_last[0], 2)
+        t_last[0] = now
     STOP["flag"] = False
     effort = max(1, min(5, int(effort or 2)))
     if deep:
@@ -1208,6 +1369,7 @@ def search_best_build(build, owned, armor0, weapon0, base_weapon0, keep=(), ap_b
         a2[slot] = wh.armor_with_powders(it, old.powders) if (old is not None and old.powders and slot < 4) else it
         return a2
 
+    _tmark("filter")
     # ---- 1. weapons worth building around
     # (Ranked on damage alone: with minimum stats set, the starting gear often misses them whatever the
     # weapon, which would say nothing about which weapons are strong. The gear around each weapon is then
@@ -1254,6 +1416,7 @@ def search_best_build(build, owned, armor0, weapon0, base_weapon0, keep=(), ap_b
             weapons.append((wpn, wh.weapon_with_powders(wpn, pw)))
             seen_w.add(wpn.name)
 
+    _tmark("weapons")
     # ---- 2. local search around each weapon (in parallel on every CPU core when possible)
     LIVE["weapons"] = [{"name": w.name, "tier": w.tier, "status": "queued", "best": None, "stage": "main"}
                        for w, _wp in weapons]
@@ -1289,22 +1452,11 @@ def search_best_build(build, owned, armor0, weapon0, base_weapon0, keep=(), ap_b
         agree = sum(1 for r in same_w if (top_v > 0 and r[0] >= top_v * 0.9999) or (top_v < 0 and r[0] >= top_v * 1.0001))
         return agree, len(same_w)
 
-    def polish(v, a, wpn, wp, e, own0):
-        """Fine-tune one build: ability tree, weapon powders, close contenders per slot, exact skill points."""
-        own = own0
-        if ap_budget and not STOP["flag"]:
-            new_own, _ = wh.best_tree(build, a, wp, ap_budget, keep=keep, extra_points=e, beam_width=30)
-            if build.evaluate(new_own, a, wp, e)["value"] > build.evaluate(own, a, wp, e)["value"]:
-                own = frozenset(new_own)
-        pw, _ = wh.best_weapon_powders(build, own, a, wpn, e)
-        wp = wh.weapon_with_powders(wpn, pw)
-        if not STOP["flag"]:
-            _v, a, e, wp = _refined_sweep(build, own, a, wp, pools, e, wpn=wpn)
-        e, free = refine_points(build, own, a, wp, e, fast=False)
-        e, free = _legal_points(build, a, wp, e)
-        fin = build.evaluate(own, a, wp, e)
-        return (fin["value"], a, wp, wpn, own, e, free, fin)
+    def polish_many(jobs):
+        """Fine-tune several builds (each job: value, armor, base weapon, weapon, points, tree)."""
+        return _polish_many(build, pools, ap_budget, keep, jobs)
 
+    _tmark("main search")
     # ---- 3. polish the best few: tree, skill points, powders
     LIVE["phase"] = 3
     uniq = dedupe(results)
@@ -1317,14 +1469,16 @@ def search_best_build(build, owned, armor0, weapon0, base_weapon0, keep=(), ap_b
     finals = []
     n_polish = P["polish"]
     polished = set()
-    for i, (v, a, wpn, wp, e) in enumerate(uniq[:n_polish]):
-        _report(0.82 + 0.15 * i / n_polish, "Fine-tuning the best builds (ability tree, skill points, powders)")
-        finals.append(polish(v, a, wpn, wp, e, cur_own))
+    _report(0.82, "Fine-tuning the best builds (ability tree, skill points, powders)")
+    for (v, a, wpn, wp, e), f in zip(uniq[:n_polish], polish_many([(v, a, wpn, wp, e, cur_own)
+                                                                    for v, a, wpn, wp, e in uniq[:n_polish]])):
+        finals.append(f)
         polished.add((tuple(it.name if it else None for it in a), wpn.name))
-        _live_offer(finals[-1][0], finals[-1][7]["main"], *_names(finals[-1][1], wpn))
+        _live_offer(f[0], f[7]["main"], *_names(f[1], wpn))
     finals.sort(key=lambda x: -x[0])
     main_best = finals[0][0]
 
+    _tmark("polish")
     # ---- 4. extra searching on top (only adds builds to choose from; everything above is kept as it was,
     # so the answer can only stay the same or get better)
     bonus = {"weapons": 0, "deeper": 0, "before": main_best, "after": main_best, "found_by": None}
@@ -1367,15 +1521,23 @@ def search_best_build(build, owned, armor0, weapon0, base_weapon0, keep=(), ap_b
                 if key not in names:
                     names.add(key)
                     tops.append(f)
-            for f in tops[:depth]:
-                if out_of_time():
-                    break
-                fv, fa, fwp, fwpn, fown, fe = f[:6]
-                res = _local_search(build, fown, pools, fwpn, fwp, [fa], fe, dp, out_of_time)
-                if res and not out_of_time():
-                    res = [_kicks(build, fown, pools, res[0], fe, P.get("depth_kicks", 4), out_of_time)]
+            sel = tops[:depth]
+            if time_limit is None:                 # the builds side by side (each one on its own)
+                outs = _run_side_by_side(build, "_depth_one", [(f[4], pools, f[3], f[2], f[1], f[5], dp,
+                                                                P.get("depth_kicks", 4)) for f in sel])
+            else:                                  # with a time limit: one at a time, checking the clock
+                outs = []
+                for f in sel:
+                    if out_of_time():
+                        break
+                    fv, fa, fwp, fwpn, fown, fe = f[:6]
+                    res = _local_search(build, fown, pools, fwpn, fwp, [fa], fe, dp, out_of_time)
+                    if res and not out_of_time():
+                        res = [_kicks(build, fown, pools, res[0], fe, P.get("depth_kicks", 4), out_of_time)]
+                    outs.append(res)
+            for f, res in zip(sel, outs):
                 bonus["deeper"] += 1
-                extra_results += [(r[0], r[1], r[2], r[3], r[4], fown) for r in res]
+                extra_results += [(r[0], r[1], r[2], r[3], r[4], f[4]) for r in res]
         # polish the best new builds not already polished
         # (the best few from the extra weapons, and the best from the deeper search: the two are scored on
         # different ability trees until polished, so each gets its own places)
@@ -1393,21 +1555,20 @@ def search_best_build(build, owned, armor0, weapon0, base_weapon0, keep=(), ap_b
                 cand.append(r)
                 taken += 1
         source = {}
-        for i, r in enumerate(cand):
-            if out_of_time():
-                break
-            _report(0.85 + 0.13 * i / max(1, len(cand)), "Fine-tuning the new contenders")
-            own0 = r[5] if len(r) > 5 else cur_own
-            f = polish(r[0], r[1], r[2], r[3], r[4], own0)
-            source[id(f)] = "deeper search" if len(r) > 5 else "more weapons"
-            finals.append(f)
-            _live_offer(f[0], f[7]["main"], *_names(f[1], f[3]))
+        if cand and not out_of_time():
+            _report(0.85, "Fine-tuning the new contenders")
+            done = polish_many([(r[0], r[1], r[2], r[3], r[4], r[5] if len(r) > 5 else cur_own) for r in cand])
+            for r, f in zip(cand, done):
+                source[id(f)] = "deeper search" if len(r) > 5 else "more weapons"
+                finals.append(f)
+                _live_offer(f[0], f[7]["main"], *_names(f[1], f[3]))
         finals.sort(key=lambda x: -x[0])
         if id(finals[0]) in source and better(finals[0][0], main_best, 1.001):
             bonus["found_by"] = source[id(finals[0])]
         bonus["after"] = finals[0][0]
         if finals[0][0] > main_best:
             agree, n_attempts = agreement(results + [r[:5] for r in extra_results])
+    _tmark("extra search")
     # ---- 5. crafted items: for the best builds, design a crafted item for each slot that fits the rest of the
     # build, and keep it where it beats what's there; then fine-tune again around the crafts. Only adds builds
     # to choose from, so the answer can only stay the same or get better.
@@ -1423,27 +1584,39 @@ def search_best_build(build, owned, armor0, weapon0, base_weapon0, keep=(), ap_b
                 names.add(key)
                 tops.append(f)
         tops = tops[: P.get("craft", 1)]
-        new_finals = []
+        new_finals, gots = [], []
         runner = _CraftRunner(build)
         try:
-            for i, f in enumerate(tops):
-                if out_of_time():
-                    break
-                _report(i / max(1, len(tops)), "Designing crafted items for the best builds")
-                got = _craft_stage(build, f, P.get("craft_kicks", 24), out_of_time, craft_info, runner)
-                if got is not None:
-                    v2, a2, wpn2, wp2, e2, own2 = got
-                    pf = polish(v2, a2, wpn2, wp2, e2, own2)
-                    new_finals.append(pf)
-                    _live_offer(pf[0], pf[7]["main"], *_names(pf[1], pf[3]))
+            _report(0.0, "Designing crafted items for the best builds")
+            infos = [{"designed": 0} for _ in tops]
+            if runner.ex is not None and len(tops) > 1:
+                # Every top build's crafts at once, sharing the CPU cores (each build's stage is worked out on
+                # its own, so the results are the same as one after another).
+                from concurrent.futures import ThreadPoolExecutor
+                with ThreadPoolExecutor(max_workers=len(tops)) as tp:
+                    got_all = list(tp.map(lambda fi: _craft_stage(build, fi[0], P.get("craft_kicks", 24), out_of_time,
+                                                                   fi[1], runner), zip(tops, infos)))
+            else:
+                got_all = []
+                for f, inf in zip(tops, infos):
+                    if out_of_time():
+                        break
+                    got_all.append(_craft_stage(build, f, P.get("craft_kicks", 24), out_of_time, inf, runner))
+            gots = [g for g in got_all if g is not None]
+            craft_info["designed"] += sum(i["designed"] for i in infos)
         finally:
             runner.close()
+        if gots:                                  # then fine-tune around the crafts (side by side)
+            for pf in polish_many([(v2, a2, wpn2, wp2, e2, own2) for v2, a2, wpn2, wp2, e2, own2 in gots]):
+                new_finals.append(pf)
+                _live_offer(pf[0], pf[7]["main"], *_names(pf[1], pf[3]))
         best_before = finals[0][0]
         finals = sorted(finals + new_finals, key=lambda x: -x[0])
         if new_finals and finals[0] in new_finals and better(finals[0][0], best_before, 1.000001):
             craft_info["found_by"] = "crafted items"
         craft_info["after"] = finals[0][0]
         craft_info["seconds"] = time.time() - t_craft
+    _tmark("crafted items")
     # ---- 6. armor powders on the finished builds. Done last, so everything above finds exactly the builds it
     # would without them; each build only gains (same gear, powders where they help).
     if not STOP["flag"]:
@@ -1476,12 +1649,13 @@ def search_best_build(build, owned, armor0, weapon0, base_weapon0, keep=(), ap_b
     v, a, wp, wpn, own, e, free, fin = finals[0]
     start_e, _ = refine_points(build, frozenset(owned), armor0, weapon0, [0] * 5, fast=False)
     start = build.evaluate(frozenset(owned), armor0, weapon0, start_e)
+    _tmark("armor powders and final checks")
     _report(1.0, "Done")
     return {"armor": a, "weapon": wp, "base_weapon": wpn, "owned": own, "extra": e, "free": free,
             "final": fin, "start": start, "start_val": start["value"], "filter": fstats,
             "stopped": STOP["flag"], "seconds": time.time() - t_start, "effort": effort,
             "effort_name": P["name"], "agree": agree, "attempts": n_attempts, "bonus_search": bonus,
-            "crafted": craft_info}
+            "crafted": craft_info, "timings": timings}
 
 
 # ============================================================================== time estimate

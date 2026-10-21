@@ -64,6 +64,18 @@ Personal files, never committed or overwritten by updates: `api_key.txt` (repo h
    GitHub runs the checks (~35-40 min, the build check is the slow part) and, only if all pass, moves `stable`
    and `release/<version>`, which is what the update bar sees. Don't push `stable` by hand.
 
+## Speed-ups
+
+Speed-ups must leave every result identical: `tests/same_numbers.py --check` (every number of 2,000 random
+builds) and the fingerprints from `tests/search_timing.py` (items, powders, tree, points, score) before and
+after. Done so far (1.7.0): repeated crafted items scored once, faster crafted-item assembly and scoring maths,
+fine-tuning / deeper search / every top build's craft stage run side by side on separate cores (each job is
+independent, results gathered in the same order), shake-ups in speculative batches (a kick that improves
+restarts the later ones from the new best; the random draws are replayed so it's exact). Not safe and not done: the simpler skill point solver for
+crafted gear (Wynnbuilder's order rules differ). Possible later: splitting the weapon craft by attack speed
+(exact only by replaying the shared random sequence, which needs each speed's candidate count first).
+Measured deep search on the owner's PC (1.6 -> 1.7): Warrior L106 7.0 -> 4.1 min, Mage L106 17.5 -> ~9 min.
+
 ## Design decisions worth knowing
 
 - Skill point solving: fast solvers verified against the reference on thousands of cases (speed_check); item
@@ -89,6 +101,9 @@ Personal files, never committed or overwritten by updates: `api_key.txt` (repo h
 
 ## History (newest first)
 
+- 1.7.0: deep search about twice as fast with identical builds (crafted items scored once per distinct item,
+  faster maths, fine-tuning / deeper search / shake-ups / every top build's crafts side by side); full check
+  run ~5.4 min on the owner's PC (was ~14); same-numbers reference check (one per system).
 - 1.6.0: bot knows your characters (and can update them / save builds); goal mix; mana check; armor powders.
 - 1.5.0: home page (class -> characters -> library), big "save this build to your library?" banner.
 - 1.4.0: crafted items designed for the build; tests/run_all.py for using all cores.
@@ -113,9 +128,13 @@ Personal files, never committed or overwritten by updates: `api_key.txt` (repo h
 
 ## Working environment notes
 
-- The owner has a 16-core Windows PC. Claude sessions so far ran in a small cloud machine (2 cores); the full
-  check run takes ~30 min there, estimated ~4-6 min on the owner's PC. To use the PC, a chat needs folder and
-  command access to it (chats started from the Claude desktop app). Otherwise the owner can double-click
-  `tests\Run all checks.bat` and paste back `tests\last_run.txt`.
+- The owner's PC (i9-11900K, 8 cores / 16 threads, Windows, Python 3.14) is a GitHub self-hosted runner for the
+  PRIVATE repository Petereta7/wynn-build-helper-dev (never attach it to the public one). Pushing a snapshot of
+  the code there (without .github/workflows/checks.yml, so no hosted minutes are used) runs
+  `.github/workflows/pc-tests.yml` on the PC: every check (tests/run_all.py), or, if the snapshot has
+  `tests/pc_job.txt`, each command in it. Results land on the `results` branch as `runs/<run id>.txt`
+  (fetch with `git fetch origin results:refs/remotes/origin/results`). The runner only works while the owner
+  has `run.cmd` open in their `actions-runner` folder. The full check run takes ~14 min there (vs ~30 min in a
+  2-core cloud session).
 - When killing background processes, don't use `pkill -f`/`pgrep -f` with a pattern that also matches your own
   shell command; match the exact process (it has killed the shell before).

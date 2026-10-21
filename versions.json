@@ -1,6 +1,12 @@
 {
   "versions": [
     {
+      "version": "1.7.0",
+      "date": "2026-10-21",
+      "notes": "Faster deep search: about twice as fast with exactly the same builds (checked on every class, and every number of 2,000 test builds compared with the previous version). The fine-tuning, the deeper search, the shake-ups and the crafted items for the best builds now run side by side on all your CPU cores, and the scoring maths is quicker.",
+      "warning": ""
+    },
+    {
       "version": "1.6.0",
       "date": "2026-10-20",
       "notes": "The bot knows your characters: say \"make my shaman tankier\" or use a character's name and it uses that character's class, level and gear; it can also level up characters and save builds to them. Goal mix: mostly one goal plus some of another (e.g. 70% spell damage + 30% survival). Mana check for spell builds: whether you can cast at full speed forever, or for how long. Armor powders are now part of the best build (they add health, so tanky builds get stronger).",
