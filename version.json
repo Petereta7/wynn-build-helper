@@ -1,4 +1,4 @@
 {
-  "version": "1.4.0",
-  "notes": "Crafted items: the search now designs crafted items for your build (recipe, tier 3 materials, attack speed, and the six ingredients and where each goes) and uses them wherever they beat normal items, for every class and slot. Every craft follows the game's crafting rules. The report and a new \"How to craft\" panel show each recipe, where the ingredients drop, and a link to Wynnbuilder's crafter. Untick \"Design crafted items\" (or tell the bot) to leave them out. Also: tests/run_all.py runs every check at once on all your CPU cores."
+  "version": "1.5.0",
+  "notes": "Home page and character library: the app opens on your characters. Pick a class, then a character, to see its saved builds and make a new build for it (class, level and gear filled in). When a build is ready, a big banner asks whether to save it to a character's library. Characters and libraries stay on your computer and updates never touch them."
 }

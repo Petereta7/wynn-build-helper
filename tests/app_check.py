@@ -7,6 +7,7 @@ App check: the things that would break the app for everyone if they slipped into
   * the updater never touches your key, settings, history or saved versions: an update and a switch back are run
     on a copy of the app, and the personal files are checked afterwards
   * the app's server starts and answers the page and its data requests, for every class
+  * the character library works (on a temporary copy, never your own)
 
     python3 tests/app_check.py
 
@@ -33,7 +34,8 @@ RESULTS = []
 KEY_RE = re.compile(r"sk-ant-[A-Za-z0-9_\-]{20,}")
 SKIP_DIRS = {".git", "__pycache__", "_versions", "_previous_version", "crossval/work", "crossval/wynnbuilder",
              "node_modules"}
-PERSONAL = ("api_key.txt", "wynn_app_config.json", "wynn_data/build_history.json", "wynn_data/best_builds.json")
+PERSONAL = ("api_key.txt", "wynn_app_config.json", "wynn_data/build_history.json", "wynn_data/best_builds.json",
+            "wynn_data/library.json")
 
 
 def check(name, ok, detail=""):
@@ -136,6 +138,7 @@ def check_updater():
                     "wynn_app_config.json": '{"model": "mine", "sound": false}\n',
                     "wynn_data/build_history.json": '[{"id": "mine"}]\n',
                     "wynn_data/best_builds.json": '{"mine": 1}\n',
+                    "wynn_data/library.json": '{"characters": [{"id": "mine"}]}\n',
                     "_versions/0.9.0/version.json": '{"version": "0.9.0"}\n'}
         for rel, text in personal.items():
             p = os.path.join(app, *rel.split("/"))
@@ -218,11 +221,67 @@ def check_server():
         srv.shutdown()
 
 
+def check_library():
+    """Characters and their saved builds: create, save a build from History, view it, mark current, rename,
+    remove, delete; on a temporary copy, never your own library."""
+    import wynn_app
+    from http.server import ThreadingHTTPServer
+    with tempfile.TemporaryDirectory() as tmp:
+        saved = (wynn_app.LIBRARY_PATH, wynn_app.HISTORY_PATH)
+        wynn_app.LIBRARY_PATH, wynn_app.HISTORY_PATH = os.path.join(tmp, "library.json"), os.path.join(tmp, "history.json")
+        srv = ThreadingHTTPServer(("127.0.0.1", 0), wynn_app.Handler)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        base = f"http://127.0.0.1:{srv.server_address[1]}"
+
+        def call(path, body=None):
+            data = None if body is None else json.dumps(body).encode()
+            req = urllib.request.Request(base + path, data=data, headers={"Content-Type": "application/json"})
+            with urllib.request.urlopen(req, timeout=60) as r:
+                return json.loads(r.read())
+        try:
+            item = {"name": "Crafted Ring (Lv 20-23)", "tier": "Crafted", "craft": {"link": "https://wynnbuilder.github.io/crafter/#ABC"}}
+            wynn_app.save_history([{"id": "h1", "class": "mage", "class_title": "Mage", "level": 20, "goal": "spells",
+                                    "label": "Spell damage per second", "numbers": {"goal": 1239.0},
+                                    "items": [{"name": "Temporal Cage", "tier": "Unique"}, None, item], "sp": {}}])
+            ok = True
+            lib = call("/api/library")
+            ok &= len(lib["classes"]) == 5 and lib["characters"] == []
+            r = call("/api/library", {"action": "create", "class": "mage", "name": "Sparky", "level": 18})
+            cid = r["character_id"]
+            ok &= r["ok"] and r["characters"][0]["name"] == "Sparky" and r["classes"][2]["count"] == 1
+            r = call("/api/library", {"action": "save", "history_id": "h1", "character_id": cid})
+            c = r["characters"][0]
+            ok &= r["ok"] and len(c["builds"]) == 1 and c["current"] == c["builds"][0]["id"] and c["level"] == 20
+            ok &= c["builds"][0]["gear"] == ["Temporal Cage", "CR-ABC"]
+            r2 = call("/api/library", {"action": "save", "history_id": "h1", "character_id": cid})     # saved once only
+            ok &= len(r2["characters"][0]["builds"]) == 1
+            bid = c["builds"][0]["id"]
+            full = call(f"/api/library/build?c={cid}&b={bid}")
+            ok &= full["character"]["name"] == "Sparky" and full["numbers"]["goal"] == 1239.0 and "tree" in full
+            wynn_app.save_history([])                                     # clearing History keeps the library
+            ok &= len(call("/api/library")["characters"][0]["builds"]) == 1
+            r = call("/api/library", {"action": "save", "history_id": "nope", "character_id": cid})
+            ok &= not r["ok"]
+            r = call("/api/library", {"action": "update", "id": cid, "name": "  Zap  ", "level": 25})
+            ok &= r["characters"][0]["name"] == "Zap" and r["characters"][0]["level"] == 25
+            r = call("/api/library", {"action": "remove", "character_id": cid, "build_id": bid})
+            ok &= r["characters"][0]["builds"] == [] and r["characters"][0]["current"] is None
+            r = call("/api/library", {"action": "delete", "id": cid})
+            ok &= r["characters"] == []
+            check("character library (create, save, view, edit, delete)", ok)
+        except Exception as exc:
+            check("character library (create, save, view, edit, delete)", False, f"{type(exc).__name__}: {exc}")
+        finally:
+            srv.shutdown()
+            wynn_app.LIBRARY_PATH, wynn_app.HISTORY_PATH = saved
+
+
 def main():
     check_code()
     check_release_files()
     check_updater()
     check_server()
+    check_library()
     print(f"\n{sum(RESULTS)}/{len(RESULTS)} checks passed.")
     sys.exit(0 if all(RESULTS) else 1)
 

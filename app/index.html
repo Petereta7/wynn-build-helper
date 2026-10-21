@@ -462,6 +462,69 @@ label.deep input[type=checkbox] { width: auto; flex: 0 0 auto; margin-top: 3px; 
 .icard.weapon.crowned { animation: crowned 1.6s ease-out; }
 @keyframes crowned { 20% { box-shadow: 0 0 40px 6px var(--rc), inset 0 0 30px -6px var(--rc); transform: scale(1.04); } }
 #main.quake { animation: shake .55s cubic-bezier(.36, .07, .19, .97); }
+
+/* ---------- home: classes, characters, library ---------- */
+.home-head { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; margin: 4px 0 18px; }
+.home-head h2 { font-family: var(--display); font-size: 34px; margin: 0; color: var(--legendary); font-weight: 700; line-height: 1.1; }
+.home-head .sub { color: var(--muted); margin: 0; }
+.crumb { background: none; border: 0; color: var(--link); cursor: pointer; padding: 0; font-size: 14px; }
+.crumb:hover { text-decoration: underline; }
+.classes { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 16px; }
+.ccard { --cc: #8a90b8; position: relative; overflow: hidden; text-align: left; cursor: pointer; padding: 18px 18px 16px; border-radius: var(--r-lg);
+  border: 1px solid color-mix(in srgb, var(--cc) 55%, var(--line)); color: var(--text);
+  background: radial-gradient(120% 90% at 85% 0%, color-mix(in srgb, var(--cc) 22%, transparent), transparent 60%), linear-gradient(180deg, #221a3a, #150d24);
+  box-shadow: inset 0 0 26px -16px var(--cc); transition: transform .18s, box-shadow .2s; animation: cardpop .45s cubic-bezier(.2, 1.4, .4, 1) both; }
+.ccard:hover, .ccard:focus-visible { transform: translateY(-3px); box-shadow: 0 10px 26px -12px var(--cc), inset 0 0 30px -12px var(--cc); }
+.ccard svg { width: 46px; height: 46px; color: var(--cc); filter: drop-shadow(0 0 8px color-mix(in srgb, var(--cc) 60%, transparent)); }
+.ccard .cn { font-family: var(--display); font-size: 24px; margin-top: 8px; color: var(--cc); }
+.ccard .cc { color: var(--muted); font-size: 13.5px; }
+.chars { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 14px; }
+.chcard { --cc: #8a90b8; text-align: left; cursor: pointer; padding: 14px 16px; border-radius: var(--r-md); color: var(--text);
+  border: 1px solid color-mix(in srgb, var(--cc) 45%, var(--line)); background: linear-gradient(180deg, rgba(40, 10, 60, .55), rgba(16, 6, 26, .75));
+  transition: transform .15s, box-shadow .2s; animation: cardpop .4s cubic-bezier(.2, 1.4, .4, 1) both; }
+.chcard:hover, .chcard:focus-visible { transform: translateY(-2px); box-shadow: 0 8px 20px -10px var(--cc); }
+.chcard .nm { font-family: var(--display); font-size: 20px; color: var(--cc); }
+.chcard .lv { color: var(--muted); font-size: 13px; }
+.chcard .bi { margin-top: 8px; font-size: 12.5px; color: var(--muted); }
+.chcard.new { border-style: dashed; display: flex; flex-direction: column; justify-content: center; gap: 8px; cursor: default; }
+.chcard.new .row { display: flex; gap: 8px; }
+.chcard.new input { min-width: 0; flex: 1; padding: 8px 10px; border-radius: var(--r-sm); border: 1px solid var(--line); background: var(--night); }
+.chcard.new input.lvl { flex: 0 0 76px; }
+.char-hero { padding: 20px 24px; margin-bottom: 20px; }
+.char-hero h2 { font-family: var(--display); font-size: 32px; margin: 0; line-height: 1.15; }
+.char-hero .edit { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 12px 0 4px; }
+.char-hero .edit input { padding: 7px 10px; border-radius: var(--r-sm); border: 1px solid var(--line); background: var(--night); }
+.char-hero .edit input.lvl { width: 80px; }
+.lib { display: flex; flex-direction: column; gap: 12px; }
+.lcard { padding: 14px 16px; border: 1px solid var(--line); border-radius: var(--r-md); background: rgba(16, 6, 26, .6); }
+.lcard.cur { border-color: color-mix(in srgb, var(--set) 60%, var(--line)); box-shadow: inset 0 0 22px -14px var(--set); }
+.lcard .lt { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+.lcard .lt b { font-size: 16px; }
+.lcard .badge { font-size: 11px; font-weight: 800; letter-spacing: .06em; padding: 1px 7px; border-radius: 4px; background: var(--set); color: #08200d; }
+.lcard .ln { font-family: var(--display); font-size: 20px; color: var(--fabled); margin: 4px 0; }
+.lcard .li { font-size: 13px; color: var(--muted); }
+.lcard .lb { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.lcard a.btn-quiet { text-decoration: none; display: inline-flex; align-items: center; }
+.home-ask { margin-top: 30px; color: var(--muted); }
+.home-ask .examples { margin-top: 10px; }
+/* the big "save this build?" banner */
+.savebar { position: relative; overflow: hidden; margin: 0 0 22px; padding: 22px 26px 20px; border-radius: var(--r-lg); text-align: center;
+  border: 2px solid var(--legendary); background: radial-gradient(90% 140% at 50% 0%, rgba(85, 255, 255, .16), transparent 60%), linear-gradient(180deg, #1d1236, #120a20);
+  box-shadow: 0 0 0 2px #0a0510, 0 0 40px -6px rgba(85, 255, 255, .45); animation: savein .7s cubic-bezier(.2, 1.3, .4, 1) both; }
+.savebar::after { content: ""; position: absolute; inset: 0; pointer-events: none; border-radius: inherit; box-shadow: inset 0 0 0 2px rgba(85, 255, 255, .5); animation: savepulse 1.8s ease-in-out infinite; }
+.savebar .q { font-family: var(--display); font-weight: 700; font-size: clamp(30px, 4.2vw, 54px); line-height: 1.05; letter-spacing: .02em; text-transform: uppercase;
+  color: #eaffff; text-shadow: 0 0 18px rgba(85, 255, 255, .7), 0 3px 0 #0a0510; margin: 0 0 16px; }
+.savebar .row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; align-items: center; }
+.savebar select, .savebar input { padding: 10px 12px; border-radius: var(--r-md); border: 1px solid var(--line); background: var(--night); font-size: 15px; min-width: 200px; }
+.savebar .btn { font-size: 17px; padding: 12px 26px; }
+.savebar.done { border-color: var(--set); box-shadow: 0 0 0 2px #0a0510, 0 0 36px -8px rgba(85, 255, 85, .5); }
+.savebar.done .q { color: #eaffea; text-shadow: 0 0 16px rgba(85, 255, 85, .6), 0 3px 0 #0a0510; font-size: clamp(24px, 3.2vw, 40px); }
+.savebar.done::after { animation: none; box-shadow: none; }
+.savebar.gone { animation: saveout .35s ease-in both; }
+@keyframes savein { from { opacity: 0; transform: translateY(-28px) scale(.96); } to { opacity: 1; transform: none; } }
+@keyframes saveout { to { opacity: 0; transform: translateY(-16px) scale(.97); height: 0; padding: 0; margin: 0; } }
+@keyframes savepulse { 0%, 100% { opacity: .25; } 50% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .savebar, .savebar::after, .ccard, .chcard { animation: none; } }
 </style>
 </head>
 <body>
@@ -469,6 +532,7 @@ label.deep input[type=checkbox] { width: auto; flex: 0 0 auto; margin-top: 3px; 
   <h1 class="brand">Wynn Build <span>Helper</span></h1>
   <span class="data" id="dataver"></span>
   <span class="spacer"></span>
+  <button class="btn-quiet" id="goHome">Home</button>
   <button class="btn-quiet" id="openSettings">Settings</button>
 </header>
 
@@ -1066,7 +1130,8 @@ function autosize() { const t = $("#input"); t.style.height = "auto"; t.style.he
 $("#input").addEventListener("input", autosize);
 $("#input").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendChat($("#input").value); } });
 $("#compose").addEventListener("submit", (e) => { e.preventDefault(); sendChat($("#input").value); });
-$("#newChat").addEventListener("click", async () => { if (busy) return; await api("/api/chat/reset", {}); greet(); LAST_REPORT = null; LAST_SUMMARY = null; forgeStop(); showEmpty(); });
+$("#goHome").addEventListener("click", () => { if (homeGuard()) showHome(); });
+$("#newChat").addEventListener("click", async () => { if (busy) return; await api("/api/chat/reset", {}); greet(); LAST_REPORT = null; LAST_SUMMARY = null; ACTIVE_CHAR = null; forgeStop(); showEmpty(); });
 
 /* ---------- form ---------- */
 function renderGear() {
@@ -1628,8 +1693,8 @@ function showReport(text, S) {
   const cr = $("#copyReport"); if (cr) cr.addEventListener("click", () => { navigator.clipboard.writeText(text); toast("Report copied"); });
   document.querySelectorAll("[data-copy]").forEach((b) => b.addEventListener("click", () => { navigator.clipboard.writeText(b.dataset.copy); toast("Link copied"); }));
   if (S) {
-    if (reveal && !REDUCED) { mountVisuals(S, false); runReveal(S).then(() => animateBars($("#main"))); }
-    else mountVisuals(S, true);
+    if (reveal && !REDUCED) { mountVisuals(S, false); runReveal(S).then(() => { animateBars($("#main")); setTimeout(() => offerSave(S), 1100); }); }
+    else { mountVisuals(S, true); setTimeout(() => offerSave(S), 700); }
   }
   REVEAL_FROM = null;
   refreshHistory();
@@ -1660,6 +1725,10 @@ async function showSaved(id) {
   let h;
   try { h = await fetch("/api/history/" + encodeURIComponent(id)).then((r) => r.json()); } catch (e) { return; }
   if (!h || h.error) { toast("That build isn't saved any more"); refreshHistory(); return; }
+  renderSaved(h, `Saved build from ${h.date}, built for ${h.focus || h.label}`, "Back to the latest build",
+              () => { if (LAST_REPORT) showReport(LAST_REPORT, LAST_SUMMARY); else showHome(); });
+}
+function renderSaved(h, sub, backLabel, back) {
   forgeStop();
   const n = h.numbers || {};
   const chips = [[h.focus || h.label, n.goal, "dmg"], ["main attack DPS", n.melee, "melee"], ["spell damage/s", n.spell, "dmg"], ["effective HP", n.ehp, "ehp"],
@@ -1667,10 +1736,10 @@ async function showSaved(id) {
     .map(([k, v, c]) => `<div class="stat ${c}"><div class="v">${k === "walk speed" ? numFmt("spd", v || 0) : fmtBig(v || 0)}</div><div class="k">${esc(k)}</div></div>`).join("");
   const floors = h.floors && Object.keys(h.floors).length ? `<p class="floor-ok">Minimums it kept: ${Object.entries(h.floors).map(([k, v]) => `${esc({ hp: "health", ehp: "effective HP", spd: "walk speed", mr: "mana regen", hpr: "health regen" }[k] || k)} ${v}`).join(", ")}</p>` : "";
   $("#main").innerHTML = `<section class="tip hero"><h2>Level ${h.level} ${esc(h.class_title)}</h2>
-    <p class="sub">Saved build from ${esc(h.date)}, built for ${esc(h.focus || h.label)}</p>${floors}
+    <p class="sub">${esc(sub)}</p>${floors}
     <div class="stats">${chips}</div>
     <div class="actions">${h.link ? `<a class="btn" href="${esc(h.link)}" target="_blank" rel="noopener">Open in Wynnbuilder</a><button class="btn-quiet" data-copy="${esc(h.link)}">Copy link</button>` : ""}
-      <button class="btn-quiet" id="savedBack" type="button">Back to the latest build</button></div></section>` +
+      <button class="btn-quiet" id="savedBack" type="button">${esc(backLabel)}</button></div></section>` +
     equipHTML({ items: h.items, sp: h.sp }, null, "Gear", "Hover any piece for its stats.") + craftsHTML({ items: h.items }) +
     (h.tree ? (TOGGLE_SHARE = h.toggle_share || {}, treeHTML(h.tree, h.order || [], h.toggles_on || [], "")) : "");
   $("#main").scrollTop = 0;
@@ -1678,26 +1747,177 @@ async function showSaved(id) {
   if (h.tree) bindTips($("#treePanel"), (nid) => nodeTip(h.tree, h.order || [], h.toggles_on || [], nid));
   animateBars($("#main"));
   document.querySelectorAll("[data-copy]").forEach((b) => b.addEventListener("click", () => { navigator.clipboard.writeText(b.dataset.copy); toast("Link copied"); }));
-  $("#savedBack").addEventListener("click", () => { if (LAST_REPORT) showReport(LAST_REPORT, LAST_SUMMARY); else showEmpty(); });
+  $("#savedBack").addEventListener("click", back);
 }
 function showError(text) {
   $("#main").innerHTML = `<section class="tip hero"><h2>That didn't work</h2><pre style="white-space:pre-wrap;font:14px/1.5 var(--mono);margin:0;color:var(--warn)">${esc(text.trim())}</pre></section>`;
 }
-function showEmpty() {
-  const ex = [
-    "I'm a level 47 mage with Haqherphix, Ridge and Phosphene. I want max damage and to keep mana bank.",
-    "Level 106 warrior, I keep dying in raids. Make me tankier.",
-    "What should a level 80 archer use for main attack damage?",
-  ];
-  $("#main").innerHTML = `<section class="tip empty">
-    <h2>Your build will show up here</h2>
-    <p>Describe your character in the chat, or use the Fill in tab. You'll get the best ability tree, skill points, powders, gear upgrades and a plan for your next levels.</p>
-    <div class="examples">${ex.map((t) => `<button class="example">${esc(t)}</button>`).join("")}</div>
-  </section>`;
+function showEmpty() { showHome(); }
+
+/* ---------- home: pick a class, then a character; each character keeps a library of builds ---------- */
+let LIB = null, ACTIVE_CHAR = null;
+const SAVE_ASKED = new Set();            // builds the "save to library?" banner was answered for
+const CLASS_COL = { warrior: "#ff8a4c", mage: "#55ffff", archer: "#7ef08a", assassin: "#ff6bff", shaman: "#ffd84a" };
+const CLASS_ICON = {
+  warrior: '<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M10 38 34 14"/><path d="M30 10l8 0 0 8-6 2-4-4z" fill="currentColor"/><path d="M8 34l6 6"/></svg>',
+  mage: '<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M10 40 28 22"/><path d="M34 6l2.5 6.5L43 15l-6.5 2.5L34 24l-2.5-6.5L25 15l6.5-2.5z" fill="currentColor"/></svg>',
+  archer: '<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M14 6c16 6 16 30 0 36"/><path d="M14 6v36" stroke-width="1.6"/><path d="M8 24h30"/><path d="M33 19l6 5-6 5"/></svg>',
+  assassin: '<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M36 8 20 24l4 4L40 12z" fill="currentColor"/><path d="M16 22l10 10"/><path d="M19 29l-9 9"/></svg>',
+  shaman: '<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M24 20v22"/><circle cx="24" cy="12" r="7"/><circle cx="24" cy="12" r="2.5" fill="currentColor"/><path d="M18 30h12"/></svg>',
+};
+const classTitle = (c) => (c || "").charAt(0).toUpperCase() + (c || "").slice(1);
+async function loadLib() {
+  try { LIB = await fetch("/api/library").then((r) => r.json()); } catch (e) { LIB = LIB || { classes: [], characters: [] }; }
+  return LIB;
+}
+function homeGuard() { if (busy) { toast("A build is running. Stop it or wait for it to finish."); return false; } return true; }
+async function showHome() {
+  forgeStop();
+  await loadLib();
+  const cards = (LIB.classes || []).map((c, i) => `<button class="ccard" data-cls="${esc(c.class)}" style="--cc:${CLASS_COL[c.class] || "#8a90b8"};animation-delay:${i * 60}ms">
+      ${CLASS_ICON[c.class] || ""}<div class="cn">${esc(c.title)}</div>
+      <div class="cc">${c.count ? `${c.count} character${c.count > 1 ? "s" : ""}` : "No characters yet"}</div></button>`).join("");
+  const ex = ["I'm a level 47 mage with Haqherphix, Ridge and Phosphene. I want max damage and to keep mana bank.",
+              "Level 106 warrior, I keep dying in raids. Make me tankier.", "What should a level 80 archer use for main attack damage?"];
+  $("#main").innerHTML = `<div class="home-head"><h2>Your characters</h2><p class="sub">Pick a class to see its characters and their saved builds.</p></div>
+    <div class="classes">${cards}</div>
+    <div class="home-ask">Or just describe a character in the chat, or use the Fill in tab:
+      <div class="examples">${ex.map((t) => `<button class="example">${esc(t)}</button>`).join("")}</div></div>`;
+  $("#main").scrollTop = 0;
+  document.querySelectorAll(".ccard").forEach((b) => b.addEventListener("click", () => showClassPage(b.dataset.cls)));
   document.querySelectorAll(".example").forEach((b) => b.addEventListener("click", () => {
     if (META && !META.has_key) { $("#input").value = b.textContent; toast("Add your API key in Settings to send this"); return; }
     sendChat(b.textContent);
   }));
+}
+function buildLine(b) {
+  if (!b) return "No saved builds yet";
+  const n = b.numbers || {};
+  return `${esc(b.focus || b.label || "")}${n.goal != null ? ": " + fmtBig(n.goal) : ""} · level ${b.level}`;
+}
+function currentBuild(c) { return (c.builds || []).find((b) => b.id === c.current) || (c.builds || [])[0] || null; }
+async function showClassPage(cls) {
+  if (!LIB) await loadLib();
+  const col = CLASS_COL[cls] || "#8a90b8";
+  const chars = (LIB.characters || []).filter((c) => c.class === cls);
+  const cards = chars.map((c, i) => `<button class="chcard" data-id="${esc(c.id)}" style="--cc:${col};animation-delay:${i * 50}ms">
+      <div class="nm">${esc(c.name)}</div><div class="lv">Level ${c.level || "?"} ${esc(c.class_title)} · ${c.builds.length} saved build${c.builds.length === 1 ? "" : "s"}</div>
+      <div class="bi">${buildLine(currentBuild(c))}</div></button>`).join("");
+  $("#main").innerHTML = `<button class="crumb" id="toHome">← All classes</button>
+    <div class="home-head"><h2 style="color:${col}">${esc(classTitle(cls))} characters</h2></div>
+    <div class="chars">${cards}
+      <div class="chcard new" style="--cc:${col}"><div class="nm">New ${esc(classTitle(cls))}</div>
+        <div class="row"><input id="ncName" placeholder="Name" maxlength="40" aria-label="Character name"><input id="ncLevel" class="lvl" type="number" min="1" max="121" placeholder="Level" aria-label="Level"></div>
+        <button class="btn" id="ncAdd" type="button">Add character</button></div></div>`;
+  $("#main").scrollTop = 0;
+  $("#toHome").addEventListener("click", showHome);
+  document.querySelectorAll(".chcard[data-id]").forEach((b) => b.addEventListener("click", () => showCharacter(b.dataset.id)));
+  $("#ncAdd").addEventListener("click", async () => {
+    const r = await api("/api/library", { action: "create", class: cls, name: $("#ncName").value, level: +$("#ncLevel").value || 1 });
+    if (!r.ok) { toast(r.error || "Couldn't add the character"); return; }
+    LIB = r; showCharacter(r.character_id);
+  });
+}
+async function showCharacter(id) {
+  if (!LIB) await loadLib();
+  const c = (LIB.characters || []).find((x) => x.id === id);
+  if (!c) { showHome(); return; }
+  const col = CLASS_COL[c.class] || "#8a90b8";
+  const lib = c.builds.length ? c.builds.map((b) => {
+    const items = (b.items || []).filter(Boolean).map(([nm, t]) => `<span class="t-${esc(t)}">${esc(nm)}</span>`).join(", ");
+    const cur = b.id === c.current;
+    return `<div class="lcard${cur ? " cur" : ""}"><div class="lt"><b>${esc(b.focus || b.label || "Build")}</b>${cur ? '<span class="badge">CURRENT</span>' : ""}<span class="hd">level ${b.level} · saved ${esc(b.saved || b.date || "")}</span></div>
+      <div class="ln">${b.numbers && b.numbers.goal != null ? fmtBig(b.numbers.goal) : ""}</div><div class="li">${items}</div>
+      <div class="lb"><button class="btn-quiet" data-view="${esc(b.id)}">View</button>${cur ? "" : `<button class="btn-quiet" data-cur="${esc(b.id)}">Make current</button>`}
+        ${b.link ? `<a class="btn-quiet" href="${esc(b.link)}" target="_blank" rel="noopener">Wynnbuilder</a>` : ""}<button class="btn-quiet" data-rm="${esc(b.id)}">Remove</button></div></div>`;
+  }).join("") : `<div class="hist-empty">No saved builds yet. Make a build for ${esc(c.name)}; when it's done you'll be asked whether to save it here.</div>`;
+  $("#main").innerHTML = `<button class="crumb" id="toClass">← ${esc(c.class_title)} characters</button>
+    <section class="tip char-hero" style="margin-top:10px"><h2 style="color:${col}">${esc(c.name)}</h2>
+      <p class="sub" style="margin:2px 0 0;color:var(--muted)">Level ${c.level || "?"} ${esc(c.class_title)}${c.created ? " · added " + esc(c.created) : ""}</p>
+      <div class="actions" style="margin-top:14px"><button class="btn" id="chForm" type="button">Make a build for ${esc(c.name)}</button>
+        <button class="btn-quiet" id="chChat" type="button">Ask in the chat</button></div>
+      <div class="edit"><input id="chName" value="${esc(c.name)}" maxlength="40" aria-label="Name"><input id="chLevel" class="lvl" type="number" min="1" max="121" value="${c.level || ""}" aria-label="Level">
+        <button class="btn-quiet" id="chSave" type="button">Save changes</button><button class="btn-quiet" id="chDel" type="button">Delete character</button></div></section>
+    <h3 style="font-family:var(--display);font-size:22px;margin:0 0 12px">Library</h3><div class="lib">${lib}</div>`;
+  $("#main").scrollTop = 0;
+  $("#toClass").addEventListener("click", () => showClassPage(c.class));
+  $("#chForm").addEventListener("click", () => startBuildFor(c, "form"));
+  $("#chChat").addEventListener("click", () => startBuildFor(c, "chat"));
+  $("#chSave").addEventListener("click", async () => {
+    const r = await api("/api/library", { action: "update", id: c.id, name: $("#chName").value, level: +$("#chLevel").value || undefined });
+    if (r.ok) { LIB = r; toast("Saved"); showCharacter(c.id); } else toast(r.error || "Couldn't save");
+  });
+  $("#chDel").addEventListener("click", async () => {
+    if (!confirm(`Delete ${c.name} and the ${c.builds.length} build(s) in its library?`)) return;
+    const r = await api("/api/library", { action: "delete", id: c.id });
+    if (r.ok) { LIB = r; if (ACTIVE_CHAR === c.id) ACTIVE_CHAR = null; showClassPage(c.class); }
+  });
+  $("#main").querySelectorAll("[data-view]").forEach((b) => b.addEventListener("click", () => viewLibraryBuild(c.id, b.dataset.view)));
+  $("#main").querySelectorAll("[data-cur]").forEach((b) => b.addEventListener("click", async () => {
+    const r = await api("/api/library", { action: "current", character_id: c.id, build_id: b.dataset.cur }); if (r.ok) { LIB = r; showCharacter(c.id); }
+  }));
+  $("#main").querySelectorAll("[data-rm]").forEach((b) => b.addEventListener("click", async () => {
+    if (!confirm("Remove this build from the library?")) return;
+    const r = await api("/api/library", { action: "remove", character_id: c.id, build_id: b.dataset.rm }); if (r.ok) { LIB = r; showCharacter(c.id); }
+  }));
+}
+function startBuildFor(c, mode) {
+  if (!homeGuard()) return;
+  ACTIVE_CHAR = c.id;
+  const b = currentBuild(c);
+  const tab = (name) => document.querySelector(`.tab[data-pane="${name}"]`).click();
+  if (mode === "form") {
+    fillForm({ class: c.class, level: c.level, goal: b ? b.goal : undefined, gear: b ? b.gear : [] });
+    tab("form");
+    toast(`Filled in for ${c.name}. Choose what matters most, then Find my best build.`);
+  } else {
+    tab("talk");
+    const gearTxt = b && b.gear.length ? ` I'm wearing ${b.gear.join(", ")}.` : "";
+    $("#input").value = `This is my level ${c.level} ${c.class_title} "${c.name}".${gearTxt} `;
+    $("#input").focus();
+    $("#input").dispatchEvent(new Event("input"));
+  }
+}
+async function viewLibraryBuild(cid, bid) {
+  let h;
+  try { h = await fetch(`/api/library/build?c=${encodeURIComponent(cid)}&b=${encodeURIComponent(bid)}`).then((r) => r.json()); } catch (e) { return; }
+  if (!h || h.error) { toast("That build isn't in the library any more"); showCharacter(cid); return; }
+  renderSaved(h, `${h.character.name}'s library · saved ${h.saved || h.date}, built for ${h.focus || h.label}`, `Back to ${h.character.name}`, () => showCharacter(cid));
+}
+
+/* ---------- after a build: "save this build to your library?" ---------- */
+async function offerSave(S) {
+  if (!S || !S.best || !S.history_id || SAVE_ASKED.has(S.history_id) || busy) return;
+  if (LAST_SUMMARY !== S || $("#saveBar")) return;               // a different build is on screen now
+  await loadLib();
+  if ((LIB.characters || []).some((c) => c.builds.some((b) => b.source === S.history_id))) return;
+  const mine = (LIB.characters || []).filter((c) => c.class === S.class);
+  const pick = mine.find((c) => c.id === ACTIVE_CHAR) || mine[0];
+  const opts = mine.map((c) => `<option value="${esc(c.id)}"${pick && c.id === pick.id ? " selected" : ""}>${esc(c.name)} (level ${c.level || "?"})</option>`).join("")
+    + `<option value=""${pick ? "" : " selected"}>New ${esc(S.class_title)} character…</option>`;
+  const bar = document.createElement("section");
+  bar.className = "savebar"; bar.id = "saveBar"; bar.setAttribute("role", "dialog"); bar.setAttribute("aria-label", "Save this build to your library?");
+  bar.innerHTML = `<div class="q">Save this build to your library?</div>
+    <div class="row"><select id="sbChar" aria-label="Character">${opts}</select>
+      <input id="sbName" placeholder="New character's name" maxlength="40"${pick ? " hidden" : ""} aria-label="New character's name">
+      <button class="btn" id="sbYes" type="button">Save it</button><button class="btn-quiet" id="sbNo" type="button">No thanks</button></div>`;
+  $("#main").prepend(bar);
+  $("#main").scrollTo({ top: 0, behavior: REDUCED ? "auto" : "smooth" });
+  sndPing(4); setTimeout(() => sndPing(7), 140);
+  $("#sbChar").addEventListener("change", () => { $("#sbName").hidden = !!$("#sbChar").value; if (!$("#sbChar").value) $("#sbName").focus(); });
+  $("#sbNo").addEventListener("click", () => { SAVE_ASKED.add(S.history_id); bar.classList.add("gone"); setTimeout(() => bar.remove(), 360); });
+  $("#sbYes").addEventListener("click", async () => {
+    const cid = $("#sbChar").value;
+    const r = await api("/api/library", { action: "save", history_id: S.history_id, character_id: cid || undefined, new_name: $("#sbName").value });
+    if (!r.ok) { toast(r.error || "Couldn't save it"); return; }
+    LIB = r; SAVE_ASKED.add(S.history_id); ACTIVE_CHAR = r.character_id;
+    const c = r.characters.find((x) => x.id === r.character_id);
+    bar.classList.add("done");
+    bar.innerHTML = `<div class="q">Saved to ${esc(c ? c.name : "your library")}</div>
+      <div class="row"><button class="btn-quiet" id="sbOpen" type="button">Open ${esc(c ? c.name : "library")}</button><button class="btn-quiet" id="sbClose" type="button">Close</button></div>`;
+    $("#sbOpen").addEventListener("click", () => showCharacter(r.character_id));
+    $("#sbClose").addEventListener("click", () => { bar.classList.add("gone"); setTimeout(() => bar.remove(), 360); });
+  });
 }
 
 /* ---------- settings ---------- */

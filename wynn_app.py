@@ -415,6 +415,134 @@ def save_history(h: list):
         pass
 
 
+# ============================================================================== character library
+# Your characters (name, class, level) and the builds you chose to keep for each. Kept on this computer only
+# (wynn_data/library.json); updates never touch it. Builds are copied in, so clearing History doesn't remove them.
+
+LIBRARY_PATH = os.path.join(wh.DATA_DIR, "library.json")
+_LIB_LOCK = threading.Lock()
+
+
+def load_library() -> dict:
+    try:
+        with open(LIBRARY_PATH, encoding="utf-8") as fh:
+            lib = json.load(fh)
+        if isinstance(lib, dict) and isinstance(lib.get("characters"), list):
+            return lib
+    except Exception:
+        pass
+    return {"characters": []}
+
+
+def save_library(lib: dict):
+    os.makedirs(os.path.dirname(LIBRARY_PATH), exist_ok=True)
+    tmp = LIBRARY_PATH + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as fh:
+        json.dump(lib, fh)
+    os.replace(tmp, LIBRARY_PATH)
+
+
+def _new_id() -> str:
+    return f"{int(time.time() * 1000)}{os.urandom(2).hex()}"
+
+
+def _clean_name(name, fallback="") -> str:
+    name = " ".join(str(name or "").split())[:40]
+    return name or fallback
+
+
+def library_summary(lib: dict) -> dict:
+    """Everything the home page needs, without the heavy build details."""
+    chars = []
+    for c in lib["characters"]:
+        builds = [{**{k: b.get(k) for k in ("id", "source", "saved", "date", "level", "label", "focus", "numbers", "goal", "link")},
+                   "items": [[x["name"], x["tier"]] if x else None for x in b.get("items", [])],
+                   "gear": _gear_of(b)} for b in reversed(c.get("builds", []))]
+        chars.append({"id": c["id"], "name": c["name"], "class": c["class"], "class_title": wh.CLASS_TITLE.get(c["class"], c["class"]),
+                      "level": c.get("level"), "created": c.get("created"), "current": c.get("current"), "builds": builds})
+    counts = {cls: sum(1 for c in chars if c["class"] == cls) for cls in wh.CLASSES}
+    return {"classes": [{"class": cls, "title": wh.CLASS_TITLE[cls], "count": counts[cls]} for cls in wh.CLASSES],
+            "characters": chars}
+
+
+def _gear_of(b) -> list:
+    """A saved build's gear as the form and the bot take it (crafted pieces as their CR- codes)."""
+    out = []
+    for x in b.get("items", []):
+        if not x:
+            continue
+        craft = x.get("craft") or {}
+        out.append("CR-" + craft["link"].split("#", 1)[1] if craft.get("link") and "#" in craft["link"] else x["name"])
+    return out
+
+
+def library_action(body: dict) -> dict:
+    """Create / rename / delete characters, save a build to one, remove a build, mark one as current."""
+    act = body.get("action")
+    with _LIB_LOCK:
+        lib = load_library()
+        chars = lib["characters"]
+        find = lambda cid: next((c for c in chars if c["id"] == cid), None)
+        if act == "create":
+            cls = str(body.get("class") or "").lower()
+            if cls not in wh.CLASSES:
+                return {"ok": False, "error": "Pick a class."}
+            c = {"id": _new_id(), "name": _clean_name(body.get("name"), f"My {wh.CLASS_TITLE[cls]}"), "class": cls,
+                 "level": max(1, min(121, int(body.get("level") or 1))), "created": time.strftime("%b %d %Y"),
+                 "builds": [], "current": None}
+            chars.append(c)
+        elif act == "update":
+            c = find(body.get("id"))
+            if c is None:
+                return {"ok": False, "error": "That character isn't there any more."}
+            if "name" in body:
+                c["name"] = _clean_name(body["name"], c["name"])
+            if body.get("level"):
+                c["level"] = max(1, min(121, int(body["level"])))
+        elif act == "delete":
+            lib["characters"] = [c for c in chars if c["id"] != body.get("id")]
+            c = None
+        elif act == "save":
+            h = next((x for x in load_history() if x.get("id") == body.get("history_id")), None)
+            if h is None:
+                return {"ok": False, "error": "That build isn't in History any more."}
+            c = find(body.get("character_id"))
+            if c is None:
+                c = {"id": _new_id(), "name": _clean_name(body.get("new_name"), f"My {h.get('class_title', '')}".strip()),
+                     "class": h["class"], "level": h.get("level") or 1, "created": time.strftime("%b %d %Y"),
+                     "builds": [], "current": None}
+                chars.append(c)
+            if c["class"] != h["class"]:
+                return {"ok": False, "error": f"That build is for a {h.get('class_title')}, and {c['name']} is a "
+                                              f"{wh.CLASS_TITLE.get(c['class'], c['class'])}."}
+            if not any(b.get("source") == h["id"] for b in c["builds"]):
+                b = dict(h, id=_new_id(), source=h["id"], saved=time.strftime("%b %d %Y %H:%M"))
+                c["builds"].append(b)
+                c["current"] = b["id"]
+                c["level"] = max(c.get("level") or 1, h.get("level") or 1)
+        elif act in ("remove", "current"):
+            c = find(body.get("character_id"))
+            if c is None:
+                return {"ok": False, "error": "That character isn't there any more."}
+            if act == "remove":
+                c["builds"] = [b for b in c["builds"] if b["id"] != body.get("build_id")]
+                if c.get("current") == body.get("build_id"):
+                    c["current"] = c["builds"][-1]["id"] if c["builds"] else None
+            else:
+                if any(b["id"] == body.get("build_id") for b in c["builds"]):
+                    c["current"] = body.get("build_id")
+        else:
+            return {"ok": False, "error": "unknown action"}
+        try:
+            save_library(lib)
+        except OSError as exc:
+            return {"ok": False, "error": f"Couldn't save the library ({exc})."}
+        out = library_summary(lib)
+        out["ok"] = True
+        out["character_id"] = c["id"] if c else None
+        return out
+
+
 def build_summary():
     """The last report as data for the visuals, plus its before/after baseline; saves it to history."""
     R = wh.LAST_RESULT
@@ -719,6 +847,21 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, [{**{k: h.get(k) for k in ("id", "date", "class_title", "level", "label", "focus", "numbers", "floors")},
                                      "items": [[x["name"], x["tier"]] if x else None for x in h.get("items", [])]}
                                     for h in reversed(load_history())])
+        if path == "/api/library":
+            return self._send(200, library_summary(load_library()))
+        if path.startswith("/api/library/build"):
+            from urllib.parse import parse_qs, urlparse
+            q = parse_qs(urlparse(self.path).query)
+            cid, bid = (q.get("c") or [""])[0], (q.get("b") or [""])[0]
+            c = next((x for x in load_library()["characters"] if x["id"] == cid), None)
+            b = next((x for x in (c or {}).get("builds", []) if x["id"] == bid), None)
+            if b is None:
+                return self._send(404, {"error": "not found"})
+            try:
+                b = dict(b, tree=tree_static(wh.Tree(game_data(), b["class"])))
+            except Exception:
+                pass
+            return self._send(200, dict(b, character={"id": c["id"], "name": c["name"]}))
         if path.startswith("/api/history/"):
             hid = path.rsplit("/", 1)[-1]
             h = next((x for x in load_history() if x.get("id") == hid), None)
@@ -780,6 +923,8 @@ class Handler(BaseHTTPRequestHandler):
                 cfg["auto_update"] = bool(body["auto_update"])
             save_config(cfg)
             return self._send(200, {"ok": True, "has_key": bool(api_key())})
+        if self.path == "/api/library":
+            return self._send(200, library_action(body))
         if self.path == "/api/history/delete":
             save_history([h for h in load_history() if h.get("id") != body.get("id")])
             return self._send(200, {"ok": True})

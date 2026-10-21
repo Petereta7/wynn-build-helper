@@ -11,6 +11,7 @@ __pycache__/
 tests/crossval/work/
 tests/crossval/wynnbuilder/
 wynn_data/build_history.json
+wynn_data/library.json
 wynn_data/*.tmp
 _versions/
 tests/last_run.txt
