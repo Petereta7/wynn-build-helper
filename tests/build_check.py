@@ -46,6 +46,8 @@ CASES = [
     {"name": "assassin L55 spells, Aerial Ace 50%", "class": "assassin", "level": 55, "goal": "spells",
      "toggles": ["Aerial Ace=50%"]},
     {"name": "warrior L50 melee, no crafted items", "class": "warrior", "level": 50, "goal": "melee", "crafted": False},
+    {"name": "shaman L70 spells 70% + survival 30%", "class": "shaman", "level": 70, "goal": "spells",
+     "second_goal": "survival", "second_goal_weight": 30},
 ]
 
 RESULTS = []
@@ -93,6 +95,8 @@ def problems_with(case, res):
         if it.craft_problems or it.missing_durability is not None:
             out.append(f"crafted {it.type} can't be made: {it.craft_problems}")
         back = wh.crafted_from_code(wh.LAST_RESULT["build"].data, "CR-" + wh.craft_code(it))
+        if getattr(it, "powders", None) and it.category == "armor":     # powders aren't part of a craft's code
+            back = wh.armor_with_powders(back, it.powders)
         if back.max_stats != it.max_stats or back.reqs != it.reqs or back.bonus != it.bonus:
             out.append(f"crafted {it.type}'s code doesn't read back the same")
     fin = best["eval"]

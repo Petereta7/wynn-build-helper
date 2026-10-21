@@ -43,6 +43,7 @@ The build appears on the right. When the search finishes, every item flies into 
 - **Your equipment screen**: every piece in its slot as a Wynncraft-style card (hover or tap for its stats, requirements and powders), "NEW" on pieces that changed, and your skill points split into what you assign and what your gear gives.
 - **The ability tree map**: the real tree with your abilities lit up and numbered in click order, coloured by archetype (hover for what each does).
 - **Save to your library**: when a build is ready, a big banner at the top asks whether to save it to your library. Pick which character it's for (or make a new one) and it's kept there.
+- **The bot knows your characters**: say "make my shaman tankier", or use a character's name, and it uses that character's class, level and current gear. Tell it a character is "level 60 now", or "save that to" a character, and it updates the library.
 - **Home page and characters**: the app opens on your characters. Pick a class, then a character, to see its library of saved builds (the current one marked), view any of them in full, and **Make a build for** that character: the form is filled in with its class, level and current gear (crafted pieces included), or the chat is started for you. Characters and their libraries are kept on your computer only (`wynn_data/library.json`), and updates never touch them. The **Home** button at the top goes back there anytime.
 - **History**: every build you make is saved on your computer only (the History tab) and kept through updates. Everyone starts with an empty history. When a build is ready, a small white box pops up in the top-left corner of your screen, on top of other windows, and disappears by itself, so you can play while it searches. (Games in exclusive fullscreen can cover it; turn the pop-up off in Settings if you don't want it.)
 
@@ -132,6 +133,12 @@ python3 wynn_helper.py --class warrior --level 60 --goal melee --min "hp=6000, w
 | `balanced` | Damage and effective HP together |
 | `ability` | Highest damage of one ability you choose with `--focus`, e.g. `--focus "puppets"`, `"Meteor"`, `"Bash"`. The tree and gear are chosen for that ability alone. In the chat, just say "maximum puppet damage". |
 | `healing` | Healing per second (support) |
+
+**Mixing two goals:** "mostly spell damage, but I want to survive too" is a main goal plus a second goal with a weight, for example 70% spells + 30% survival (`--goal spells --goal2 survival --goal2-weight 30`, the "Also care about" box in the form, or just say it to the bot). The score is a weighted mix of the two, like `balanced` (damage and effective HP at 50/50), so the best build is the one that's good at both in that proportion. It's softer than a minimum: use a minimum when you have a number in mind ("at least 20,000 health"), a mix when it's a preference. The report shows both parts before and after.
+
+**Mana check:** for spell builds the report and results screen say whether your rotation can be cast at full speed (3 casts a second) forever, or how many seconds it lasts from a full mana bar and how many casts a second you can keep up after that (which is what the spell damage counts). It uses Wynnbuilder's mana model: 5 + mana regen/5 + mana steal/3 mana a second, a bar of 100 + max mana bonus + your Intelligence %.
+
+**Armor powders:** the whole-build search also picks powders for armor pieces with empty slots, when they make the build better: every armor powder adds health (5 to 75 by tier, any element), so tanky goals and health minimums gain from them; the element matters against an enemy hit you enter or an elemental defense minimum. Pieces you already powdered are left as they are.
 
 ## Options
 

@@ -1,6 +1,12 @@
 {
   "versions": [
     {
+      "version": "1.6.0",
+      "date": "2026-10-20",
+      "notes": "The bot knows your characters: say \"make my shaman tankier\" or use a character's name and it uses that character's class, level and gear; it can also level up characters and save builds to them. Goal mix: mostly one goal plus some of another (e.g. 70% spell damage + 30% survival). Mana check for spell builds: whether you can cast at full speed forever, or for how long. Armor powders are now part of the best build (they add health, so tanky builds get stronger).",
+      "warning": ""
+    },
+    {
       "version": "1.5.0",
       "date": "2026-10-20",
       "notes": "Home page and character library: the app opens on your characters. Pick a class, then a character, to see its saved builds and make a new build for it (class, level and gear filled in). When a build is ready, a big banner asks whether to save it to a character's library. Characters and libraries stay on your computer and updates never touch them.",

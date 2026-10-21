@@ -54,6 +54,8 @@ jobs:
         run: python tests/speed_check.py
       - name: Crafted item designer (best grid, game rules)
         run: python tests/craft_check.py
+      - name: Goal mix, mana check, armor powders
+        run: python tests/goal_check.py
 
   builds:
     name: Builds for every class on Windows (legal, never worse)

@@ -28,7 +28,8 @@ QUICK = [("App, updater and release files", ["app_check.py"]),
          ("Self-test (matches Wynnbuilder)", ["self_test.py"]),
          ("Ability buffs, every class", ["toggle_check.py"]),
          ("Fast skill points = reference", ["speed_check.py"]),
-         ("Crafted item designer", ["craft_check.py"])]
+         ("Crafted item designer", ["craft_check.py"]),
+         ("Goal mix, mana check, armor powders", ["goal_check.py"])]
 
 
 def main():

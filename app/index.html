@@ -505,6 +505,9 @@ label.deep input[type=checkbox] { width: auto; flex: 0 0 auto; margin-top: 3px; 
 .lcard .li { font-size: 13px; color: var(--muted); }
 .lcard .lb { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
 .lcard a.btn-quiet { text-decoration: none; display: inline-flex; align-items: center; }
+.mananote, .mixnote { margin: 12px 0 0; padding: 8px 12px; border-radius: var(--r-md); background: rgba(85, 85, 255, .08); border: 1px solid var(--line); color: var(--muted); font-size: 14px; }
+.mananote b, .mixnote b { color: var(--text); }
+.mananote.ok { border-color: color-mix(in srgb, var(--good) 40%, var(--line)); }
 .home-ask { margin-top: 30px; color: var(--muted); }
 .home-ask .examples { margin-top: 10px; }
 /* the big "save this build?" banner */
@@ -575,6 +578,13 @@ label.deep input[type=checkbox] { width: auto; flex: 0 0 auto; margin-top: 3px; 
           <div class="field"><label for="f-level">Combat level</label><input id="f-level" type="number" min="1" max="121" placeholder="e.g. 60"></div>
         </div>
         <div class="field"><label for="f-goal">What matters most</label><select id="f-goal"></select></div>
+        <div class="row">
+          <div class="field"><label for="f-goal2">Also care about (optional)</label>
+            <select id="f-goal2"><option value="">Nothing else</option><option value="survival">Survival</option><option value="spells">Spell damage</option><option value="melee">Highest DPS</option><option value="burst">Biggest combo</option><option value="healing">Healing others</option></select></div>
+          <div class="field" id="goal2wField" hidden><label for="f-goal2w">How much: <b id="goal2wVal">30%</b></label>
+            <input id="f-goal2w" type="range" min="10" max="90" step="5" value="30" aria-describedby="goal2hint"></div>
+        </div>
+        <span class="hint" id="goal2hint">A softer version of a minimum: e.g. 70% spell damage + 30% survival picks the build that's best at both in that proportion.</span>
         <div class="field" id="focusField" hidden><label for="f-focus">Which ability</label>
           <input id="f-focus" type="text" list="abilityList" placeholder="e.g. Puppet Damage, Meteor, Bash">
           <datalist id="abilityList"></datalist>
@@ -735,6 +745,8 @@ async function sendChat(text) {
     wait.remove();
     addMsg("bot", r.reply || "", r.error ? "err" : "");
     if (r.needs_key) $("#keynote").hidden = false;
+    if (r.character_id) ACTIVE_CHAR = r.character_id;           // the bot built for one of your characters
+    if (r.library_changed) await loadLib();
     if (r.reports && r.reports.length) { await forgeFinish(); showReport(r.reports[r.reports.length - 1], (r.summaries || [])[r.reports.length - 1]); }
     else { forgeStop(); if (LAST_REPORT) showReport(LAST_REPORT, LAST_SUMMARY); else showEmpty(); }   // no new build: bring the last one back
     if (r.args) fillForm(r.args);
@@ -1167,6 +1179,7 @@ function formParams() {
     powders: $("#f-powders").value, enemy: $("#f-enemy").value, tomes: $("#f-tomes").value, aspects: $("#f-aspects").value,
     sliders: $("#f-sliders").value, raid_buffs: $("#f-raid").value, rolls: $("#f-rolls").value, poison: $("#f-poison").value,
     drops_only: $("#f-drops").checked, crafted: $("#f-crafted").checked, deep_search: $("#f-deep").checked,
+    second_goal: $("#f-goal2").value || undefined, second_goal_weight: $("#f-goal2").value ? +$("#f-goal2w").value : undefined,
     item_levels: $("#f-levels").value ? +$("#f-levels").value : undefined,
     buffs: [...document.querySelectorAll("#buffChips [aria-pressed=true]")].map((b) => b.dataset.buff),
     minimums: minimumsFromForm(),
@@ -1182,6 +1195,7 @@ function fillForm(a) {
   if (a.class) $("#f-class").value = a.class;
   if (a.level) $("#f-level").value = a.level;
   if (a.goal) { $("#f-goal").value = a.goal; syncFocus(); }
+  if (a.second_goal !== undefined) { $("#f-goal2").value = a.second_goal || ""; if (a.second_goal_weight) $("#f-goal2w").value = a.second_goal_weight; syncGoal2(); }
   if (a.focus) $("#f-focus").value = a.focus;
   if (a.gear) { gear = Array.isArray(a.gear) ? a.gear.slice() : String(a.gear).split(",").map((s) => s.trim()).filter(Boolean); renderGear(); }
   const set = (id, v) => { if (v !== undefined) $(id).value = Array.isArray(v) ? v.join(", ") : v; };
@@ -1286,6 +1300,23 @@ function itemTip(c) {
     ${c.craft.durability.length ? `<div class="gray">Durability ${c.craft.durability[0]}–${c.craft.durability[1]}</div>` : ""}`;
   h += `<hr><div style="color:${col}">${esc(c.tier)} Item</div>`;
   if (c.notes && c.notes.length) h += `<div class="gray">${esc(c.notes.join("; "))}</div>`;
+  return h;
+}
+
+/* ---- mana check (spell builds) and goal mix ---- */
+function manaHTML(S) {
+  const b = S.best || {}, m = b.mana, parts = b.goal_parts;
+  let h = "";
+  if (parts) {
+    const words = { spells: "Spell damage", melee: "Highest DPS", burst: "Biggest combo", survival: "Survival", healing: "Healing", balanced: "Damage and survival", ability: "Ability" };
+    h += `<p class="mixnote">Goal mix: ${Object.entries(parts).map(([k, v]) => `${esc(words[k] || k)} <b>${fmtBig(v)}</b>`).join(" · ")}</p>`;
+  }
+  const spelly = m && (S.goal === "spells" || S.goal === "burst" || S.goal === "balanced" || (parts && "spells" in parts));
+  if (spelly) {
+    h += m.seconds == null
+      ? `<p class="mananote ok">Mana: you never run out at full casting speed (${m.used.toFixed(1)}/s used, ${(m.regen + m.from_spells).toFixed(1)}/s back).</p>`
+      : `<p class="mananote">Mana: full casting speed lasts about <b>${Math.round(m.seconds)}s</b> from a full bar (${Math.round(m.bar)} mana), then about <b>${m.sustained_rate.toFixed(1)} casts/s</b>, which is what the spell damage above counts.</p>`;
+  }
   return h;
 }
 
@@ -1654,7 +1685,8 @@ function showReport(text, S) {
   visible.sort((a, b) => b.title.startsWith("Best whole build") - a.title.startsWith("Best whole build"));
   const headNotes = head.slice(1).map((l) => l.trim()).filter(Boolean);
   const heroTitle = title ? `Level ${title[2]} ${title[1]}` : "Your build";
-  const heroSub = title ? `Built for ${goalWords[title[3]] || title[3]}` : "";
+  const heroSub = S && S.label && S.label.includes("% ") ? `Built for ${S.label.replace(/ per second| score/g, "").toLowerCase()}`
+    : title ? `Built for ${goalWords[title[3]] || title[3]}` : "";
   const vis = !!(S && S.best);
   let html = `<section class="tip hero">
     <h2>${esc(heroTitle)}</h2><p class="sub">${esc(heroSub)}</p>
@@ -1663,6 +1695,7 @@ function showReport(text, S) {
     ${floorMiss ? `<p class="floor-warn">No build meets every minimum you set. The closest one still misses: ${esc(floorMiss[1])}</p>` : ""}
     ${!floorMiss && floorOk ? `<p class="floor-ok">Best whole build keeps your minimums: ${esc(floorOk[1])}.</p>` : ""}
     ${vis ? compareHTML(S) : ""}
+    ${vis ? manaHTML(S) : ""}
     ${!vis && (wbGain || floorFixed || floorMiss) && wbNums ? `<div class="upgrade">
       <div class="up-title">${wbGain ? `Best whole build: +${wbGain[1]}% for your goal` : floorFixed ? "Best whole build: meets all your minimums" : "Closest build to your minimums"}</div>
       ${wbFoc ? `<div class="up-row"><span>${esc(foc[1])}</span><b>${wbFoc[1]} → <i class="dmg">${wbFoc[2]}</i></b></div>` : ""}
@@ -1975,6 +2008,12 @@ async function loadMeta() {
   $("#s-model").innerHTML = Object.entries(META.models).map(([k, v]) => `<option value="${k}"${k === META.model ? " selected" : ""}>${esc(v)}</option>`).join("");
 }
 function syncFocus() { $("#focusField").hidden = $("#f-goal").value !== "ability"; }
+function syncGoal2() {
+  const g2 = $("#f-goal2").value;
+  if (g2 && g2 === $("#f-goal").value) { $("#f-goal2").value = ""; toast("The second goal has to be different from the first"); }
+  $("#goal2wField").hidden = !$("#f-goal2").value;
+  $("#goal2wVal").textContent = `${$("#f-goal2w").value}%`;
+}
 async function loadAbilities() {
   try {
     const names = await fetch("/api/abilities?class=" + encodeURIComponent($("#f-class").value)).then((r) => r.json());
@@ -1990,7 +2029,9 @@ async function init() {
   const buffNames = { totem: "Totem", fortitude: "Fortitude", chantlunatic: "Chant of the Lunatic", warscream: "War Scream", emboldeningcry: "Emboldening Cry", hauntingfanatic: "Haunting (Fanatic)", hauntinglunatic: "Haunting (Lunatic)", eldritchcall: "Eldritch Call", judgement: "Judgement", chantfanatic: "Chant of the Fanatic", weathering: "Weathering", acidrain: "Acid Rain" };
   $("#buffChips").innerHTML = META.buffs.map((b) => `<button type="button" class="toggle-chip" aria-pressed="false" data-buff="${b}">${buffNames[b] || b}</button>`).join("");
   $("#buffChips").addEventListener("click", (e) => { const b = e.target.closest("[data-buff]"); if (b) b.setAttribute("aria-pressed", b.getAttribute("aria-pressed") !== "true"); });
-  $("#f-goal").addEventListener("change", syncFocus);
+  $("#f-goal").addEventListener("change", () => { syncFocus(); syncGoal2(); });
+  $("#f-goal2").addEventListener("change", syncGoal2);
+  $("#f-goal2w").addEventListener("input", syncGoal2);
   $("#f-class").addEventListener("change", loadAbilities);
   loadAbilities();
   greet(); showEmpty(); refreshHistory();

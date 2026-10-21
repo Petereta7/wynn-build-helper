@@ -2424,6 +2424,33 @@ GOALS = {
 }
 
 
+# A second goal can be mixed in by weight ("mostly spells, 30% survival"). The score is a weighted geometric
+# mean, main^(1-w) x second^w, like "balanced" (which is damage and effective HP at 50/50): scaling either part
+# doesn't change which build wins, so the two never need to be in the same units.
+SECOND_GOALS = ("spells", "burst", "melee", "survival", "healing")
+GOAL_WORDS = {"spells": "spell damage", "burst": "burst combo", "melee": "highest DPS", "survival": "survival",
+              "balanced": "damage and survival", "healing": "healing", "ability": "one ability"}
+
+
+def clean_goal2(goal, goal2, weight):
+    """(second goal, weight 0-0.9) or (None, 0) when there's no usable second goal."""
+    goal2 = (goal2 or "").strip().lower() or None
+    try:
+        w = float(weight or 0)
+    except (TypeError, ValueError):
+        w = 0.0
+    if w > 1:
+        w /= 100.0                         # given as a percentage
+    w = max(0.0, min(0.9, w))
+    if goal2 not in SECOND_GOALS or goal2 == goal or w <= 0:
+        return None, 0.0
+    return goal2, w
+
+
+def mix_goals(m1: float, m2: float, w: float) -> float:
+    return max(m1, 1e-9) ** (1 - w) * max(m2, 1e-9) ** w
+
+
 def resolve_focus(tree, text: str):
     """Find the ability a player means ('puppet damage', 'meteor', 'bash'): (spell slot, name, unlocking node id)."""
     norm = lambda x: re.sub(r"[^a-z0-9]", "", str(x).lower())
@@ -2476,8 +2503,22 @@ def poison_dps(stats: dict, weapon) -> tuple:
     return float(spell), float(melee)
 
 
+def mana_lines(m) -> list:
+    """Plain words for the mana check of a spell rotation."""
+    if not m:
+        return []
+    head = (f"Mana: at full speed ({m['full_rate']:.0f} casts/s) the rotation uses {m['used']:.1f}/s; you get "
+            f"{m['regen']:.1f}/s back from regen" + (f" and {m['from_spells']:.1f}/s from spells" if m["from_spells"] > 0 else "")
+            + f". Mana bar {m['bar']:.0f}.")
+    if m["seconds"] is None:
+        return [head, "  You never run out: full casting speed can be kept up forever."]
+    return [head, f"  From a full bar you run dry after about {m['seconds']:.0f}s at full speed "
+                  f"({fmt_num(m['full_dps'])} damage/s). After that you can keep up about {m['sustained_rate']:.1f} casts/s, "
+                  "which is the damage per second counted above."]
+
+
 def score_build(results: dict, stats: dict, weapon, goal: str, ult_spells=frozenset(), special=None,
-                defense=None, focus_bs=None) -> dict:
+                defense=None, focus_bs=None, goal2=None, goal2_weight=0.0) -> dict:
     melee = results.get(0, {}).get("damage", 0.0)
     tier = ATTACK_SPEEDS.index(weapon.atk_spd) if weapon.atk_spd in ATTACK_SPEEDS else 3
     tier = max(0, min(6, tier + int(stats.get("atkTier", 0))))
@@ -2526,6 +2567,21 @@ def score_build(results: dict, stats: dict, weapon, goal: str, ult_spells=frozen
             dps = cast_rate * dmg
             if dps > best_rot_dps:
                 best_rot_dps, best_rot = dps, combo
+    # Mana check for that rotation (Wynnbuilder's mana model: 3 casts/s at 9 clicks/s, mana income
+    # 5 + mr/5 + ms/3, mana bar 100 + max mana bonus + Intelligence %): how long full speed lasts.
+    mana = None
+    if best_rot:
+        rs = [results[b] for b in best_rot]
+        full_rate = CLICKS_PER_SECOND / 3
+        used = full_rate * sum(r["cost"] for r in rs) / len(rs)
+        back = full_rate * sum(r["mana_gained"] for r in rs) / len(rs)
+        net = income + back - used
+        bar = 100 + stats.get("maxMana", 0) + math.floor(skill_pct(stats.get("int", 0)) * 100)
+        full_dps = full_rate * sum(r["cast"] for r in rs) / len(rs)
+        mana = {"used": used, "regen": income, "from_spells": back, "net": net, "bar": max(1, bar),
+                "full_rate": full_rate, "full_dps": full_dps,
+                "seconds": None if net >= -1e-9 else max(1, bar) / -net,
+                "sustained_rate": full_rate if net >= -1e-9 else full_rate * max(0.0, income) / max(1e-9, used - back)}
     # Healing: best mana-limited rotation of healing spells (heal per second).
     heal_ps, heal_rot = 0.0, None
     healers = [bs for bs, r in results.items() if bs in (1, 2, 3, 4) and r.get("heal", 0) > 0]
@@ -2553,10 +2609,15 @@ def score_build(results: dict, stats: dict, weapon, goal: str, ult_spells=frozen
     best_damage = max(spell_goal, melee_total + special_dps)
     self_heal = SURVIVAL_HEAL_SECONDS * (heal_ps + life_steal_ps) + 2 * max(defense.get("hpr", 0), 0)
     focus_val = results.get(focus_bs, {}).get("damage", 0.0) if focus_bs is not None else 0.0
-    main = {"ability": focus_val, "spells": spell_goal, "burst": burst, "melee": melee_goal,
-            "survival": ehp + (ehp / max(defense.get("hp", 1), 1)) * self_heal,
-            "balanced": math.sqrt(max(best_damage, 0) * max(ehp, 0)),
-            "healing": heal_ps}[goal]
+    goals = {"ability": focus_val, "spells": spell_goal, "burst": burst, "melee": melee_goal,
+             "survival": ehp + (ehp / max(defense.get("hp", 1), 1)) * self_heal,
+             "balanced": math.sqrt(max(best_damage, 0) * max(ehp, 0)),
+             "healing": heal_ps}
+    main = goals[goal]
+    parts = None
+    if goal2 and goal2_weight > 0:              # main goal mixed with a second one by weight
+        parts = {goal: main, goal2: goals[goal2]}
+        main = mix_goals(main, goals[goal2], goal2_weight)
     # Small tie-breakers so spare points still go somewhere useful (other damage, then mana bank size).
     bank = sum(r["mana_gained"] for r in results.values())
     value = main * 1.0 + 0.002 * (best_rot_dps + burst / 5 + melee_dps) + 0.0005 * triggered_extra + 0.0001 * bank
@@ -2566,7 +2627,7 @@ def score_build(results: dict, stats: dict, weapon, goal: str, ult_spells=frozen
             "poison_spell": poison_spell, "poison_melee": poison_melee, "life_steal_ps": life_steal_ps,
             "triggered_dps": triggered_extra, "triggered_names": triggered_names, "spell_goal": spell_goal,
             "melee_goal": melee_goal, "dps_style": "spells" if spell_goal >= melee_goal else "main attack",
-            "focus_value": focus_val}
+            "focus_value": focus_val, "goal_parts": parts, "goal_values": goals, "mana": mana}
 
 
 # ============================================================================== toggles
@@ -2813,8 +2874,10 @@ class Build:
 
     def __init__(self, data: GameData, tree: Tree, level: int, goal: str, tomes=(), aspects=(),
                  toggles=frozenset(), sliders=None, slider_mode="none", buffs=(), raid_buffs=(), enemy=None,
-                 focus=None, floors=None, toggle_share=None, auto_masks=False, toggles_off=(), auto_toggles=()):
+                 focus=None, floors=None, toggle_share=None, auto_masks=False, toggles_off=(), auto_toggles=(),
+                 goal2=None, goal2_weight=0.0):
         self.data, self.tree, self.level, self.goal = data, tree, level, goal
+        self.goal2, self.goal2_weight = clean_goal2(goal, goal2, goal2_weight)   # optional second goal and its weight
         self.toggle_share = {k: float(v) for k, v in (toggle_share or {}).items() if 0 < float(v) < 1}
         self.auto_masks = bool(auto_masks)  # wear whichever Mystic Mask helps the goal most
         self.floors = clean_floors(floors)  # minimum stats every build must meet, e.g. {"hp": 20000, "spd": 0}
@@ -2835,7 +2898,8 @@ class Build:
                       toggles=self.toggles, sliders=self.sliders, slider_mode=self.slider_mode,
                       buffs=self.buffs, raid_buffs=self.raid_buffs, enemy=self.enemy, focus=self.focus,
                       floors=self.floors, toggle_share=self.toggle_share, auto_masks=self.auto_masks,
-                      toggles_off=self.toggles_off, auto_toggles=self.auto_toggles)
+                      toggles_off=self.toggles_off, auto_toggles=self.auto_toggles, goal2=self.goal2,
+                      goal2_weight=self.goal2_weight)
         fields.update(kw)
         return Build(self.data, self.tree, **fields)
 
@@ -3015,9 +3079,9 @@ class Build:
                 dmult["PowderSpecial"] = boost_list[lvl - 1] * uptime
             special = {"name": name, "level": lvl, "damage": dmg, "cycle": cycle,
                        "boost": boost_list[lvl - 1] if boost_list else 0, "uptime": uptime}
-        if fast and self.goal == "melee":
+        if fast and self.goal == "melee" and self.goal2 in (None, "melee"):
             spells = {k: v for k, v in spells.items() if k == 0}
-        elif fast and self.goal == "ability" and self.focus:
+        elif fast and self.goal == "ability" and self.focus and not self.goal2:
             spells = {k: v for k, v in spells.items() if k == self.focus[0]}
         res = evaluate_spells(spells, stats, weapon, dmult)
         def_mults = {}
@@ -3028,7 +3092,7 @@ class Build:
             def_mults[k] = max(def_mults.get(k, 0), v) if k in NONSTACKING_MULTS else def_mults.get(k, 0) + v
         defense = defense_stats(stats, weapon, def_mults, self.enemy)
         sc = score_build(res, stats, weapon, self.goal, self.tree.ult_spells, special, defense,
-                         focus_bs=self.focus[0] if self.focus else None)
+                         focus_bs=self.focus[0] if self.focus else None, goal2=self.goal2, goal2_weight=self.goal2_weight)
         if self.floors:
             vals = floor_values(stats, defense)
             short = floor_shortfall(self.floors, vals)
@@ -3382,7 +3446,7 @@ def default_weapon(data: GameData, cls: str, level: int, build=None, armor=None)
     armor = armor or [None] * 8
     roots = frozenset(build.tree.roots)
     pool = options[:40]
-    if build.goal in ("survival", "balanced", "healing"):
+    if build.goal in ("survival", "balanced", "healing") or build.goal2 in ("survival", "healing"):
         pool += sorted(options, key=lambda it: it.max_stats.get("hpBonus", 0), reverse=True)[:20]
     best, best_v = options[0], None
     for it in pool:
@@ -4400,7 +4464,14 @@ def run(args):
                   sliders=sliders, slider_mode=args.slider_mode, buffs=buffs, raid_buffs=raid_buffs, enemy=enemy,
                   focus=focus, floors=floors, toggle_share=toggle_share,
                   auto_masks=not no_auto and not (set(MASKS) & set(toggles_off)), toggles_off=toggles_off,
-                  auto_toggles=set(auto_on))
+                  auto_toggles=set(auto_on), goal2=getattr(args, "goal2", None),
+                  goal2_weight=getattr(args, "goal2_weight", 0) or 0)
+    if getattr(args, "goal2", None) and not build.goal2:
+        print(f"  (A second goal of \"{args.goal2}\" can't be mixed with {goal}; using {goal} alone.)")
+    if build.goal2:
+        print(f"  Goal mix: {round((1 - build.goal2_weight) * 100)}% {GOAL_WORDS.get(goal, goal)} + "
+              f"{round(build.goal2_weight * 100)}% {GOAL_WORDS.get(build.goal2, build.goal2)}. The score is a weighted "
+              "mix of the two (like \"balanced\"), so a build only wins by being good at both in that proportion.")
     floor_build = build                   # the whole-build search always keeps the minimums
     try:                                   # item names for the app's live view while the tree is planned
         import wynn_search as _ws
@@ -4639,6 +4710,8 @@ def run(args):
         names = " + ".join(final["results"][b]["name"] for b in rot)
         print(f"  Best spell rotation: {names}  ≈ {fmt_num(final['spell_dps'])} damage/s "
               f"(mana income {final['mana_income']:.1f}/s)")
+        for line in mana_lines(final.get("mana")):
+            print("  " + line)
     print(f"  Main attack: {fmt_num(final['melee_dps'])} DPS (Wynnbuilder's Average DPS: damage per hit x attack speed)"
           f"   One full combo: {fmt_num(final['burst'])}")
     if goal == "melee" and final.get("special"):
@@ -4797,7 +4870,8 @@ def run(args):
                 mark = "keep" if (it is not None and old_it is not None and it.name == old_it.name) else "new"
                 if it is None:
                     continue
-                print(f"  {SLOT_LABELS[s_i]:<11} {it.name:<24} ({mark}) {it.short()}")
+                apw = (" with " + ", ".join(p.label() for p in it.powders)) if getattr(it, "powders", None) else ""
+                print(f"  {SLOT_LABELS[s_i]:<11} {it.name:<24} ({mark}) {it.short()}{apw}")
             w = wb["weapon"]
             mark = "keep" if w.name == weapon.name else "new"
             pw = (" with " + ", ".join(p.label() for p in w.powders)) if w.powders else ""
@@ -4826,6 +4900,14 @@ def run(args):
             print(f"  Health {fmt_num(st['defense'].get('hp', 0))} -> {fmt_num(fin['defense'].get('hp', 0))}"
                   f"   Walk speed {fmt_speed(st['stats'].get('spd', 0))} -> {fmt_speed(fin['stats'].get('spd', 0))}"
                   f"   Mana regen {st['stats'].get('mr', 0):.0f} -> {fin['stats'].get('mr', 0):.0f}")
+            if fin.get("mana") and goal in ("spells", "burst", "balanced") or fin.get("mana") and build.goal2 == "spells":
+                for line in mana_lines(fin.get("mana")):
+                    print("  Best build's " + line[0].lower() + line[1:] if line.startswith("Mana") else "  " + line)
+            if fin.get("goal_parts"):
+                sp_, fp_ = st.get("goal_parts") or {}, fin["goal_parts"]
+                print("  Goal mix: " + "   ".join(f"{GOAL_WORDS.get(k, k).capitalize()} {fmt_num(sp_.get(k, 0))} -> "
+                                                    f"{fmt_num(v)}" for k, v in fp_.items())
+                      + f"   (score {fmt_num(st['main'])} -> {fmt_num(fin['main'])})")
             bs = wb.get("bonus_search") or {}
             if bs.get("found_by") and bs.get("after", 0) > bs.get("before", 0) > 0:
                 print(f"  The extra search ({bs['found_by']}) found this build: "
@@ -4999,6 +5081,10 @@ def make_parser():
     p.add_argument("--class", dest="cls", choices=CLASSES)
     p.add_argument("--level", type=int)
     p.add_argument("--goal", choices=list(GOALS), default=None)
+    p.add_argument("--goal2", choices=list(SECOND_GOALS), default=None,
+                   help="a second goal to mix in, e.g. survival (with --goal2-weight)")
+    p.add_argument("--goal2-weight", type=float, default=30,
+                   help="how much the second goal counts, in percent (default 30)")
     p.add_argument("--gear", help='comma-separated item names, e.g. "Haqherphix, Ridge, Phosphene"')
     p.add_argument("--keep", help='abilities you want no matter what, e.g. "Arcane Transfer"')
     p.add_argument("--rank-ap", type=int, default=0, help="extra ability points from rank (VIP+ 2, HERO 4)")

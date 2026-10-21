@@ -2,7 +2,7 @@
 
 ## Automatic checks on GitHub
 
-Every push to `main` runs these checks on Windows, the only system the app is used on (newest Python, plus Python 3.10, the oldest the app runs on): the app check, self-test, toggle check, speed check and craft check, and the build check for every class. **Only when every check passes** is that version copied to the `stable` branch, which is where the app's update bar looks, and kept as `release/<version>` for switching back. A version that fails never reaches anyone.
+Every push to `main` runs these checks on Windows, the only system the app is used on (newest Python, plus Python 3.10, the oldest the app runs on): the app check, self-test, toggle check, speed check, craft check and goal check, and the build check for every class. **Only when every check passes** is that version copied to the `stable` branch, which is where the app's update bar looks, and kept as `release/<version>` for switching back. A version that fails never reaches anyone.
 
 Once a week (and on demand: Actions tab → Checks → Run workflow) the helper is also compared side by side with Wynnbuilder's current code, plus three brute-force accuracy cases, to catch game or Wynnbuilder updates that change the numbers.
 
@@ -109,3 +109,11 @@ python3 tests/accuracy_test.py 100 5
 ```
 
 This makes small random cases (random class, level and goal, two or three items per slot), checks **every** gear combination by brute force, and checks whether the build search finds the same best build. The arguments are the first case number and how many cases to run. Each case takes 1 to 4 minutes because of the brute force; the search itself takes about a second. Every case should say OK.
+
+## 9. Goal mix, mana check and armor powders
+
+```
+python3 tests/goal_check.py
+```
+
+A main goal mixed with a second one scores exactly main^(1-w) x second^w (every class); goals that can't be mixed fall back to the main goal; the search's shortcuts and item filter never drop what the second goal needs; the mana check's numbers match the spell damage they describe; and armor powders are added where they help (never on a damage-only build), with the element of an enemy hit chosen against it. Under a minute.

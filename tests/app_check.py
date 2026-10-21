@@ -264,8 +264,33 @@ def check_library():
             ok &= not r["ok"]
             r = call("/api/library", {"action": "update", "id": cid, "name": "  Zap  ", "level": 25})
             ok &= r["characters"][0]["name"] == "Zap" and r["characters"][0]["level"] == 25
+            # the bot's side: finding characters by what the player calls them, its instructions, its tool,
+            # and a build for a character filling in class, level and gear
+            ok_bot = wynn_app.find_character("zap")[0]["id"] == cid and wynn_app.find_character("my mage")[0]["id"] == cid
+            ok_bot &= wynn_app.find_character("nobody")[0] is None
+            ctx = wynn_app.characters_context()
+            ok_bot &= "Zap: level 25 Mage" in ctx and "Temporal Cage" in ctx and "a crafted piece" in ctx
+            seen = {}
+            real_run = wynn_app.wh.run
+            wynn_app.wh.run = lambda a: (seen.update(cls=a.cls, level=a.level, gear=a.gear), print("fake report"))
+            try:
+                out = wynn_app.run_report({"character": "Zap", "goal": "spells"})
+                ok_bot &= seen == {"cls": "mage", "level": 25, "gear": "Temporal Cage, CR-ABC"} and out["character_id"] == cid
+                out = wynn_app.run_report({"character": "Zap", "level": 30, "use_saved_gear": False})
+                ok_bot &= seen["level"] == 30 and not seen["gear"]
+            finally:
+                wynn_app.wh.run = real_run
+            wynn_app.save_history([{"id": "h2", "class": "mage", "class_title": "Mage", "level": 30, "goal": "melee",
+                                    "label": "Average DPS", "numbers": {"goal": 5.0}, "items": [], "sp": {}}])
+            wynn_app.STATE["last_history_id"] = "h2"
+            msg = wynn_app.manage_characters({"action": "save_last_build", "name": "Zap"})
+            ok_bot &= msg.startswith("Done") and "2 saved build" in msg
+            msg = wynn_app.manage_characters({"action": "update", "name": "Zap", "level": 31})
+            ok_bot &= "level 31" in msg
+            ok_bot &= not wynn_app.manage_characters({"action": "update", "name": "nobody", "level": 3}).startswith("Done")
+            check("the bot finds and uses your characters", ok_bot)
             r = call("/api/library", {"action": "remove", "character_id": cid, "build_id": bid})
-            ok &= r["characters"][0]["builds"] == [] and r["characters"][0]["current"] is None
+            ok &= len(r["characters"][0]["builds"]) == 1 and r["characters"][0]["current"] != bid
             r = call("/api/library", {"action": "delete", "id": cid})
             ok &= r["characters"] == []
             check("character library (create, save, view, edit, delete)", ok)

@@ -129,6 +129,22 @@ def run_report(params: dict) -> dict:
     """Run the full report for these settings; returns {"ok", "text", "args"}."""
     args = wh.make_parser().parse_args([])
     link = (params.get("wynnbuilder_link") or params.get("link") or "").strip()
+    char_note, char = "", None
+    if params.get("character"):                       # one of the player's saved characters: fill in the gaps
+        char, why = find_character(params["character"])
+        if char is None:
+            return {"ok": False, "text": why}
+        params = dict(params)
+        params.setdefault("class", char["class"])
+        if params.get("level") in (None, ""):
+            params["level"] = char.get("level")
+        cur = next((b for b in char.get("builds", []) if b.get("id") == char.get("current")), None) or \
+            (char.get("builds") or [None])[-1]
+        if not params.get("gear") and params.get("use_saved_gear", True) is not False and cur:
+            params["gear"] = _gear_of(cur)
+        char_note = (f"Character: {char['name']} (level {params['level']} {wh.CLASS_TITLE.get(char['class'], char['class'])})"
+                     + (f", starting from the gear of its current build" if params.get("gear") and cur and
+                        params.get("use_saved_gear", True) is not False else "") + ".\n")
     cls = (params.get("class") or params.get("cls") or "").strip().lower() or None
     if cls and cls not in wh.CLASSES:
         return {"ok": False, "text": f'Unknown class "{cls}". Choose one of: {", ".join(wh.CLASSES)}.'}
@@ -145,6 +161,10 @@ def run_report(params: dict) -> dict:
     if goal not in wh.GOALS:
         goal = "spells"
     args.cls, args.level, args.goal = cls, level, goal
+    args.goal2 = (params.get("second_goal") or params.get("goal2") or "").lower() or None
+    if args.goal2 not in wh.SECOND_GOALS:
+        args.goal2 = None
+    args.goal2_weight = params.get("second_goal_weight", params.get("goal2_weight", 30)) or 30
     args.focus = params.get("focus") or ""
     args.from_link = link or None
     args.gear = _as_list_text(params.get("gear"))
@@ -212,7 +232,11 @@ def run_report(params: dict) -> dict:
             traceback.print_exc()
     if load_config().get("popup", True):
         notify_done(ok, args, text)
-    return {"ok": ok, "text": text, "args": used, "summary": summary}
+    if char is not None:
+        text = char_note + text
+        if summary:
+            summary["character_id"] = char["id"]
+    return {"ok": ok, "text": text, "args": used, "summary": summary, "character_id": char["id"] if char else None}
 
 
 GOAL_SHORT = {"spells": "spell damage", "burst": "burst combo", "melee": "highest DPS", "survival": "survival",
@@ -543,6 +567,75 @@ def library_action(body: dict) -> dict:
         return out
 
 
+def find_character(name):
+    """(character, "") for a name the player used ("Sparky", "my shaman"), or (None, why not)."""
+    chars = load_library()["characters"]
+    q = " ".join(str(name or "").lower().split())
+    if not chars:
+        return None, "The player has no saved characters yet; ask for class and level instead."
+    exact = [c for c in chars if c["name"].lower() == q]
+    if len(exact) == 1:
+        return exact[0], ""
+    part = [c for c in chars if q and (q in c["name"].lower() or c["name"].lower() in q)]
+    if len(part) == 1:
+        return part[0], ""
+    by_cls = [c for c in chars if c["class"] in q.split() or wh.CLASS_TITLE.get(c["class"], "").lower() in q]
+    if len(by_cls) == 1:
+        return by_cls[0], ""
+    names = ", ".join(f"{c['name']} ({wh.CLASS_TITLE.get(c['class'], c['class'])} {c.get('level')})" for c in (part or by_cls or chars))
+    return None, f'Which character is "{name}"? Saved characters: {names}.'
+
+
+def characters_context() -> str:
+    """The player's characters, for the bot (added to its instructions every turn)."""
+    chars = load_library()["characters"]
+    if not chars:
+        return "\n\nThe player has no saved characters yet."
+    lines = []
+    for c in chars:
+        cur = next((b for b in c.get("builds", []) if b.get("id") == c.get("current")), None) or (c.get("builds") or [None])[-1]
+        what = ""
+        if cur:
+            gear = ", ".join(x if not x.startswith("CR-") else "a crafted piece" for x in _gear_of(cur))
+            what = f"; current build for {cur.get('label', cur.get('goal', ''))}: {gear or 'no gear'}"
+        lines.append(f"- {c['name']}: level {c.get('level')} {wh.CLASS_TITLE.get(c['class'], c['class'])}, "
+                     f"{len(c.get('builds', []))} saved build(s){what}")
+    return "\n\nThe player's saved characters (their library):\n" + "\n".join(lines)
+
+
+def manage_characters(inp: dict) -> str:
+    """The bot's tool for the library: create a character, update one, or save the last build to one."""
+    act = inp.get("action")
+    if act == "create":
+        r = library_action({"action": "create", "class": inp.get("class"), "name": inp.get("name"), "level": inp.get("level")})
+    elif act == "update":
+        c, why = find_character(inp.get("name"))
+        if c is None:
+            return why
+        body = {"action": "update", "id": c["id"]}
+        if inp.get("new_name"):
+            body["name"] = inp["new_name"]
+        if inp.get("level"):
+            body["level"] = inp["level"]
+        r = library_action(body)
+    elif act == "save_last_build":
+        if not STATE.get("last_history_id"):
+            return "There's no build to save yet."
+        c, why = find_character(inp.get("name")) if inp.get("name") else (None, "")
+        if c is None and inp.get("name") and not inp.get("create_if_missing"):
+            return why
+        r = library_action({"action": "save", "history_id": STATE["last_history_id"],
+                            "character_id": c["id"] if c else None, "new_name": inp.get("name")})
+    else:
+        return "Unknown action."
+    if not r.get("ok"):
+        return r.get("error", "That didn't work.")
+    STATE["library_changed"] = True
+    c = next((x for x in r["characters"] if x["id"] == r.get("character_id")), None)
+    return ("Done. " + (f"{c['name']} is a level {c['level']} {c['class_title']} with {len(c['builds'])} saved build(s)."
+                        if c else ""))
+
+
 def build_summary():
     """The last report as data for the visuals, plus its before/after baseline; saves it to history."""
     R = wh.LAST_RESULT
@@ -551,6 +644,10 @@ def build_summary():
     tree, level, b = R["tree"], R["level"], R["build"]
     focus = R.get("focus")
     label = focus[1] if R["goal"] == "ability" and focus else GOAL_LABELS.get(R["goal"], "Score")
+    b0 = R.get("build")
+    if b0 is not None and getattr(b0, "goal2", None):          # a mixed goal: "70% Spell damage + 30% Survival"
+        label = (f"{round((1 - b0.goal2_weight) * 100)}% {label} + {round(b0.goal2_weight * 100)}% "
+                 f"{GOAL_LABELS.get(b0.goal2, b0.goal2)}")
 
     def pack(x):
         ev = x["eval"]
@@ -560,7 +657,9 @@ def build_summary():
         return {"items": [item_card(a, wh.SLOT_LABELS[i]) for i, a in enumerate(x["armor"])] + [item_card(x["weapon"], "Weapon")],
                 "numbers": numbers_of(ev), "owned": sorted(x["owned"]),
                 "order": tree.validate(x["owned"], level)["order"],
-                "sp": {"assigned": list(ass), "extra": extra, "gear": [totals[i] - ass[i] - extra[i] for i in range(5)]}}
+                "sp": {"assigned": list(ass), "extra": extra, "gear": [totals[i] - ass[i] - extra[i] for i in range(5)]},
+                "mana": ({k: v for k, v in ev["mana"].items()} if ev.get("mana") else None),
+                "goal_parts": ev.get("goal_parts")}
 
     best_ev = (R.get("best") or R["current"])["eval"]
     mask = best_ev.get("mask")
@@ -581,7 +680,7 @@ def build_summary():
                                "items": [x["name"] if x else None for x in out["current"]["items"]]}
         else:
             prev = next((h for h in reversed(hist) if h.get("class") == R["cls"] and h.get("goal") == R["goal"]
-                         and h.get("focus") == out["focus"]), None)
+                         and h.get("focus") == out["focus"] and h.get("label") == label), None)
             if prev:
                 out["baseline"] = {"kind": "history", "numbers": prev["numbers"],
                                    "label": f"Your last {out['class_title']} build (level {prev['level']}, {prev['date']})",
@@ -598,6 +697,7 @@ def build_summary():
         hist.append(entry)
         save_history(hist)
         out["history_id"] = entry["id"]
+        STATE["last_history_id"] = entry["id"]
     return out
 
 
@@ -611,6 +711,8 @@ How to work:
 - To run the calculator you need the class and combat level, or a Wynnbuilder link. If either is missing, ask for it in one short question. Ask about gear too, but if they don't know or don't care, run without it.
 - Baseline stats: the first time they ask for a build (or a new goal), ask whether they want any minimums kept, for example "Any baseline stats you want to keep, like at least 20,000 health or no slower walk speed?". Put it in the same message as any other question you need to ask; if you have everything else, ask it on its own and wait. If they say no or don't care, run without minimums and don't ask again for follow-ups. Pass what they say as minimums (health, ehp, walk_speed in %, mana_regen, health_regen, elemental defenses). "No negative walk speed" means walk_speed 0.
 - Some abilities only give their bonus while a toggle is on. By default the calculator only counts buffs whose timing is known: Bullwhip (on), the best Mystic Mask (you always wear one), Coursing Restraints for the share of time its duration and cooldown allow, and ultimate buffs for the same share as ultimate damage. Everything else (Holy Power, Tricks, Unstable, Blood Pool, Corrupted, "next hit" effects) is off so numbers aren't inflated. If the player says they keep a buff up, pass it in toggles, with a share if it's only part of the time, e.g. "Contamination=70%, Activate Luster Purge". Pass toggles_off for buffs they say they don't keep up. The report's "Toggles and sliders" section shows what each off toggle would add; mention a big one and ask if they keep it up.
+- Characters: the player's saved characters are listed at the end of these instructions. When they mean one ("my shaman", "Sparky", "my main"), pass character with its name instead of asking for class and level: its class, level and current gear are filled in (pass gear only to change it, use_saved_gear false to start from nothing). If they say a character leveled up or was renamed, update it with manage_characters. After a build the app itself asks whether to save it to a character's library; save it with manage_characters only if they ask you to. Don't create characters unless they ask.
+- If they want a mix ("mostly damage but I want to survive too", "70/30 spells and tankiness"), pass the main goal plus second_goal and second_goal_weight (the share for the second goal, default 30). This is a weighted mix, softer than a minimum: use minimums when they name a number ("at least 20k health"), the mix when they describe a preference. balanced is the same idea at 50/50 for damage and effective HP.
 - If no build meets every minimum, the report says so and shows the closest one; tell them which minimum couldn't be met and suggest relaxing it.
 - The report shows health, effective HP and walk speed for the best build next to the current gear; mention any big drop in health or walk speed so they can set a minimum.
 - If they want the most damage from one specific ability ("maximum puppet damage", "biggest Meteor", "strongest Bash"), use goal ability with focus set to that ability.
@@ -641,6 +743,18 @@ TOOLS = [
                 "level": {"type": "integer", "minimum": 1, "maximum": 121, "description": "Combat level"},
                 "goal": {"type": "string", "enum": list(wh.GOALS),
                          "description": "; ".join(f"{k}: {v}" for k, v in wh.GOALS.items())},
+                "character": {"type": "string",
+                              "description": "One of the player's saved characters, by name (or 'my shaman' if they "
+                                             "have one shaman). Fills in its class, level and current gear; anything "
+                                             "you pass yourself overrides that."},
+                "use_saved_gear": {"type": "boolean",
+                                   "description": "With character: start from its current build's gear (default true). "
+                                                  "False to build from nothing."},
+                "second_goal": {"type": "string", "enum": list(wh.SECOND_GOALS),
+                                "description": "Optional second goal to mix in by weight, e.g. survival when they want "
+                                               "mostly damage but also to stay alive. Not the same as goal."},
+                "second_goal_weight": {"type": "number",
+                                       "description": "How much the second goal counts, in percent (10-90, default 30)."},
                 "focus": {"type": "string",
                           "description": "For goal 'ability': the one ability to maximise, as the player said it, "
                                          "e.g. 'puppets', 'Meteor', 'Bash', 'Totem'"},
@@ -704,6 +818,18 @@ TOOLS = [
         },
     },
     {
+        "name": "manage_characters",
+        "description": "The player's saved characters (listed in your instructions). create: a new character "
+                       "(name, class, level). update: change a character's level or name (name = current name). "
+                       "save_last_build: save the build from the last report to a character's library (name; "
+                       "create_if_missing true to make a new character with that name). Only when the player asks.",
+        "input_schema": {"type": "object", "properties": {
+            "action": {"type": "string", "enum": ["create", "update", "save_last_build"]},
+            "name": {"type": "string"}, "class": {"type": "string", "enum": wh.CLASSES},
+            "level": {"type": "integer"}, "new_name": {"type": "string"}, "create_if_missing": {"type": "boolean"}},
+            "required": ["action"]},
+    },
+    {
         "name": "lookup_item",
         "description": "Stats, requirements, powder slots, major IDs and set of one item (any spelling).",
         "input_schema": {"type": "object", "properties": {"name": {"type": "string"}}, "required": ["name"]},
@@ -723,7 +849,7 @@ class ClaudeError(Exception):
 
 def call_claude(messages: list, model: str) -> dict:
     key = api_key()
-    body = json.dumps({"model": model, "max_tokens": 1500, "system": SYSTEM_PROMPT, "tools": TOOLS,
+    body = json.dumps({"model": model, "max_tokens": 1500, "system": SYSTEM_PROMPT + characters_context(), "tools": TOOLS,
                        "messages": messages}).encode("utf-8")
     req = urllib.request.Request(API_URL, data=body, method="POST", headers={
         "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json"})
@@ -760,6 +886,8 @@ def chat_turn(user_text: str) -> dict:
     start = len(history)
     history.append({"role": "user", "content": user_text})
     reports, summaries = [], []
+    char_id = None
+    STATE["library_changed"] = False
     try:
         for _ in range(8):
             resp = call_claude(history, model)
@@ -767,7 +895,8 @@ def chat_turn(user_text: str) -> dict:
             history.append({"role": "assistant", "content": content})
             if resp.get("stop_reason") != "tool_use":
                 text = "\n".join(b.get("text", "") for b in content if b.get("type") == "text").strip()
-                return {"reply": text or "(no reply)", "reports": reports, "summaries": summaries, "args": STATE["last_args"]}
+                return {"reply": text or "(no reply)", "reports": reports, "summaries": summaries, "args": STATE["last_args"],
+                        "character_id": char_id, "library_changed": STATE.get("library_changed", False)}
             results = []
             for block in content:
                 if block.get("type") != "tool_use":
@@ -775,10 +904,14 @@ def chat_turn(user_text: str) -> dict:
                 name, inp = block.get("name"), block.get("input") or {}
                 if name == "analyze_build":
                     out = run_report(inp)
+                    if out.get("character_id"):
+                        char_id = out["character_id"]
                     if out["ok"]:
                         reports.append(out["text"])
                         summaries.append(out.get("summary"))
                     result = out["text"]
+                elif name == "manage_characters":
+                    result = manage_characters(inp)
                 elif name == "lookup_item":
                     result = item_summary(inp.get("name", ""))
                 elif name == "list_abilities":

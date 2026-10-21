@@ -262,6 +262,9 @@ def safe_filter(build, include_never: bool = True, min_level: int = 1, keep=()):
     """
     cls, goal = build.tree.cls, build.goal
     rel, eq = goal_stats(goal)
+    if getattr(build, "goal2", None):           # a second goal: what either goal can use counts
+        rel2, eq2 = goal_stats(build.goal2)
+        rel, eq = set(rel) | set(rel2), set(eq) | set(eq2)
     f_rel, f_eq = floor_stats(build)
     eq = (set(eq) | f_eq)
     rel = (set(rel) | f_rel) - eq
@@ -600,7 +603,8 @@ def _settings(build, include_never, min_level):
             "drops_only": not include_never, "min_level": min_level, "focus": build.focus,
             **({"floors": sorted(build.floors.items())} if getattr(build, "floors", None) else {}),
             **({"toggle_share": sorted(build.toggle_share.items())} if getattr(build, "toggle_share", None) else {}),
-            **({"auto_masks": True} if getattr(build, "auto_masks", False) else {})}
+            **({"auto_masks": True} if getattr(build, "auto_masks", False) else {}),
+            **({"goal2": [build.goal2, build.goal2_weight]} if getattr(build, "goal2", None) else {})}
 
 
 def _key(settings: dict, level: int) -> str:
@@ -785,6 +789,21 @@ def _starts_for(build, cur_own, pools, wpn, wp, armor0, base_extra, memory_arms,
             if wh._wearable(r, wp, level):
                 starts.append(r)
     return starts
+
+
+def _armor_powders(build, own, a, wp, e):
+    """Powders for the armor pieces that have empty slots: per piece, every element at the highest tier it
+    accepts, kept when the whole build gets better (they add health, and elemental defense that counts
+    against an enemy hit or an elemental minimum). Pieces that already have powders (yours) are left alone."""
+    base = [x if (i < 4 and x is not None and x.slots > 0 and not getattr(x, "powders", None)) else None
+            for i, x in enumerate(a)]
+    if not any(base):
+        return a
+    try:
+        _picks, cur = wh.best_armor_powders(build, own, base, list(a), wp, e)
+    except Exception:
+        return a
+    return list(cur)
 
 
 def _refined_sweep(build, own, a, wp, pools, e, fast=True, top=4, passes=3, wpn=None):
@@ -1017,7 +1036,8 @@ def _build_spec(build):
             "focus": build.focus, "floors": dict(getattr(build, "floors", None) or {}),
             "toggle_share": dict(getattr(build, "toggle_share", {}) or {}), "auto_masks": getattr(build, "auto_masks", False),
             "toggles_off": sorted(getattr(build, "toggles_off", ()) or ()),
-            "auto_toggles": sorted(getattr(build, "auto_toggles", ()) or ())}
+            "auto_toggles": sorted(getattr(build, "auto_toggles", ()) or ()),
+            "goal2": getattr(build, "goal2", None), "goal2_weight": getattr(build, "goal2_weight", 0.0)}
 
 
 def _worker_init(spec, stop_event, q=None):
@@ -1032,7 +1052,8 @@ def _worker_init(spec, stop_event, q=None):
                            buffs=spec["buffs"], raid_buffs=spec["raid_buffs"], enemy=spec["enemy"],
                            focus=tuple(spec["focus"]) if spec.get("focus") else None, floors=spec.get("floors"),
                            toggle_share=spec.get("toggle_share"), auto_masks=spec.get("auto_masks", False),
-                           toggles_off=spec.get("toggles_off", ()), auto_toggles=spec.get("auto_toggles", ()))
+                           toggles_off=spec.get("toggles_off", ()), auto_toggles=spec.get("auto_toggles", ()),
+                           goal2=spec.get("goal2"), goal2_weight=spec.get("goal2_weight", 0.0))
     _W["stop"] = stop_event
     if q is not None:
         last = {"t": 0.0, "v": -1e300, "n": wh.EVAL_STATS["n"]}
@@ -1155,6 +1176,8 @@ def search_best_build(build, owned, armor0, weapon0, base_weapon0, keep=(), ap_b
     slots = list(range(8)) + ["weapon"]
     LIVE["phase"] = 0
     LIVE["label"] = (build.focus[1] if build.goal == "ability" and build.focus else GOAL_LABELS.get(build.goal, "Score"))
+    if getattr(build, "goal2", None):
+        LIVE["label"] = f"{LIVE['label']} + {round(build.goal2_weight * 100)}% {GOAL_LABELS.get(build.goal2, build.goal2)}"
     keep_items = [a for a in armor0 if a is not None] + ([base_weapon0] if base_weapon0 else [])
     if pools_override is not None:
         pools = dict(pools_override)
@@ -1421,6 +1444,21 @@ def search_best_build(build, owned, armor0, weapon0, base_weapon0, keep=(), ap_b
             craft_info["found_by"] = "crafted items"
         craft_info["after"] = finals[0][0]
         craft_info["seconds"] = time.time() - t_craft
+    # ---- 6. armor powders on the finished builds. Done last, so everything above finds exactly the builds it
+    # would without them; each build only gains (same gear, powders where they help).
+    if not STOP["flag"]:
+        powdered = []
+        for f in finals:
+            v, a, wp, wpn, own, e, free, fin = f
+            a2 = _armor_powders(build, own, a, wp, e)
+            if all(x is y for x, y in zip(a2, a)):
+                powdered.append(f)
+                continue
+            e2, _ = refine_points(build, own, a2, wp, e, fast=False)
+            e2, free2 = _legal_points(build, a2, wp, e2)
+            fin2 = build.evaluate(own, a2, wp, e2)
+            powdered.append((fin2["value"], a2, wp, wpn, own, e2, free2, fin2) if fin2["value"] > v else f)
+        finals = sorted(powdered, key=lambda x: -x[0])
     _PHASE[:] = [0.0, 1.0]
     LIVE["phase"] = 5
     # Last check, worked out from scratch: never hand back gear the level can't wear, or a craft that can't
