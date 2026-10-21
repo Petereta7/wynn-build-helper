@@ -444,10 +444,14 @@ EFFORT = {
         "extra_weapons": 12, "promote": 2, "depth": 1, "depth_kicks": 3, "extra_polish": 2, "craft": 2, "craft_kicks": 24},
     3: {"name": "Thorough", "weapons": 10, "random_starts": 3, "short": 7, "triple": 3, "kicks": 6, "polish": 3,
         "extra_weapons": 20, "promote": 3, "depth": 2, "depth_kicks": 4, "extra_polish": 3, "craft": 2, "craft_kicks": 30},
-    4: {"name": "Very thorough", "weapons": 16, "random_starts": 6, "short": 8, "triple": 4, "kicks": 15, "polish": 4,
-        "extra_weapons": 32, "promote": 4, "depth": 2, "depth_kicks": 6, "extra_polish": 3, "craft": 3, "craft_kicks": 40},
-    5: {"name": "Maximum", "weapons": 30, "random_starts": 10, "short": 10, "triple": 5, "kicks": 40, "polish": 6,
-        "extra_weapons": 60, "promote": 6, "depth": 3, "depth_kicks": 10, "extra_polish": 4, "craft": 4, "craft_kicks": 60},
+    # Deep search. 30 weapons (was 16): the best weapon is sometimes ranked outside the top 16 (Warrior L106 +11%,
+    # Archer L100 +9%, Assassin L106 +6% on the owner's PC, about 30% more time). Crafts for the best 6 builds with
+    # 150 shake-ups (was 3 and 40): up to +2.6% more when crafted items are asked for. Every class ended at least as
+    # high as with the old settings (tests/headroom.py runs, October 2026).
+    4: {"name": "Very thorough", "weapons": 30, "random_starts": 6, "short": 8, "triple": 4, "kicks": 15, "polish": 4,
+        "extra_weapons": 60, "promote": 4, "depth": 2, "depth_kicks": 6, "extra_polish": 3, "craft": 6, "craft_kicks": 150},
+    5: {"name": "Maximum", "weapons": 50, "random_starts": 10, "short": 10, "triple": 5, "kicks": 40, "polish": 6,
+        "extra_weapons": 100, "promote": 6, "depth": 3, "depth_kicks": 10, "extra_polish": 4, "craft": 8, "craft_kicks": 200},
 }
 
 STOP = {"flag": False}          # set STOP["flag"] = True to stop a running search (keeps the best so far)

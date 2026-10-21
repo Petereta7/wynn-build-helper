@@ -364,6 +364,17 @@ label.deep input[type=checkbox] { width: auto; flex: 0 0 auto; margin-top: 3px; 
 .craft .ca { margin-top: 8px; font-size: 12px; }
 .craft .ca a { color: #2bc4c4; }
 .tipgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 8px; font-size: 12px; margin-top: 3px; }
+/* why each ability is in the tree */
+.tnode.rspare { border-style: dashed; opacity: .55; }
+.tnode.rbig { box-shadow: 0 0 0 2px #ffd84a, 0 0 14px -2px #ffd84a; }
+.tnode .rgain { position: absolute; top: -15px; left: 50%; transform: translateX(-50%); font-size: 9.5px; font-weight: 800; color: #ffd84a;
+  white-space: nowrap; text-shadow: 0 1px 2px #000, 0 0 4px #000; pointer-events: none; }
+.tlegend .lg { display: inline-block; width: 11px; height: 11px; border-radius: 3px; vertical-align: -1px; margin-right: 4px; }
+.tlegend .lg.big { box-shadow: 0 0 0 2px #ffd84a; } .tlegend .lg.spare { border: 1.5px dashed #8a90b8; opacity: .7; }
+.whytree { margin: 0 0 12px; padding: 10px 12px; border-radius: var(--r-md); border: 1px solid var(--line); background: rgba(0, 0, 0, .22); font-size: 13.5px; display: flex; flex-direction: column; gap: 6px; }
+.whytree .wg { display: inline-block; margin: 2px 6px 0 0; padding: 1px 8px; border-radius: 999px; border: 1px solid color-mix(in srgb, #ffd84a 45%, var(--line)); }
+.whytree .wg i { font-style: normal; color: #ffd84a; font-weight: 700; }
+.whytree .wsub { color: var(--muted); }
 /* the crafting bench in The Forge */
 .fbench { margin: 14px 0 4px; padding: 12px 14px; border-radius: var(--r-md); border: 1px solid color-mix(in srgb, #2bc4c4 45%, var(--line)); background: rgba(10, 30, 34, .45); animation: savein .6s ease both; }
 .fbhead { margin-bottom: 8px; } .fbhead b { font-family: var(--display); color: #2bc4c4; font-size: 17px; font-weight: 600; } .fbhead span { color: var(--muted); font-size: 13px; margin-left: 8px; }
@@ -1560,7 +1571,8 @@ function equipHTML(pack, baseItems, title, sub) {
 }
 
 /* ---- ability tree map ---- */
-function treeHTML(T, order, togglesOn, tabs) {
+function treeHTML(T, order, togglesOn, tabs, roles) {
+  roles = roles || {};
   const CELL = 38, COLS = 9;
   const nodes = T.nodes, maxRow = Math.max(...nodes.map((n) => n.row));
   const W = COLS * CELL, H = (maxRow + 1) * CELL;
@@ -1577,22 +1589,45 @@ function treeHTML(T, order, togglesOn, tabs) {
   const togOn = new Set(togglesOn || []);
   const nodeHTML = nodes.map((n) => {
     const k = idx[n.id];
-    return `<div class="tnode${k ? " on" : ""}${n.ult ? " ult" : ""}" tabindex="0" data-tipk="${n.id}" style="left:${cx(n)}px;top:${cy(n)}px;--ac:${archCol(n.arch)};${k ? `animation-delay:${Math.min(k * 25, 900)}ms` : ""}">${k || ""}
+    const ro = k ? roles[n.id] : null;
+    const rc = ro ? (ro.role === "goal" && ro.gain >= 1 ? " rbig" : ro.role === "goal" ? " rgoal" : ro.role === "spare" ? " rspare" : "") : "";
+    return `<div class="tnode${k ? " on" : ""}${n.ult ? " ult" : ""}${rc}" tabindex="0" data-tipk="${n.id}" style="left:${cx(n)}px;top:${cy(n)}px;--ac:${archCol(n.arch)};${k ? `animation-delay:${Math.min(k * 25, 900)}ms` : ""}">${k || ""}
+      ${rc === " rbig" ? `<span class="rgain">+${ro.gain >= 10 ? Math.round(ro.gain) : ro.gain.toFixed(1)}%</span>` : ""}
       ${n.toggle ? `<span class="tg${k && togOn.has(n.toggle) ? " on" : k && TOGGLE_SHARE[n.toggle] ? " part" : ""}" title="toggle">⏻</span>` : ""}</div>`;
   }).join("");
   const legend = T.archetypes.map((a) => `<span><i style="background:${archCol(a)}"></i>${esc(a)}</span>`).join("") +
     '<span><i style="background:#8a90b8"></i>no archetype</span><span>numbers = click order</span><span><span class="tg on" style="position:static;display:inline-grid;width:13px;height:13px;border-radius:50%;font-size:8px;place-items:center">⏻</span> toggle counted</span><span><span class="tg part" style="position:static;display:inline-grid;width:13px;height:13px;border-radius:50%;font-size:8px;place-items:center">⏻</span> counted part of the time</span>';
+  const has = Object.keys(roles).length > 0;
+  const legend2 = has ? '<span><i class="lg big"></i>big gain for your goal (the % it adds)</span><span><i class="lg spare"></i>spare point: doesn\'t change your goal\'s number</span>' : "";
   return `<section class="tip panel" id="treePanel"><h3>Ability tree <small>${order.length} abilities, in click order</small>${tabs || ""}</h3>
-    <div class="tlegend">${legend}</div>
+    <div class="tlegend">${legend}${legend2}</div>${has ? whyTreeHTML(T, roles) : ""}
     <div class="tmap-wrap"><div class="tmap" style="width:${W}px;height:${H}px"><svg width="${W}" height="${H}" aria-hidden="true">${lines.join("")}</svg>${nodeHTML}</div></div></section>`;
 }
 let TOGGLE_SHARE = {};
+function whyTreeHTML(T, roles) {
+  const name = (id) => (T.nodes.find((x) => String(x.id) === String(id)) || {}).name || "?";
+  const cost = (id) => (T.nodes.find((x) => String(x.id) === String(id)) || {}).cost || 0;
+  const ents = Object.entries(roles);
+  const goal = ents.filter(([, r]) => r.role === "goal").sort((a, b) => b[1].gain - a[1].gain);
+  const path = ents.filter(([, r]) => r.role === "path"), spare = ents.filter(([, r]) => r.role === "spare");
+  const extra = ents.filter(([, r]) => r.role === "extra");
+  const pct = (g) => `+${g >= 10 ? Math.round(g) : g.toFixed(1)}%`;
+  let h = '<div class="whytree">';
+  if (goal.length) h += `<div><b>What matters for your goal:</b> ${goal.slice(0, 6).map(([id, r]) => `<span class="wg">${esc(name(id))} <i>${pct(r.gain)}</i></span>`).join("")}</div>`;
+  if (path.length) h += `<div class="wsub">${path.length} abilities are on the way to those (a path through the tree, or an archetype count one of them needs).</div>`;
+  if (extra.length) h += `<div class="wsub">Not for your goal, but worth keeping: ${extra.map(([id, r]) => `${esc(name(id))} (${esc((r.text.split("adds ")[1] || "").split(":")[0])})`).join(", ")}.</div>`;
+  if (spare.length) h += `<div class="wsub"><b>${spare.length} spare points</b> (${spare.reduce((t, [id]) => t + cost(id), 0)} AP) don't change your goal's number: ${spare.map(([id]) => esc(name(id))).join(", ")}. They're picked for small extras (hover for which); swap them for anything you like.</div>`;
+  return h + "</div>";
+}
+let TREE_ROLES = {};
 function nodeTip(T, order, togglesOn, id) {
   const n = T.nodes.find((x) => String(x.id) === String(id)); if (!n) return "";
   const k = order.indexOf(n.id) + 1;
+  const ro = k ? TREE_ROLES[n.id] : null;
   let h = `<div class="tn" style="color:${n.ult ? "#ffaa00" : "#55ffff"}">${esc(n.name)}</div>`;
   h += `<div class="tl">${n.cost} AP${n.arch ? ` · ${esc(n.arch)}` : ""}${n.ult ? " · ultimate, level 90+" : ""}</div>`;
   h += k ? `<div class="ok">Click #${k}</div>` : '<div class="gray">Not in this tree</div>';
+  if (ro) h += `<div class="${ro.role === "goal" ? "ok" : ro.role === "spare" ? "gray" : "tl"}">Why: ${esc(ro.text)}</div>`;
   if (n.toggle) {
     const sh = TOGGLE_SHARE[n.toggle];
     const st = !k ? "off" : (togglesOn || []).includes(n.toggle) ? "counted as on" : sh ? `counted ${Math.round(sh * 100)}% of the time` : "off (not counted)";
@@ -1607,7 +1642,8 @@ function mountTree(S, which) {
   const both = S.best && S.current && JSON.stringify(S.best.order) !== JSON.stringify(S.current.order);
   const tabs = both ? `<span class="ttabs"><button type="button" data-tree="best" aria-pressed="${which !== "current"}">Best build's tree</button><button type="button" data-tree="current" aria-pressed="${which === "current"}">For your current gear</button></span>` : "";
   const box = $("#treeSlot"); if (!box) return;
-  box.innerHTML = treeHTML(S.tree, pack.order, S.toggles_on, tabs);
+  TREE_ROLES = pack.roles || {};
+  box.innerHTML = treeHTML(S.tree, pack.order, S.toggles_on, tabs, pack.roles);
   bindTips(box, (id) => nodeTip(S.tree, pack.order, S.toggles_on, id));
   box.querySelectorAll("[data-tree]").forEach((b) => b.addEventListener("click", () => mountTree(S, b.dataset.tree)));
 }
@@ -2009,7 +2045,7 @@ function renderSaved(h, sub, backLabel, back, opts = {}) {
       ${opts.share ? '<button class="btn-quiet" id="shareBtn" type="button">Share with a friend</button>' : ""}${opts.actions || ""}
       <button class="btn-quiet" id="savedBack" type="button">${esc(backLabel)}</button></div><div id="shareSlot"></div>${opts.after || ""}</section>` +
     equipHTML({ items: h.items, sp: h.sp }, null, "Gear", "Hover any piece for its stats.") + craftsHTML({ items: h.items }) +
-    (h.tree ? (TOGGLE_SHARE = h.toggle_share || {}, treeHTML(h.tree, h.order || [], h.toggles_on || [], "")) : "");
+    (h.tree ? (TOGGLE_SHARE = h.toggle_share || {}, (TREE_ROLES = h.roles || {}), treeHTML(h.tree, h.order || [], h.toggles_on || [], "", h.roles)) : "");
   $("#main").scrollTop = 0;
   bindTips($("#equipPanel"), (i) => itemTip(h.items[+i]));
   mountCrafts({ items: h.items });

@@ -470,6 +470,134 @@ def check_craft_table():
     check("crafting table adds up to the crafted item", not bad and n > 300, f"({n} crafts" + (f"; wrong: {bad[:3]})" if bad else ")"))
 
 
+def check_chat():
+    """The chat keeps a conversation Claude's API accepts, after a build, after a reply that was cut off in the
+    middle of a tool request, and after a tool that failed; API errors come back in plain words. Uses a stand-in
+    for Claude's API that refuses anything the real one refuses (no internet or API key needed)."""
+    import wynn_app
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+    problems, script = [], []
+
+    import hashlib
+
+    def bound(system, prefix):          # Claude's thinking is tied to the instructions and everything before it
+        return hashlib.sha1((system + json.dumps(prefix, sort_keys=True)).encode()).hexdigest()
+
+    def invalid(msgs, system=""):
+        if not msgs or msgs[0]["role"] != "user":
+            return "must start with the player"
+        for i, m in enumerate(msgs):
+            if i and msgs[i - 1]["role"] == m["role"]:
+                return "same speaker twice in a row"
+            c = m["content"]
+            if not c or (isinstance(c, list) and not all(c)):
+                return "empty message"
+            for b in (c if isinstance(c, list) else []):
+                if b.get("type") == "text" and not b.get("text", "").strip():
+                    return "empty text"
+                if b.get("type") == "thinking" and b.get("signature") != bound(system, msgs[:i]):
+                    return "Invalid signature in thinking block. The block is bound to a different conversation."
+                if b.get("type") == "tool_use":
+                    nxt = msgs[i + 1]["content"] if i + 1 < len(msgs) else []
+                    if not any(isinstance(x, dict) and x.get("tool_use_id") == b["id"] for x in nxt):
+                        return "tool_use ids were found without tool_result blocks immediately after"
+                if b.get("type") == "tool_result":
+                    prev = msgs[i - 1]["content"] if i else []
+                    if not any(isinstance(x, dict) and x.get("id") == b["tool_use_id"] for x in prev):
+                        return "unexpected tool_use_id found in tool_result blocks"
+        return None
+
+    class Fake(BaseHTTPRequestHandler):
+        def log_message(self, *a):
+            pass
+
+        def do_POST(self):
+            body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+            msgs = body["messages"]
+            bad = invalid(msgs, body.get("system", ""))
+            if not bad and msgs[-1]["role"] == "user" and isinstance(msgs[-1]["content"], list) and \
+                    any(b.get("type") == "tool_result" for b in msgs[-1]["content"]) and \
+                    not any(b.get("type") == "thinking" for b in msgs[-2]["content"]):
+                bad = "expected the thinking block of the turn in progress"
+            think = [{"type": "thinking", "thinking": "hmm", "signature": bound(body.get("system", ""), msgs)}]
+            step = script.pop(0) if script else ("text", "ok")
+            if bad:
+                problems.append(bad)
+                code, out = 400, {"type": "error", "error": {"type": "invalid_request_error", "message": bad}}
+            elif step[0] == "error":
+                code, out = 400, {"type": "error", "error": {"type": "invalid_request_error", "message": step[1]}}
+            elif step[0] == "tool":
+                code, out = 200, {"stop_reason": "tool_use", "content": think + [{"type": "text", "text": "Let me check."},
+                                  {"type": "tool_use", "id": f"toolu_{len(script)}{step[1]}", "name": step[1], "input": step[2]}]}
+            elif step[0] == "cut":            # cut off while asking for a tool
+                code, out = 200, {"stop_reason": "max_tokens", "content": think + [{"type": "text", "text": "The build is"},
+                                  {"type": "tool_use", "id": "toolu_cut", "name": "lookup_item", "input": {}}]}
+            else:
+                code, out = 200, {"stop_reason": "end_turn", "content": think + [{"type": "text", "text": step[1]}]}
+            data = json.dumps(out).encode()
+            self.send_response(code)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), Fake)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    saved = (wynn_app.API_URL, wynn_app.api_key, wynn_app.run_report, wynn_app.item_summary, wynn_app.STATE["chat"],
+             wynn_app.ssl_context, wynn_app.characters_context)
+    calls = {"n": 0}
+
+    def changing_characters():          # the player's characters change during the chat (a build gets saved, ...)
+        calls["n"] += 1
+        return f"\n\nThe player's saved characters: Sparky ({calls['n']} saved builds)"
+    wynn_app.characters_context = changing_characters
+    wynn_app.API_URL = f"http://127.0.0.1:{srv.server_address[1]}/v1/messages"
+    wynn_app.api_key = lambda: "test"
+    wynn_app.ssl_context = lambda: None
+    wynn_app.run_report = lambda inp: {"ok": True, "text": "REPORT " * 3000, "summary": None}
+    try:
+        wynn_app.STATE["chat"] = []
+        ok = True
+        script[:] = [("tool", "analyze_build", {"class": "mage", "level": 60}), ("text", "Here's your build.")]
+        ok &= wynn_app.chat_turn("make me a mage")["reply"] == "Here's your build."
+        script[:] = [("text", "Sure.")]
+        ok &= wynn_app.chat_turn("why that helmet?")["reply"] == "Sure."            # the question after a build
+        script[:] = [("cut",)]
+        wynn_app.chat_turn("tell me everything")
+        script[:] = [("text", "Still here.")]
+        ok &= wynn_app.chat_turn("and?")["reply"] == "Still here."                  # after a cut-off reply
+        def boom(name):
+            raise RuntimeError("broken")
+        wynn_app.item_summary = boom
+        script[:] = [("tool", "lookup_item", {"name": "x"}), ("text", "Couldn't look it up.")]
+        ok &= wynn_app.chat_turn("look up x")["reply"] == "Couldn't look it up."     # a tool that fails
+        script[:] = [("text", "Fine.")]
+        ok &= wynn_app.chat_turn("ok")["reply"] == "Fine."
+        script[:] = [("error", "Your credit balance is too low to access the Anthropic API.")]
+        r = wynn_app.chat_turn("hi")
+        ok &= r.get("error") and "credit" in r["reply"] and "console.anthropic.com" in r["reply"]
+        script[:] = [("text", "Back.")]
+        ok &= wynn_app.chat_turn("hi again")["reply"] == "Back."
+        # two builds in one turn, then another turn: Claude's thinking stays valid all along
+        script[:] = [("tool", "analyze_build", {"class": "mage", "level": 61}),
+                     ("tool", "analyze_build", {"class": "mage", "level": 62}), ("text", "Done.")]
+        ok &= wynn_app.chat_turn("again at 61 and 62")["reply"] == "Done."
+        script[:] = [("text", "Yes.")]
+        ok &= wynn_app.chat_turn("is 62 better?")["reply"] == "Yes."
+        # older reports are shortened, the most recent stays whole
+        sent = wynn_app.clean_history(wynn_app.STATE["chat"] + [{"role": "user", "content": "next"}])
+        lens = [len(b["content"]) for m in sent for b in (m["content"] if isinstance(m["content"], list) else [])
+                if b.get("type") == "tool_result" and b["content"].startswith("REPORT")]
+        ok &= len(lens) == 3 and max(lens[:2]) < 7000 and lens[2] == len("REPORT " * 3000)
+        check("chat stays valid for Claude (thinking, builds, cut-off replies, failed tools)", ok and not problems,
+              "; ".join(problems[:3]))
+    except Exception as exc:
+        check("chat stays valid for Claude (thinking, builds, cut-off replies, failed tools)", False, f"{type(exc).__name__}: {exc}")
+    finally:
+        srv.shutdown()
+        (wynn_app.API_URL, wynn_app.api_key, wynn_app.run_report, wynn_app.item_summary, wynn_app.STATE["chat"],
+         wynn_app.ssl_context, wynn_app.characters_context) = saved
+
+
 def main():
     check_code()
     check_release_files()
@@ -478,6 +606,7 @@ def main():
     check_library()
     check_sharing()
     check_craft_table()
+    check_chat()
     print(f"\n{sum(RESULTS)}/{len(RESULTS)} checks passed.")
     sys.exit(0 if all(RESULTS) else 1)
 

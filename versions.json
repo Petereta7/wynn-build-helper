@@ -1,6 +1,12 @@
 {
   "versions": [
     {
+      "version": "1.9.0",
+      "date": "2026-10-21",
+      "notes": "Better builds: deep search now builds around the top 30 weapons instead of 16. The best weapon wasn't always in the top 16, so some builds get a lot better (Warrior L106 +11%, Archer L100 +9%, Assassin L106 +6% in our tests), for about 30% more time. With crafted items it also designs crafts for more builds, more carefully. Crafted items are now off unless you ask for them (tick the box in the form, or tell the bot). New crafting table on results: the 3x2 grid like the game's, each ingredient's spot strength and effects, hover for stats and drops; and a live crafting bench in The Forge. The ability tree now explains itself: which abilities matter for your goal and by how much, which are just the path to them, and which are spare points you can swap freely. Fixed: the chat stopped working with an error 400 after a build. The bot's questions before a build are shorter.",
+      "warning": ""
+    },
+    {
       "version": "1.8.1",
       "date": "2026-10-21",
       "notes": "\"Make a build for\" on a character's page now opens the chat (with the character's name typed in, so you just say what it should be good at) instead of the form. The form is still there: \"Use the form instead\".",

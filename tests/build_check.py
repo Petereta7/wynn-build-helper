@@ -11,6 +11,7 @@ For every class it checks:
   * any minimums asked for are met
   * crafted pieces (when asked for) can be made in game, and their crafter codes read back the same
   * the build as a share code opens as exactly the same build (items, powders, crafts, tree, skill points)
+  * every ability in the tree says why it's there, and a "spare" one really doesn't change the goal's number
   * the score is at least the score recorded in tests/golden/build_baseline.json (builds never get worse)
 
     python3 tests/build_check.py              (all cases; a few minutes)
@@ -155,6 +156,22 @@ def main():
             same = back is not None and all(back[k] == e[k] for k in ("items", "owned", "order", "sp", "label")) \
                 and not back["shared_from"]["missing"]
             check(f"{case['name']}: share code opens the same build", same, f"({len(code)} characters)" + (f" {err}" if err else ""))
+            # every ability in the tree says why it's there, and the reasons hold up
+            roles = S["best"].get("roles") or {}
+            tree, R = wh.LAST_RESULT["tree"], wh.LAST_RESULT
+            okr = len(roles) == len(S["best"]["owned"]) and all(r["role"] in ("start", "goal", "path", "spare", "extra")
+                                                                 for r in roles.values())
+            bad_r = []
+            for nid, r in roles.items():
+                if r["role"] in ("spare", "extra") and tree.validate(frozenset(best["owned"]) - {int(nid)}, case["level"])["ok"]:
+                    with_ = R["build"].evaluate(frozenset(best["owned"]), best["armor"], best["weapon"], best["extra"])["main"]
+                    without = R["build"].evaluate(frozenset(best["owned"]) - {int(nid)}, best["armor"], best["weapon"], best["extra"])["main"]
+                    if without > 0 and with_ / without - 1 >= 0.0005:
+                        bad_r.append(tree.by_id[int(nid)].name)
+                if r["role"] == "goal" and not (r["gain"] or 0) > 0:
+                    bad_r.append(tree.by_id[int(nid)].name)
+            check(f"{case['name']}: each ability says why it's there", okr and not bad_r,
+                  f"({sum(1 for r in roles.values() if r['role'] == 'spare')} spare of {len(roles)})" + (f" wrong: {bad_r[:3]}" if bad_r else ""))
         score = best["eval"]["main"]
         print(f"SCORE\t{case['name']}\t{score!r}", flush=True)
         was = base.get(case["name"])

@@ -956,7 +956,13 @@ def build_summary():
                 "order": tree.validate(x["owned"], level)["order"],
                 "sp": {"assigned": list(ass), "extra": extra, "gear": [totals[i] - ass[i] - extra[i] for i in range(5)]},
                 "mana": ({k: v for k, v in ev["mana"].items()} if ev.get("mana") else None),
-                "goal_parts": ev.get("goal_parts")}
+                "goal_parts": ev.get("goal_parts"), "roles": roles_of(x)}
+
+    def roles_of(x):                    # why each ability is in the tree (shown on the tree map)
+        try:
+            return {str(k): v for k, v in wh.tree_roles(b, x["owned"], x["armor"], x["weapon"], list(x["extra"]), level).items()}
+        except Exception:
+            return {}
 
     best_ev = (R.get("best") or R["current"])["eval"]
     mask = best_ev.get("mask")
@@ -992,7 +998,7 @@ def build_summary():
                  "toggle_share": out["toggle_share"],
                  "numbers": out["best"]["numbers"], "items": out["best"]["items"], "sp": out["best"]["sp"],
                  "owned": out["best"]["owned"], "order": out["best"]["order"], "link": out["best_link"],
-                 "settings": out["settings"], "rolls": out["rolls"]}
+                 "settings": out["settings"], "rolls": out["rolls"], "roles": out["best"].get("roles") or {}}
         hist.append(entry)
         save_history(hist)
         out["history_id"] = entry["id"]
@@ -1016,9 +1022,10 @@ How to work:
   Save longer explanations for when you explain a decision or a result.
 - Baseline stats: the first time they ask for a build (or a new goal), ask whether they want any minimums kept, as one short line like the example above. Put it in the same message as any other question you need to ask; if you have everything else, ask it on its own and wait. If they say no or don't care, run without minimums and don't ask again for follow-ups. Pass what they say as minimums (health, ehp, walk_speed in %, mana_regen, health_regen, elemental defenses). "No negative walk speed" means walk_speed 0.
 - Some abilities only give their bonus while a toggle is on. By default the calculator only counts buffs whose timing is known: Bullwhip (on), the best Mystic Mask (you always wear one), Coursing Restraints for the share of time its duration and cooldown allow, and ultimate buffs for the same share as ultimate damage. Everything else (Holy Power, Tricks, Unstable, Blood Pool, Corrupted, "next hit" effects) is off so numbers aren't inflated. If the player says they keep a buff up, pass it in toggles, with a share if it's only part of the time, e.g. "Contamination=70%, Activate Luster Purge". Pass toggles_off for buffs they say they don't keep up. The report's "Toggles and sliders" section shows what each off toggle would add; mention a big one and ask if they keep it up.
-- Characters: the player's saved characters are listed at the end of these instructions. When they mean one ("my shaman", "Sparky", "my main"), pass character with its name instead of asking for class and level: its class, level and current gear are filled in (pass gear only to change it, use_saved_gear false to start from nothing). If they say a character leveled up or was renamed, update it with manage_characters. After a build the app itself asks whether to save it to a character's library; save it with manage_characters only if they ask you to. Don't create characters unless they ask.
+- Characters: the player's saved characters come with each message, in a note from the app (the player didn't type it). When they mean one ("my shaman", "Sparky", "my main"), pass character with its name instead of asking for class and level: its class, level and current gear are filled in (pass gear only to change it, use_saved_gear false to start from nothing). If they say a character leveled up or was renamed, update it with manage_characters. After a build the app itself asks whether to save it to a character's library; save it with manage_characters only if they ask you to. Don't create characters unless they ask.
 - Sharing and comparing: every saved build has a Share button that makes a share code (starts with WBH1-) a friend pastes into their app (Home page, or in this chat, which opens it straight away), and a Compare button that puts two saved builds side by side (numbers, gear, skill points, abilities). Point the player to those when they ask; you can't make or read share codes yourself.
 - If they want a mix ("mostly damage but I want to survive too", "70/30 spells and tankiness"), pass the main goal plus second_goal and second_goal_weight (the share for the second goal, default 30). This is a weighted mix, softer than a minimum: use minimums when they name a number ("at least 20k health"), the mix when they describe a preference. balanced is the same idea at 50/50 for damage and effective HP.
+- The report's "Abilities that matter most" lines say which abilities in the best build's tree raise the goal and by how much, which are only there to reach those (a path or an archetype count), and which are spare points that don't change the goal's number. When the player asks why an ability is there or says the tree looks odd, explain with that, and say spare points can go anywhere they like.
 - If no build meets every minimum, the report says so and shows the closest one; tell them which minimum couldn't be met and suggest relaxing it.
 - The report shows health, effective HP and walk speed for the best build next to the current gear; mention any big drop in health or walk speed so they can set a minimum.
 - If they want the most damage from one specific ability ("maximum puppet damage", "biggest Meteor", "strongest Bash"), use goal ability with focus set to that ability.
@@ -1153,10 +1160,97 @@ class ClaudeError(Exception):
     pass
 
 
-def call_claude(messages: list, model: str) -> dict:
+def clean_history(history: list, turn_start: int = None, keep_thinking: bool = True) -> list:
+    """The conversation as Claude's API accepts it, whatever happened before.
+
+    - Only the parts the API takes back; no empty messages; every tool request answered (a request without an
+      answer, e.g. from a reply that was cut off or a tool that failed, is left out, as are answers without one);
+      the same speaker never twice in a row.
+    - Claude's thinking: each thought is tied to exactly what came before it. Thoughts from earlier turns are left
+      out (the API allows that); thoughts from the turn in progress are kept unchanged (it needs those while it
+      uses tools), and nothing before them changes during the turn.
+    - Build reports from earlier turns are shortened, except the most recent one, so a long chat doesn't outgrow
+      what Claude can read. Only turns before the one in progress are touched, so it stays the same all turn.
+    turn_start: index in history of the player's message that started the turn in progress (default: the last
+    player message that isn't tool answers)."""
+    if turn_start is None:
+        turn_start = 0
+        for i, m in enumerate(history):
+            c = m.get("content")
+            if m.get("role") == "user" and (isinstance(c, str) or not any(isinstance(b, dict) and b.get("type") == "tool_result" for b in c or [])):
+                turn_start = i
+    msgs = []
+    for idx, m in enumerate(history):
+        content = m.get("content")
+        if isinstance(content, str):
+            blocks = [{"type": "text", "text": content}] if content.strip() else []
+        else:
+            blocks = []
+            for b in content or []:
+                t = b.get("type")
+                if t in ("thinking", "redacted_thinking"):
+                    if keep_thinking and idx >= turn_start and m.get("role") == "assistant":
+                        blocks.append(b)                  # exactly as Claude sent it
+                elif t == "text" and (b.get("text") or "").strip():
+                    blocks.append({"type": "text", "text": b["text"]})
+                elif t == "tool_use" and b.get("id") and b.get("name"):
+                    blocks.append({"type": "tool_use", "id": b["id"], "name": b["name"],
+                                   "input": b.get("input") if isinstance(b.get("input"), dict) else {}})
+                elif t == "tool_result" and b.get("tool_use_id"):
+                    blocks.append({"type": "tool_result", "tool_use_id": b["tool_use_id"],
+                                   "content": str(b.get("content") or "(no result)")})
+        msgs.append({"role": m.get("role"), "content": blocks, "old": idx < turn_start})
+    # every tool request needs its answer in the very next message, and every answer its request
+    for i, m in enumerate(msgs):
+        if m["role"] != "assistant":
+            continue
+        nxt = msgs[i + 1] if i + 1 < len(msgs) and msgs[i + 1]["role"] == "user" else None
+        answered = {b["tool_use_id"] for b in (nxt["content"] if nxt else []) if b["type"] == "tool_result"}
+        m["content"] = [b for b in m["content"] if b["type"] != "tool_use" or b["id"] in answered]
+        if not any(b["type"] in ("text", "tool_use") for b in m["content"]):
+            m["content"] = []                              # thoughts alone aren't a message
+    for i, m in enumerate(msgs):
+        if m["role"] != "user":
+            continue
+        prev = msgs[i - 1] if i > 0 and msgs[i - 1]["role"] == "assistant" else None
+        asked = {b["id"] for b in (prev["content"] if prev else []) if b["type"] == "tool_use"}
+        m["content"] = [b for b in m["content"] if b["type"] != "tool_result" or b["tool_use_id"] in asked]
+    # shorten build reports from earlier turns, all but the most recent of them
+    names = {b["id"]: b["name"] for m in msgs if m["role"] == "assistant" for b in m["content"] if b["type"] == "tool_use"}
+    old_reports = [b for m in msgs if m["role"] == "user" and m["old"] for b in m["content"]
+                   if b["type"] == "tool_result" and names.get(b["tool_use_id"]) == "analyze_build"]
+    for b in old_reports[:-1]:
+        if len(b["content"]) > 6000:
+            b["content"] = b["content"][:6000] + "\n... (older report shortened; run it again for the full details)"
+    # no empty messages, no speaker twice in a row, starting with the player
+    out = []
+    for m in msgs:
+        if not m["content"] or m["role"] not in ("user", "assistant"):
+            continue
+        m = {"role": m["role"], "content": m["content"]}
+        if out and out[-1]["role"] == m["role"]:
+            strip = lambda c: [b for b in c if b["type"] not in ("thinking", "redacted_thinking")]
+            if m["role"] == "assistant":
+                out[-1] = {"role": "assistant", "content": strip(out[-1]["content"]) + strip(m["content"])}
+            else:
+                out[-1] = {"role": "user", "content": out[-1]["content"] + m["content"]}
+            continue
+        out.append(m)
+    while out and out[0]["role"] != "user":
+        out.pop(0)
+    return out
+
+
+class ThinkingMismatch(Exception):
+    pass
+
+
+def call_claude(messages: list, model: str, turn_start: int = None, keep_thinking: bool = True) -> dict:
     key = api_key()
-    body = json.dumps({"model": model, "max_tokens": 1500, "system": SYSTEM_PROMPT + characters_context(), "tools": TOOLS,
-                       "messages": messages}).encode("utf-8")
+    # The instructions never change during a chat (the player's characters go with each message instead), because
+    # Claude's thinking is tied to them.
+    body = json.dumps({"model": model, "max_tokens": 4096, "system": SYSTEM_PROMPT, "tools": TOOLS,
+                       "messages": clean_history(messages, turn_start, keep_thinking)}).encode("utf-8")
     req = urllib.request.Request(API_URL, data=body, method="POST", headers={
         "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json"})
     try:
@@ -1168,6 +1262,15 @@ def call_claude(messages: list, model: str) -> dict:
             detail = json.load(exc).get("error", {}).get("message", "")
         except Exception:
             pass
+        low = detail.lower()
+        if exc.code == 400 and "thinking" in low and ("signature" in low or "bound" in low):
+            raise ThinkingMismatch(detail)
+        if "credit balance" in low:
+            raise ClaudeError("Your Claude API credit has run out. Add credit at console.anthropic.com (Plans & Billing), "
+                              "then send your message again.")
+        if "prompt is too long" in low or "too many tokens" in low:
+            raise ClaudeError("This chat got too long for Claude to read. Press New chat (top of the chat) to start fresh; "
+                              "your builds stay in History and your library.")
         msg = {401: "Claude didn't accept the API key. Check it in Settings.",
                403: "This API key isn't allowed to use that model. Try another model in Settings.",
                404: "That model isn't available on your account. Pick another in Settings.",
@@ -1190,13 +1293,21 @@ def chat_turn(user_text: str) -> dict:
     model = load_config().get("model") or DEFAULT_MODEL
     history = STATE["chat"]
     start = len(history)
-    history.append({"role": "user", "content": user_text})
+    # what the app knows right now (the player's characters) goes with the message, so it stays exactly as sent
+    history.append({"role": "user", "content": [{"type": "text", "text": user_text},
+                                                 {"type": "text", "text": "(Note from the app, not typed by the player:"
+                                                  + characters_context() + ")"}]})
     reports, summaries = [], []
     char_id = None
     STATE["library_changed"] = False
     try:
+        keep = True
         for _ in range(8):
-            resp = call_claude(history, model)
+            try:
+                resp = call_claude(history, model, start, keep)
+            except ThinkingMismatch:          # shouldn't happen any more; if it does, once more without thoughts
+                keep = False
+                resp = call_claude(history, model, start, keep)
             content = resp.get("content", [])
             history.append({"role": "assistant", "content": content})
             if resp.get("stop_reason") != "tool_use":
@@ -1208,28 +1319,38 @@ def chat_turn(user_text: str) -> dict:
                 if block.get("type") != "tool_use":
                     continue
                 name, inp = block.get("name"), block.get("input") or {}
-                if name == "analyze_build":
-                    out = run_report(inp)
-                    if out.get("character_id"):
-                        char_id = out["character_id"]
-                    if out["ok"]:
-                        reports.append(out["text"])
-                        summaries.append(out.get("summary"))
-                    result = out["text"]
-                elif name == "manage_characters":
-                    result = manage_characters(inp)
-                elif name == "lookup_item":
-                    result = item_summary(inp.get("name", ""))
-                elif name == "list_abilities":
-                    result = ability_list(inp.get("class", ""))
-                else:
-                    result = "Unknown tool."
-                results.append({"type": "tool_result", "tool_use_id": block["id"], "content": result[:60000]})
+                try:
+                    if name == "analyze_build":
+                        out = run_report(inp)
+                        if out.get("character_id"):
+                            char_id = out["character_id"]
+                        if out["ok"]:
+                            reports.append(out["text"])
+                            summaries.append(out.get("summary"))
+                        result = out["text"]
+                    elif name == "manage_characters":
+                        result = manage_characters(inp)
+                    elif name == "lookup_item":
+                        result = item_summary(inp.get("name", ""))
+                    elif name == "list_abilities":
+                        result = ability_list(inp.get("class", ""))
+                    else:
+                        result = "Unknown tool."
+                except Exception as exc:         # always answer, so the conversation stays valid
+                    traceback.print_exc()
+                    result = f"That didn't work ({type(exc).__name__}: {exc})."
+                results.append({"type": "tool_result", "tool_use_id": block["id"], "content": (str(result) or "(no result)")[:60000]})
             history.append({"role": "user", "content": results})
         return {"reply": "That took more steps than expected. Try asking in a simpler way.", "reports": reports}
-    except ClaudeError as exc:
+    except (ClaudeError, ThinkingMismatch) as exc:
         del history[start:]             # forget the unanswered turn so the conversation stays valid
-        return {"reply": str(exc), "error": True, "reports": reports}
+        msg = str(exc) if isinstance(exc, ClaudeError) else "Claude couldn't continue this chat. Press New chat to start fresh."
+        return {"reply": msg, "error": True, "reports": reports}
+    except Exception as exc:            # anything else: same, and say what happened
+        traceback.print_exc()
+        del history[start:]
+        return {"reply": f"Something went wrong talking to Claude ({type(exc).__name__}). Try again; if it keeps "
+                         "happening, press New chat.", "error": True, "reports": reports}
 
 
 # ============================================================================== web server

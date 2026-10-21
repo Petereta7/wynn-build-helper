@@ -103,11 +103,26 @@ Measured deep search on the owner's PC (1.6 -> 1.7): Warrior L106 7.0 -> 4.1 min
   Wynnbuilder's, lengths capped, decompression capped). Numbers are labelled as the sender's. Saved builds keep
   `settings` (party buffs, enemy hits, tomes, aspects, stacks, non-max rolls) so comparisons say what they assumed.
   build_check checks every case's build opens identically from its code.
-- The bot sees the player's characters every turn (`characters_context()`); `analyze_build` with `character`
-  fills in class, level and current gear.
+- The bot sees the player's characters every turn (`characters_context()`, sent as an app note inside each player
+  message, NOT in the system prompt: Claude's thinking blocks are bound to the system prompt and everything before
+  them, so the system prompt must never change during a chat). `clean_history()` keeps thinking blocks only for the
+  turn in progress and only changes earlier turns (shortening old reports), and drops unanswered tool requests.
+  `analyze_build` with `character` fills in class, level and current gear.
+- Crafted items are off unless the player asks (form box, `crafted: true`, `--crafted`).
+- Tree roles (`tree_roles`): each ability is goal (% it adds), path (needed to reach abilities that count; whole
+  branch value), spare (doesn't change the goal's number; text says what else it adds) or start. Spare points come from
+  the score's small tie-breakers (other damage); owner hasn't decided whether spare points should favour survival.
+- Search headroom (Oct 2026, tests/headroom.py in the dev repo): more weapons was the big win; the 'Maximum' search's
+  other extras added nothing beyond it. A wider ingredient candidate list for crafts helped single slots but not
+  whole builds (one case -0.03%), so it was dropped. Crafting for more top builds helps Shaman/Assassin most; with 30
+  weapons the top 6 are mostly the new weapons' builds, so a craft-only run still beat the combined run there
+  (154,867 vs 150,317 Shaman; 224,705 vs 221,436 Assassin): next idea is picking craft candidates for diversity.
 
 ## History (newest first)
 
+- 1.9.0: deep search 30 weapons (was 16) and crafts for 6 builds x 150 shake-ups (was 3 x 40); crafted items off
+  unless asked; crafting table + Forge crafting bench; tree roles (why each ability is there); chat 400 fix (thinking
+  blocks are tied to the system prompt, so the characters list moved out of it); shorter bot questions.
 - 1.8.1: a character's "Make a build for" button opens the chat (name typed in); the form is the secondary button.
 - 1.8.0: compare two saved builds side by side; share codes (open from Home or by pasting in the chat, save to
   library, compare with yours); saved builds remember non-default settings; empty gear slot display fixed.
@@ -137,6 +152,8 @@ Measured deep search on the owner's PC (1.6 -> 1.7): Warrior L106 7.0 -> 4.1 min
 
 ## Working environment notes
 
+- **Owner's rule: run tests and experiments on the owner's PC whenever it's available** (it's much faster than the
+  cloud session). Only fall back to the cloud session when the PC runner isn't picking up jobs.
 - The owner's PC (i9-11900K, 8 cores / 16 threads, Windows, Python 3.14) is a GitHub self-hosted runner for the
   PRIVATE repository Petereta7/wynn-build-helper-dev (never attach it to the public one). Pushing a snapshot of
   the code there (without .github/workflows/checks.yml, so no hosted minutes are used) runs

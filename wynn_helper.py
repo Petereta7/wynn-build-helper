@@ -4345,6 +4345,117 @@ def fmt_num(x: float) -> str:
     return f"{x:,.1f}" if x < 100 else f"{x:,.0f}"
 
 
+def tree_roles(build, owned, armor, weapon, extra, level) -> dict:
+    """Why each ability is in a tree, worked out with the calculator: {node id: {"role", "gain", "text"}}.
+    role: "start" (the first ability), "goal" (taking it out lowers the goal's number by gain %), "path" (needed to
+    reach abilities that count: taking it out, and everything that then can't stay, lowers the goal's number),
+    "spare" (taking it out, with anything that only it leads to, doesn't change the goal's number; text says what
+    else it adds, if anything)."""
+    tree = build.tree
+    owned = frozenset(owned)
+    full = build.evaluate(owned, armor, weapon, extra)
+    key = "main" if full.get("main", 0) > 0 else "value"
+    base = full.get(key, 0.0)
+    by_name = {n.name: n.id for n in tree.nodes}
+
+    def prune(rest):
+        """Take out what can't stay once an ability is gone (no way to it, archetype count too low, ...)."""
+        rest, gone, arch = set(rest), set(), False
+        while True:
+            v = tree.validate(rest, level)
+            bad = [e.partition(": ") for e in v["errors"] if ": " in e]
+            bad = [(by_name.get(nm), why) for nm, _, why in bad if by_name.get(nm) in rest]
+            if not bad:
+                return frozenset(rest), gone, arch
+            for nid, why in bad:
+                arch |= "abilities (have" in why
+                rest.discard(nid)
+                gone.add(nid)
+
+    def gain_of(rest):
+        r = build.evaluate(rest, armor, weapon, extra)
+        was = r.get(key, 0.0)
+        return ((base / was - 1) * 100 if was > 0 else (100.0 if base > 0 else 0.0)), r
+
+    def pct(g):
+        return f"+{g:.1f}%" if g < 10 else f"+{g:.0f}%"
+
+    order = tree.validate(owned, level)["order"]
+    out, later = {}, []
+    for nid in order:                                  # first: the ones that can be taken out on their own
+        if nid in tree.roots:
+            out[nid] = {"role": "start", "gain": None, "text": "the ability every tree starts with"}
+            continue
+        rest, gone, _arch = prune(owned - {nid})
+        if gone:
+            later.append((nid, rest, gone, _arch))
+            continue
+        gain, r = gain_of(rest)
+        if gain >= 0.05:
+            out[nid] = {"role": "goal", "gain": gain, "text": f"{pct(gain)} for your goal"}
+            continue
+        side = []
+        for k, word in (("spell_dps", "spell damage"), ("melee_dps", "main attack damage"), ("burst", "combo damage"),
+                        ("heal_ps", "healing")):
+            a, b = full.get(k, 0) or 0, r.get(k, 0) or 0
+            if b > 0 and a / b - 1 >= 0.002:
+                side.append(((a / b - 1) * 100, word))
+        da, db = (full.get("defense") or {}).get("ehp_agi", 0) or 0, (r.get("defense") or {}).get("ehp_agi", 0) or 0
+        if db > 0 and da / db - 1 >= 0.002:
+            side.append(((da / db - 1) * 100, "effective HP"))
+        side.sort(reverse=True)
+        if side and side[0][0] >= 5:                   # big for something else: worth keeping, not a free point
+            out[nid] = {"role": "extra", "gain": 0.0,
+                        "text": f"doesn't change your goal's number, but adds {pct(side[0][0])[1:]} {side[0][1]}: worth keeping"}
+            continue
+        text = (f"doesn't change your goal's number; adds {pct(side[0][0])[1:]} {side[0][1]}" if side else
+                "doesn't change anything the calculator counts (a free point: take something you like instead)")
+        out[nid] = {"role": "spare", "gain": 0.0, "text": text}
+    for nid, rest, gone, arch in later:              # then: the ones others need
+        gain, _r = gain_of(rest)
+        goal_after = sorted((out[g]["gain"], tree.by_id[g].name) for g in gone if out.get(g, {}).get("role") == "goal")
+        names = [nm for _g, nm in reversed(goal_after)] or [tree.by_id[g].name for g in sorted(gone, key=order.index)]
+        if gain < 0.05:
+            out[nid] = {"role": "spare", "gain": 0.0,
+                        "text": "doesn't change your goal's number; it only leads to " + ", ".join(names[:3]) +
+                                (", which don't either" if len(names) > 1 else ", which doesn't either")}
+            continue
+        n = tree.by_id[nid]
+        if arch and n.archetype:
+            text = f"counts toward the {n.archetype} abilities that {', '.join(names[:3])} need" + ("s" if len(names[:3]) == 1 else "")
+        else:
+            text = "on the way to " + ", ".join(names[:3])
+        out[nid] = {"role": "path", "gain": gain, "text": f"{text} (together {pct(gain)} for your goal)"}
+    return out
+
+
+def roles_lines(tree, roles, top=6) -> list:
+    """Short report lines: the abilities that matter most, how many are paths, and the spare ones."""
+    goal = sorted(((r["gain"], tree.by_id[i].name) for i, r in roles.items() if r["role"] == "goal"), reverse=True)
+    path = [tree.by_id[i].name for i, r in roles.items() if r["role"] == "path"]
+    spare = [(tree.by_id[i], r) for i, r in roles.items() if r["role"] == "spare"]
+    extra = [(tree.by_id[i], r) for i, r in roles.items() if r["role"] == "extra"]
+    lines = []
+    if goal:
+        lines.append("  Abilities that matter most for your goal: " + ", ".join(
+            f"{nm} (+{g:.1f}%)" if g < 10 else f"{nm} (+{g:.0f}%)" for g, nm in goal[:top]) + ".")
+    if path:
+        lines.append(f"  {len(path)} abilities are there to reach those (a way through the tree, or the archetype count "
+                     "one of them needs).")
+    if extra:
+        lines.append("  Not for your goal, but worth keeping: " + "; ".join(
+            f"{n.name} ({r['text'].split('adds ', 1)[1].split(':')[0]})" for n, r in extra[:4]) + ".")
+    if spare:
+        pts = sum(n.cost for n, _ in spare)
+        lines.append(f"  {len(spare)} abilities ({pts} AP) don't change your goal's number; they're spare points, picked "
+                     "for small extras:")
+        for n, r in spare[:8]:
+            extra = r["text"].split("; ", 1)[1] if "; " in r["text"] else "no effect the calculator counts"
+            lines.append(f"    {n.name}: {extra}")
+        lines.append("  Swap spare points for anything you like (mobility, defense) without losing anything for your goal.")
+    return lines
+
+
 def describe_tree(tree: Tree, owned, level) -> list[str]:
     res = tree.validate(owned, level)
     lines, running = [], 0
@@ -4976,6 +5087,13 @@ def run(args):
             removed = [tree.by_id[i].name for i in chosen if i not in wb["owned"]]
             if added or removed:
                 print(f"  Tree changes for this gear: add {', '.join(added) or '-'}; remove {', '.join(removed) or '-'}")
+            try:                      # why each ability is there (the panel's tree map shows the same)
+                roles_b = tree_roles(floor_build, wb["owned"], wb["armor"], w, wb["extra"], level)
+                LAST_RESULT["best_roles"] = roles_b
+                for line in roles_lines(tree, roles_b):
+                    print(line)
+            except Exception:
+                pass
             names_b = inter_names(tree, wb["owned"])
             tm_b = floor_build.toggle_map(wb["owned"])
             counted = [f"{k} ({'on' if v >= 1 else f'{v * 100:.0f}% of the time'})" for k, v in tm_b.items() if k in names_b]
