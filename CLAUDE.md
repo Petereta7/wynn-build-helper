@@ -108,6 +108,7 @@ Measured deep search on the owner's PC (1.6 -> 1.7): Warrior L106 7.0 -> 4.1 min
 
 ## History (newest first)
 
+- 1.8.1: a character's "Make a build for" button opens the chat (name typed in); the form is the secondary button.
 - 1.8.0: compare two saved builds side by side; share codes (open from Home or by pasting in the chat, save to
   library, compare with yours); saved builds remember non-default settings; empty gear slot display fixed.
 - 1.7.0: deep search about twice as fast with identical builds (crafted items scored once per distinct item,

@@ -1956,8 +1956,8 @@ async function showCharacter(id) {
   $("#main").innerHTML = `<button class="crumb" id="toClass">← ${esc(c.class_title)} characters</button>
     <section class="tip char-hero" style="margin-top:10px"><h2 style="color:${col}">${esc(c.name)}</h2>
       <p class="sub" style="margin:2px 0 0;color:var(--muted)">Level ${c.level || "?"} ${esc(c.class_title)}${c.created ? " · added " + esc(c.created) : ""}</p>
-      <div class="actions" style="margin-top:14px"><button class="btn" id="chForm" type="button">Make a build for ${esc(c.name)}</button>
-        <button class="btn-quiet" id="chChat" type="button">Ask in the chat</button></div>
+      <div class="actions" style="margin-top:14px"><button class="btn" id="chChat" type="button">Make a build for ${esc(c.name)}</button>
+        <button class="btn-quiet" id="chForm" type="button">Use the form instead</button></div>
       <div class="edit"><input id="chName" value="${esc(c.name)}" maxlength="40" aria-label="Name"><input id="chLevel" class="lvl" type="number" min="1" max="121" value="${c.level || ""}" aria-label="Level">
         <button class="btn-quiet" id="chSave" type="button">Save changes</button><button class="btn-quiet" id="chDel" type="button">Delete character</button></div></section>
     <h3 style="font-family:var(--display);font-size:22px;margin:0 0 12px">Library</h3><div class="lib">${lib}</div>`;
@@ -1997,10 +1997,13 @@ function startBuildFor(c, mode) {
     toast(`Filled in for ${c.name}. Choose what matters most, then Find my best build.`);
   } else {
     tab("talk");
-    const gearTxt = b && b.gear.length ? ` I'm wearing ${b.gear.join(", ")}.` : "";
-    $("#input").value = `This is my level ${c.level} ${c.class_title} "${c.name}".${gearTxt} `;
-    $("#input").focus();
-    $("#input").dispatchEvent(new Event("input"));
+    // the bot already knows the character (class, level, current gear), so its name is enough
+    const t = $("#input");
+    t.value = `Make a build for ${c.name}: `;
+    t.focus(); t.setSelectionRange(t.value.length, t.value.length);
+    t.dispatchEvent(new Event("input"));
+    toast(META && !META.has_key ? "Add your API key in Settings to use the chat, or use the form instead"
+                                : `Say what ${c.name} should be good at, then press Send`);
   }
 }
 async function viewLibraryBuild(cid, bid) {

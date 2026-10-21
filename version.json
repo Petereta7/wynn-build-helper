@@ -1,4 +1,4 @@
 {
-  "version": "1.8.0",
-  "notes": "Compare and share builds. Every saved build has a Compare button: two builds side by side, with their numbers, gear slot by slot, skill points and the abilities only one of them has. And a Share button: it makes a short code (fits in one Discord message) a friend pastes into their app, on the Home page or just in the chat, to see your exact build, compare it with theirs and save it to their library. Items are rebuilt from their own game data, so a code can't carry made-up stats. Also: saved builds now remember settings that change the numbers (like party buffs), and an empty gear slot no longer looks broken."
+  "version": "1.8.1",
+  "notes": "\"Make a build for\" on a character's page now opens the chat (with the character's name typed in, so you just say what it should be good at) instead of the form. The form is still there: \"Use the form instead\"."
 }
