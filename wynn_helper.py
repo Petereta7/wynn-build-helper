@@ -466,6 +466,7 @@ class Item:
         self.name = raw.get("displayName") or raw["name"]
         self.type = raw.get("type")
         self.category = raw.get("category")
+        self.wynn_rank = WYNN_EQUIP_RANK.get(self.type, 9)     # where it comes in Wynncraft's equip order
         self.tier = raw.get("tier") or "Normal"
         self.level = int(raw.get("lvl") or 0)
         self.class_req = (raw.get("classReq") or "").lower() or None
@@ -1203,9 +1204,23 @@ def _sp_key(armor, weapon):
     return tuple(out), (s[1] if s is not None and s[0] is ep else _sp_sig(weapon))
 
 
+# Wynncraft puts gear on in this order (boots, leggings, chestplate, helmet, ring, ring, bracelet, necklace), and so
+# does Wynnbuilder (builder_graph.js: wynn_equip). With items that take skill points away, the order decides how many
+# points you need, so every skill point calculation goes through the gear in this order, whatever order it's given in.
+WYNN_EQUIP_RANK = {"boots": 0, "leggings": 1, "chestplate": 2, "helmet": 3, "ring": 4, "bracelet": 6, "necklace": 7}
+
+
+def _wynn_sorted(arm: list) -> list:
+    """The gear (no empty slots) in Wynncraft's equip order; the two rings keep their own order."""
+    r = [getattr(a, "wynn_rank", 9) for a in arm]
+    if all(r[i] <= r[i + 1] for i in range(len(r) - 1)):
+        return arm
+    return [arm[i] for i in sorted(range(len(arm)), key=r.__getitem__)]       # (sorted keeps ties in order)
+
+
 def solve_skill_points(armor: list, weapon):
     """Cached wrapper: the same gear always needs the same points, and searches ask for it many times."""
-    arm = [a for a in armor if a is not None]
+    arm = _wynn_sorted([a for a in armor if a is not None])
     key = _sp_key(arm, weapon)
     hit = _SP_CACHE.get(key)
     if hit is None:
@@ -1232,7 +1247,7 @@ def solve_skill_points(armor: list, weapon):
 def _solve_skill_points_uncached(armor: list, weapon):
     """Minimum skill points to assign (see _solve_skill_points_reference for the rules). Same answers as the
     reference, including which of several equally cheap equip orders is picked, just faster."""
-    armor = [a for a in armor if a is not None]
+    armor = _wynn_sorted([a for a in armor if a is not None])
     if any(b < 0 for a in armor for b in a.bonus) or any(a.crafted for a in armor):
         return _solve_skill_points_exact_fast(armor, weapon)
     return _solve_plain_fast(armor, weapon)
@@ -1364,9 +1379,10 @@ def _solve_skill_points_reference(armor: list, weapon):
     (as implemented by Wynnbuilder): items are equipped one at a time and each must meet its
     requirements when equipped; an item's own bonus never counts toward its own requirement;
     the weapon is equipped last and its bonus doesn't help armor requirements.
-    Returns (assigned[5], total_after_all_items[5], equip_order) for the cheapest order.
+    Returns (assigned[5], total_after_all_items[5], equip_order) for the cheapest order. The gear is gone through in
+    Wynncraft's equip order (boots first), as the game and Wynnbuilder do.
     """
-    armor = [a for a in armor if a is not None]
+    armor = _wynn_sorted([a for a in armor if a is not None])
     if any(b < 0 for a in armor for b in a.bonus) or any(a.crafted for a in armor):
         return _solve_skill_points_exact(armor, weapon)
     with_bonus = [a for a in armor if any(a.bonus)]
@@ -4380,7 +4396,7 @@ def prune_spare(build, owned, armor, weapon, extra, level):
         while stack:
             cur = tree.by_id[stack.pop()]
             for p in cur.parents + cur.deps:
-                if p in gone and p not in need:
+                if p in gone and p not in need and p != nid:
                     need.add(p)
                     stack.append(p)
         add = owned | {nid} | need
@@ -4402,7 +4418,13 @@ def prune_spare(build, owned, armor, weapon, extra, level):
                           sum(tree.by_id[i].cost for i in {nid} | need),
                           f"+{g:.1f}% {best[1]}" if g < 10 else f"+{g:.0f}% {best[1]}"))
     ideas.sort(key=lambda x: -float(x[3].split("%")[0].lstrip("+")))
-    return owned, ideas[:4]
+    kept = []                      # one idea per branch: skip ones on the way to (or reached through) a better one
+    for idea in ideas:
+        branch = {idea[0]} | set(idea[1])
+        if any(idea[0] in k[4] or k[0] in branch for k in kept):
+            continue
+        kept.append(idea + (branch,))
+    return owned, [k[:4] for k in kept[:4]]
 
 
 def unspent_lines(tree, owned, level, ideas) -> list:
@@ -4412,8 +4434,8 @@ def unspent_lines(tree, owned, level, ideas) -> list:
     lines = [f"  {left} ability point{'s' if left != 1 else ''} left unspent: nothing else in reach raises your goal, "
              "so spend them on whatever you like (or keep them for later)."]
     for name, need, ap, text in ideas:
-        lines.append(f"    Idea: {name}{' (with ' + ', '.join(need) + ')' if need else ''}, {ap} AP: {text}, but nothing for "
-                     "your goal.")
+        way = (f" (with {', '.join(need)})" if len(need) <= 3 else f" (with {len(need)} abilities on the way)") if need else ""
+        lines.append(f"    Idea: {name}{way}, {ap} AP: {text}, but nothing for your goal.")
     return lines
 
 

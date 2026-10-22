@@ -73,6 +73,17 @@ def main():
             ok += sum(assigned) == c["py_total"] and final == c["py_final"]
         report("skill points", ok, len(cases))
 
+    # ---- skill points in Wynncraft's equip order (boots first). A friend's level 50 build where helmet-first
+    # gave 97 points; Wynnbuilder's page (and the game) need 99: Agility 27, not 25.
+    gear = [d.find_item(n)[0] for n in ("Ajax", "Giant's Bracer", "Inclemency", "Heartbreak", "Horseshoe",
+                                        "Horseshoe", "Buster Bracer", "Desert Wretch")]
+    if all(gear):
+        wpn = wh.weapon_with_powders(d.find_item("Alarm")[0], [wh.Powder(0, 5)])
+        got = [wh.solve_skill_points(gear, wpn)[0], wh._solve_skill_points_reference(gear, wpn)[0],
+               wh.solve_skill_points(list(reversed(gear)), wpn)[0]]
+        ok = sum(g == [20, 52, 0, 0, 27] for g in got) + (not wh._wearable(gear, wpn, 50)) + wh._wearable(gear, wpn, 51)
+        report("skill points in the game's equip order", ok, 5, f"got {got}")
+
     # ---- weapon powders
     cases = golden("powder_cases.json")
     if cases:

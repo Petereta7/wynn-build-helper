@@ -30,6 +30,7 @@ for _ in range(1500):
             armor[idx] = wh.make_crafted(d, int(r["id"]), [random.randint(1, 3), random.randint(1, 3)], ids)
     wpool = [i for i in d.items.values() if i.category == "weapon" and abs(i.level - lvl) <= 15]
     weapon = random.choice(wpool)
+    armor = wh._wynn_sorted(armor)       # Wynnbuilder's page (and the game) go through gear boots-first
     assigned, final, order = wh.solve_skill_points(armor, weapon)
     cases.append({"armor": [{"reqs": a.reqs, "bonus": a.bonus, "crafted": a.crafted} for a in armor],
                   "weapon": {"reqs": weapon.reqs, "bonus": weapon.bonus},
