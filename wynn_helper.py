@@ -5378,30 +5378,32 @@ def run(args):
               + (f" (stops after {args.time_limit:.0f}s)" if getattr(args, "time_limit", None) else "") + "...")
         if ws.PROGRESS.get("cb") is None:
             ws.PROGRESS["cb"] = lambda f, m: None
-        # Tomes are part of the build from level 55 (unless you listed yours or turned it off): picked for your gear
-        # first so the search chooses gear with them on, then picked again for the finished build.
+        # Tomes are part of the build from level 55 (unless you listed yours, turned it off, or build from your
+        # items): picked for the finished build, after the search, like armor powders. (Picking them before the
+        # search once led it to a worse build, so the search path stays the same and builds only gain.)
         tome_base, tome_picks = floor_build, []
         auto_on = (not build.tomes and getattr(args, "auto_tomes", True) and level >= AUTO_TOMES_LEVEL
                    and only is None)        # building from your items: only tomes you list (--tomes)
-        if auto_on:
-            tome_picks = auto_tomes(floor_build, search_start, armor, weapon, extra_fn(search_start, armor, weapon)[0])
-            if tome_picks:
-                floor_build = floor_build.copy_with(tomes=[t for _k, t, _g in tome_picks])
-                LAST_RESULT["build"] = floor_build
         wb = ws.search_best_build(floor_build, search_start, armor, weapon, base_weapon, keep=keep_ids, ap_budget=budget,
                                   include_never=include_never, min_level=min_lvl,
                                   deep=getattr(args, "deep", False), time_limit=getattr(args, "time_limit", None),
                                   log=lambda m: print("  " + m), crafted=not getattr(args, "no_crafted", True),
                                   only=only)
         if auto_on:
-            again = auto_tomes(tome_base, frozenset(wb["owned"]), wb["armor"], wb["weapon"], wb["extra"])
-            if [t.name for _k, t, _g in again] != [t.name for _k, t, _g in tome_picks]:
-                tb2 = tome_base.copy_with(tomes=[t for _k, t, _g in again])
-                fin2 = tb2.evaluate(frozenset(wb["owned"]), wb["armor"], wb["weapon"], wb["extra"])
-                if fin2["value"] > wb["final"]["value"] and fin2.get("floors_met", True) >= wb["final"].get("floors_met", True):
+            picks = auto_tomes(tome_base, frozenset(wb["owned"]), wb["armor"], wb["weapon"], wb["extra"])
+            if picks:
+                tb2 = tome_base.copy_with(tomes=[t for _k, t, _g in picks])
+                own_b = frozenset(wb["owned"])
+                fin2 = tb2.evaluate(own_b, wb["armor"], wb["weapon"], wb["extra"])
+                ex3, _ = ws.refine_points(tb2, own_b, wb["armor"], wb["weapon"], list(wb["extra"]), fast=False)
+                ex3, _free3 = ws._legal_points(tb2, wb["armor"], wb["weapon"], ex3)
+                fin3 = tb2.evaluate(own_b, wb["armor"], wb["weapon"], ex3)
+                if fin3["value"] > fin2["value"] and fin3.get("floors_met", True) >= fin2.get("floors_met", True):
+                    fin2, wb["extra"], wb["free"] = fin3, ex3, _free3      # skill points re-spent with the tomes on
+                if fin2["value"] >= wb["final"]["value"] and fin2.get("floors_met", True) >= wb["final"].get("floors_met", True):
                     st_e, _ = ws.refine_points(tb2, frozenset(search_start), armor, weapon, [0] * 5, fast=False)
                     wb["start"] = tb2.evaluate(frozenset(search_start), armor, weapon, st_e)
-                    wb["final"], floor_build, tome_picks = fin2, tb2, again
+                    wb["final"], floor_build, tome_picks = fin2, tb2, picks
                     LAST_RESULT["build"] = floor_build
         LAST_RESULT["auto_tomes"] = [(k, t.name, g) for k, t, g in tome_picks]
         if wb.get("stopped"):

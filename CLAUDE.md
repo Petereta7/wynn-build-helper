@@ -131,8 +131,9 @@ Measured deep search on the owner's PC (1.6 -> 1.7): Warrior L106 7.0 -> 4.1 min
   Fabled items, 118 effects modeled by Wynnbuilder, 88 text-only (mostly movement/ally). Recheck HELPER_MAJIDS after
   game data updates (if Wynnbuilder starts modeling one, its abilities win automatically).
 - Tomes (owner asked, Oct 2026): from AUTO_TOMES_LEVEL 55 (tomes need 60) `auto_tomes` picks weapon/armor tomes
-  greedily for the current gear before the whole-build search (so gear is chosen with them on), then again for the
-  finished build (kept only if better; start numbers recomputed with the same tomes so before/after compare gear).
+  greedily for the finished build after the whole-build search (like armor powders), then re-spends skill points
+  with them on (kept only if better); start numbers are recomputed with the same tomes so before/after compare gear.
+  Picking them before the search was tried: shaman L70 mix fell 72,295 -> 69,864 (search landed elsewhere), so no.
   Old-name copies (`remapID`) and duplicates never picked; unused armor slots get the most health; no guild tomes
   unless listed; off when the player lists tomes, unticks it (`auto_tomes: false`, `--no-auto-tomes`) or builds from
   their items.
