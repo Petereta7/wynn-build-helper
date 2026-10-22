@@ -775,6 +775,7 @@ label.deep input[type=checkbox] { width: auto; flex: 0 0 auto; margin-top: 3px; 
             </div>
             <div class="field"><label for="f-only">Only use these items (the ones you have; empty = every item)</label>
               <textarea id="f-only" rows="2" placeholder="Comma-separated, e.g. Ajax, Horseshoe x2 (x2 = you have two of that ring)"></textarea></div>
+            <label><input type="checkbox" id="f-autotomes" checked> Add the best tomes to my build (level 60+; leave Tomes empty)</label>
             <label><input type="checkbox" id="f-drops"> Only suggest items that drop from mobs, chests or dungeons</label>
             <label><input type="checkbox" id="f-crafted"> Design crafted items for my build too (you or a crafter make them; the report shows the recipe)</label>
             <div class="field"><label for="f-levels">Items to search</label>
@@ -1370,6 +1371,7 @@ function formParams() {
     powders: $("#f-powders").value, enemy: $("#f-enemy").value, tomes: $("#f-tomes").value, aspects: $("#f-aspects").value,
     sliders: $("#f-sliders").value, raid_buffs: $("#f-raid").value, rolls: $("#f-rolls").value, poison: $("#f-poison").value,
     drops_only: $("#f-drops").checked, crafted: $("#f-crafted").checked, deep_search: $("#f-deep").checked,
+    auto_tomes: $("#f-autotomes").checked,
     only_items: $("#f-only").value.trim() ? $("#f-only").value.split(/[,;\n]/).map((s) => s.trim()).filter(Boolean) : undefined,
     second_goal: $("#f-goal2").value || undefined, second_goal_weight: $("#f-goal2").value ? +$("#f-goal2w").value : undefined,
     item_levels: $("#f-levels").value ? +$("#f-levels").value : undefined,

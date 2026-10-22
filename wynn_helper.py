@@ -3518,22 +3518,48 @@ TOME_SLOTS = [("weaponTome", 2), ("armorTome", 4), ("guildTome", 1)]
 ROMAN = {"i": 1, "ii": 2, "iii": 3, "iv": 4}
 
 
+def auto_tomes(build: Build, owned, armor, weapon, extra) -> list:
+    """Tomes to put in the free weapon and armor tome slots for this build: the best for the goal, one at a time,
+    only ones that add at least 0.1%. [(slot type, tome, gain)]."""
+    if build.level < AUTO_TOMES_LEVEL or not build.data.tomes:
+        return []
+    picks, _ = recommend_tomes(build, owned, armor, weapon, extra, types=AUTO_TOME_TYPES)
+    picks = [p for p in picks if p[2] >= 0.001]
+    # Armor tome slots the goal doesn't use still get the tome with the most health (free survivability; the goal's
+    # number doesn't change). gain None marks them.
+    free = dict(TOME_SLOTS)["armorTome"] - sum(1 for k, _t, _g in picks if k == "armorTome")
+    hp = sorted((t for t in build.data.tomes if t.type == "armorTome" and t.level <= build.level
+                 and t.raw.get("remapID") is None and t.max_stats.get("hpBonus", 0) > 0
+                 and all(t.name != p[1].name for p in picks)),
+                key=lambda t: (-t.max_stats.get("hpBonus", 0), -t.max_stats.get("hprRaw", 0), t.name))
+    picks += [("armorTome", t, None) for t in hp[:max(0, free)]]
+    return picks
+
+
 def aspect_slots(level: int) -> int:
     """Aspect slots unlocked at a combat level (wiki: 1 + slots at 20, 40, 60, 80)."""
     return 1 + sum(level >= t for t in (20, 40, 60, 80))
 
 
-def recommend_tomes(build: Build, owned, armor, weapon, extra):
+AUTO_TOMES_LEVEL = 55       # builds from this level get tomes picked for them (weapon and armor tomes need 60)
+AUTO_TOME_TYPES = ("weaponTome", "armorTome")     # guild tomes need a guild, so they're only used when you list them
+
+
+def recommend_tomes(build: Build, owned, armor, weapon, extra, types=None):
     """Greedy best tomes per slot type for the goal. Returns [(slot type, tome, gain fraction)]."""
     base = build.evaluate(owned, armor, weapon, extra)["value"]
     chosen = list(build.tomes)
     picks = []
     for ttype, count in TOME_SLOTS:
+        if types is not None and ttype not in types:
+            continue
         have = sum(1 for t in chosen if t.type == ttype)
         for _ in range(max(0, count - have)):
             best, best_v = None, None
             for t in build.data.tomes:
                 if t.type != ttype or t.level > build.level or any(c.name == t.name for c in chosen):
+                    continue
+                if t.raw.get("remapID") is not None:     # an old name kept for old links: same tome as a current one
                     continue
                 v = build.copy_with(tomes=chosen + [t]).evaluate(owned, armor, weapon, extra)["value"]
                 if best_v is None or v > best_v:
@@ -4864,6 +4890,8 @@ def run(args):
             print(f"  No {CLASS_WEAPON[cls]} you can use at level {level} in your list, so the weapon can be any {CLASS_WEAPON[cls]}.")
         if only["one"]:
             print("  Rings you have one of are never worn twice (add \"x2\" to a ring you have two of).")
+        if not getattr(args, "tomes", None) and level >= AUTO_TOMES_LEVEL:
+            print("  Tomes: only ones you list in the Tomes box (none listed, so none are used).")
         LAST_RESULT["only_items"] = {"count": len(mine["items"]), "names": [it.name for it in mine["items"]][:400]}
     assumed_weapon = False
     if weapon is None:
@@ -5337,11 +5365,32 @@ def run(args):
               + (f" (stops after {args.time_limit:.0f}s)" if getattr(args, "time_limit", None) else "") + "...")
         if ws.PROGRESS.get("cb") is None:
             ws.PROGRESS["cb"] = lambda f, m: None
+        # Tomes are part of the build from level 55 (unless you listed yours or turned it off): picked for your gear
+        # first so the search chooses gear with them on, then picked again for the finished build.
+        tome_base, tome_picks = floor_build, []
+        auto_on = (not build.tomes and getattr(args, "auto_tomes", True) and level >= AUTO_TOMES_LEVEL
+                   and only is None)        # building from your items: only tomes you list (--tomes)
+        if auto_on:
+            tome_picks = auto_tomes(floor_build, search_start, armor, weapon, extra_fn(search_start, armor, weapon)[0])
+            if tome_picks:
+                floor_build = floor_build.copy_with(tomes=[t for _k, t, _g in tome_picks])
+                LAST_RESULT["build"] = floor_build
         wb = ws.search_best_build(floor_build, search_start, armor, weapon, base_weapon, keep=keep_ids, ap_budget=budget,
                                   include_never=include_never, min_level=min_lvl,
                                   deep=getattr(args, "deep", False), time_limit=getattr(args, "time_limit", None),
                                   log=lambda m: print("  " + m), crafted=not getattr(args, "no_crafted", True),
                                   only=only)
+        if auto_on:
+            again = auto_tomes(tome_base, frozenset(wb["owned"]), wb["armor"], wb["weapon"], wb["extra"])
+            if [t.name for _k, t, _g in again] != [t.name for _k, t, _g in tome_picks]:
+                tb2 = tome_base.copy_with(tomes=[t for _k, t, _g in again])
+                fin2 = tb2.evaluate(frozenset(wb["owned"]), wb["armor"], wb["weapon"], wb["extra"])
+                if fin2["value"] > wb["final"]["value"] and fin2.get("floors_met", True) >= wb["final"].get("floors_met", True):
+                    st_e, _ = ws.refine_points(tb2, frozenset(search_start), armor, weapon, [0] * 5, fast=False)
+                    wb["start"] = tb2.evaluate(frozenset(search_start), armor, weapon, st_e)
+                    wb["final"], floor_build, tome_picks = fin2, tb2, again
+                    LAST_RESULT["build"] = floor_build
+        LAST_RESULT["auto_tomes"] = [(k, t.name, g) for k, t, g in tome_picks]
         if wb.get("stopped"):
             print("  (Stopped early: this is the best build found so far.)")
         bs = wb.get("bonus_search") or {}
@@ -5421,6 +5470,9 @@ def run(args):
                 print("  Ability buffs counted in this build: " + ", ".join(counted) + ". (See \"Toggles and sliders\" for why.)")
             for line in special_effect_lines(data, list(wb["armor"]) + [w]):
                 print(line)
+            if tome_picks:
+                print("  Tomes in this build (counted in every number here, before and after): "
+                      + ", ".join(t.name for _k, t, _g in tome_picks) + ".")
             def nums(r):
                 return (r["spell_dps"] + (r["poison_spell"] if r["spell_dps"] else 0),
                         r["melee_dps"] + (r["poison_melee"] if r["melee_dps"] else 0), r["defense"].get("ehp_agi", 0))
@@ -5447,7 +5499,7 @@ def run(args):
             if data.enc and data.version in data.version_names:
                 try:
                     url = encode_build_link(data, tree, data.enc, data.version_names.index(data.version), level,
-                                            wb["armor"], w, build.tomes, build.aspects, wb["owned"],
+                                            wb["armor"], w, floor_build.tomes, build.aspects, wb["owned"],
                                             [fin["totals"][i] - wb["extra"][i] for i in range(5)], fin["totals"])
                     print("  Whole build in Wynnbuilder: " + url)
                     LAST_RESULT["best_link"] = url
@@ -5478,8 +5530,18 @@ def run(args):
         print_header("Tomes")
         if build.tomes:
             print("  Using: " + ", ".join(t.name for t in build.tomes))
+        auto_t = LAST_RESULT.get("auto_tomes") or []
         if level < min(t.level for t in data.tomes):
             print(f"  Tomes start at level {min(t.level for t in data.tomes)}.")
+        elif auto_t:
+            print("  Picked for the best whole build above (and counted in its numbers):")
+            for ttype, name, gain in auto_t:
+                kind = {"weaponTome": "Weapon tome", "armorTome": "Armor tome"}[ttype]
+                print(f"  {kind:<12} {name:<44} " + (f"+{gain * 100:4.1f}%" if gain is not None
+                                                      else "adds health (your goal's number doesn't change)"))
+            if not any(k == "weaponTome" for k, _n, _g in auto_t):
+                print("  No weapon tome adds to this goal, so those slots are left free.")
+            print("  Guild tomes need a guild, so they're left out; list yours (or say which tomes you have) to use them.")
         else:
             picks, total = recommend_tomes(build, chosen, armor, weapon, extra)
             skipped = [p for p in picks if p[2] < 0.001]
@@ -5629,6 +5691,8 @@ def make_parser():
                    help='powders you have, e.g. "weapon=t6 t6; chestplate=w4 w4". Weapon left out = recommend best')
     p.add_argument("--max-powder-tier", type=int, default=7, help="highest powder tier you can get (default 7)")
     p.add_argument("--tomes", default="", help='tomes you have, comma-separated (by name)')
+    p.add_argument("--no-auto-tomes", dest="auto_tomes", action="store_false", default=True,
+                   help="don't pick tomes for the build (from level 55 the best weapon and armor tomes are added)")
     p.add_argument("--aspects", default="", help='aspects you have with tier, e.g. "Comet 2, Ray of Frost 1"')
     p.add_argument("--aspect-tier", type=int, default=1, help="tier to assume for recommended aspects (default 1)")
     p.add_argument("--toggles", default="", help='ability toggles to turn on, e.g. "Activate Gravitational Collapse"')

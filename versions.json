@@ -3,7 +3,7 @@
     {
       "version": "1.10.1",
       "date": "2026-10-22",
-      "notes": "Fabled and Mythic special effects: the report now lists every special effect (major ID) in your build, what it does, and whether it's counted in the numbers; item cards say the same. Most are counted the way Wynnbuilder counts them. Three that Wynnbuilder skips are now counted too: Pas De Deux (Frog Dance deals no damage, so builds no longer overrate it), Grand Design (Storm Dance no longer adds air damage to Aura) and Self-Sufficient (the weapon special fills by itself every 12.5 seconds). Movement effects, help for allies and effects that only work some of the time aren't counted, and the report says so.",
+      "notes": "Fabled and Mythic special effects: the report now lists every special effect (major ID) in your build, what it does, and whether it's counted in the numbers; item cards say the same. Most are counted the way Wynnbuilder counts them. Three that Wynnbuilder skips are now counted too: Pas De Deux (Frog Dance deals no damage, so builds no longer overrate it), Grand Design (Storm Dance no longer adds air damage to Aura) and Self-Sufficient (the weapon special fills by itself every 12.5 seconds). Movement effects, help for allies and effects that only work some of the time aren't counted, and the report says so. Tomes are now part of builds from level 55 (tomes need level 60): the best weapon and armor tomes are picked with the gear, and armor tome slots your goal doesn't use get the ones with the most health. List your own tomes to use only those, or untick \"Add the best tomes\".",
       "warning": ""
     },
     {

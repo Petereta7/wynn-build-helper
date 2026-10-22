@@ -130,6 +130,12 @@ Measured deep search on the owner's PC (1.6 -> 1.7): Warrior L106 7.0 -> 4.1 min
   counted; the report's "Special effects" lines and item cards say which (`majid_status`). Audit Oct 2026: 254
   Fabled items, 118 effects modeled by Wynnbuilder, 88 text-only (mostly movement/ally). Recheck HELPER_MAJIDS after
   game data updates (if Wynnbuilder starts modeling one, its abilities win automatically).
+- Tomes (owner asked, Oct 2026): from AUTO_TOMES_LEVEL 55 (tomes need 60) `auto_tomes` picks weapon/armor tomes
+  greedily for the current gear before the whole-build search (so gear is chosen with them on), then again for the
+  finished build (kept only if better; start numbers recomputed with the same tomes so before/after compare gear).
+  Old-name copies (`remapID`) and duplicates never picked; unused armor slots get the most health; no guild tomes
+  unless listed; off when the player lists tomes, unticks it (`auto_tomes: false`, `--no-auto-tomes`) or builds from
+  their items.
 - Search headroom (Oct 2026, tests/headroom.py in the dev repo): more weapons was the big win; the 'Maximum' search's
   other extras added nothing beyond it. A wider ingredient candidate list for crafts helped single slots but not
   whole builds (one case -0.03%), so it was dropped. Crafting for more top builds helps Shaman/Assassin most; with 30
@@ -139,7 +145,7 @@ Measured deep search on the owner's PC (1.6 -> 1.7): Warrior L106 7.0 -> 4.1 min
 ## History (newest first)
 
 - 1.10.1: item special effects: report and item cards say what each does and whether it's counted; Pas De Deux,
-  Grand Design and Self-Sufficient now counted (Wynnbuilder doesn't).
+  Grand Design and Self-Sufficient now counted (Wynnbuilder doesn't). Tomes in the build from level 55 (owner asked).
 - 1.10.0: build from the items you have (My items per character, form box, bot; "worth getting next"); skill points
   in the game's equip order (fixes a build needing 2 more points than shown); spare ability points left unspent, with
   ideas.
@@ -168,7 +174,7 @@ Measured deep search on the owner's PC (1.6 -> 1.7): Warrior L106 7.0 -> 4.1 min
 - New item alerts: after a game data update, re-check saved builds.
 - Report-a-problem button (pack build, settings and report into a file).
 - Faster search / faster CI build check (currently ~20 min on GitHub).
-- Later, when the owner has them: aspects (from raids) and guild tomes.
+- Later, when the owner has them: aspects (from raids) and guild tomes (tomes from level 55 are done, guild ones not).
 - Skipped by the owner (don't propose again unless asked): bank auto-organizer (against Wynncraft rules; a
   planner version was also declined), instant small edits without re-searching.
 

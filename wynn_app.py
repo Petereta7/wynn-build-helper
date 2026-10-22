@@ -189,6 +189,7 @@ def run_report(params: dict) -> dict:
     args.keep = _as_list_text(params.get("keep"))
     args.powders = params.get("powders") or ""
     args.tomes = _as_list_text(params.get("tomes"))
+    args.auto_tomes = params.get("auto_tomes") is not False      # tomes picked for the build from level 55
     args.aspects = _as_list_text(params.get("aspects"))
     args.enemy = params.get("enemy") or ""
     args.sliders = _as_list_text(params.get("sliders"))
@@ -1108,6 +1109,7 @@ How to work:
 - Match the build to the play style they describe. A DPS or melee build is judged on Wynnbuilder's Average DPS (goal melee: damage per hit x attack speed, so attack speed matters as much as damage); a spell build on spell damage within its mana; if they want both damage and to stay alive, use balanced. If the best whole build trades away something they care about (for example less health, or a new element), point it out and offer the alternative.
 - After a report, the player sees the full report in the panel next to the chat, so don't repeat it. Reply with a short plain summary: the build as a whole and why it fits together, then the 3 to 5 most useful things to do (skill points, what to click next in the tree, powders), plus anything surprising. Use short paragraphs or a few bullets, under about 220 words unless they ask for detail.
 - When they change something ("I'm level 50 now", "make it tankier", "what if I use X"), run the calculator again with the change and say what's different.
+- Tomes: from level 55 the best weapon and armor tomes are picked for the build and counted in its numbers (tomes themselves need level 60; guild tomes are left out because they need a guild). The report says which. If the player lists the tomes they have, pass them as tomes and only those are used; if they say they don't use tomes, set auto_tomes false.
 - Item special effects (major IDs, common on Fabled and Mythic items): the report's "Special effects" lines say what each one in the build does and whether it's counted. Most are counted with Wynnbuilder's numbers; a few the helper counts itself (for example Pas De Deux making Frog Dance deal no damage, Self-Sufficient's weapon special timing); movement, ally, situational ones and ones without an exact size aren't counted. Say so when the player asks about a Fabled or Mythic item, and don't claim an uncounted effect adds damage.
 - Mention a limitation only when it matters for their question (for example: items marked "not a mob drop" may be raid, quest, merchant or event rewards; poison numbers follow Wynnbuilder).
 - Plain words, no jargon the player didn't use. Never mention tools, JSON or code."""
@@ -1155,7 +1157,12 @@ TOOLS = [
                             "description": 'Powders already slotted, e.g. "weapon=t6 t6; chestplate=w4 w4". Leave the '
                                            'weapon out to get a recommendation.'},
                 "max_powder_tier": {"type": "integer", "minimum": 1, "maximum": 7},
-                "tomes": {"type": "array", "items": {"type": "string"}},
+                "tomes": {"type": "array", "items": {"type": "string"},
+                          "description": "Tomes the player has. Leave out to let the calculator pick the best weapon and "
+                                         "armor tomes for the build (from level 55; tomes need level 60)."},
+                "auto_tomes": {"type": "boolean",
+                               "description": "Default true: pick tomes for the build. False if the player says they "
+                                              "don't use tomes."},
                 "aspects": {"type": "string", "description": 'Aspects with tier, e.g. "Comet 2, Ray of Frost 1"'},
                 "enemy": {"type": "string", "description": 'An enemy hit to survive, e.g. "fire 3000" or "fire=2000, earth=1000"'},
                 "minimums": {

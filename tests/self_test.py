@@ -109,6 +109,24 @@ def main():
             ["counted", "helper", "helper", "not counted"]
         report("item special effects the helper counts", ok, 4)
 
+    # ---- tomes picked for builds from level 55: never an old-name copy of a tome (marked remapID) or the same tome
+    # twice, armor slots the goal doesn't use get health, none below level 55, no guild tomes
+    ar = wh.Tree(d, "archer")
+    ok, total = 0, 0
+    for level, goal in ((54, "melee"), (60, "melee"), (106, "spells"), (106, "survival")):
+        bt = wh.Build(d, ar, level, goal)
+        wpn = wh.default_weapon(d, "archer", level)
+        picks = wh.auto_tomes(bt, frozenset(ar.roots), [None] * 8, wpn, None)
+        names = [t.name for _k, t, _g in picks]
+        total += 1
+        if level < wh.AUTO_TOMES_LEVEL:
+            ok += picks == []
+            continue
+        ok += (len(set(names)) == len(names) and all(t.raw.get("remapID") is None and t.level <= level for _k, t, _g in picks)
+               and sum(k == "armorTome" for k, _t, _g in picks) == 4 and sum(k == "weaponTome" for k, _t, _g in picks) <= 2
+               and not any(k == "guildTome" for k, _t, _g in picks))
+    report("tomes picked for the build", ok, total)
+
     # ---- weapon powders
     cases = golden("powder_cases.json")
     if cases:
