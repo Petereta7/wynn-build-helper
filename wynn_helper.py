@@ -2579,25 +2579,26 @@ SURVIVAL_HEAL_SECONDS = 10.0  # survival goal: effective HP plus 10 s of healing
 
 
 GOALS = {
+    "mixed": "Most damage per second possible, any style: main attacks only, spells, or both together (whichever "
+             "is highest: the spell rotation your mana keeps up with main attacks in between; the helper's own "
+             "estimate, Wynnbuilder has no such number)",
     "spells": "Highest damage you can keep up with spells (mana-limited spell rotation)",
     "burst": "Biggest one-time combo (every damage spell once)",
-    "melee": "Highest DPS exactly as Wynnbuilder shows it (Average DPS: main attack damage per hit x attack speed)",
+    "melee": "Main attack DPS exactly as Wynnbuilder shows it (Average DPS: main attack damage per hit x attack speed)",
     "survival": "Hardest to kill (effective HP, plus regen and self-healing)",
     "balanced": "Best mix of damage and effective HP",
     "healing": "Most healing per second (support)",
     "ability": "Highest damage of one ability you choose (--focus), e.g. puppets, Meteor or Bash",
-    "mixed": "Spells and main attacks together: the spell rotation your mana keeps up, main attacks in between "
-             "(the helper's own estimate; Wynnbuilder has no such number)",
 }
 
 
 # A second goal can be mixed in by weight ("mostly spells, 30% survival"). The score is a weighted geometric
 # mean, main^(1-w) x second^w, like "balanced" (which is damage and effective HP at 50/50): scaling either part
 # doesn't change which build wins, so the two never need to be in the same units.
-SECOND_GOALS = ("spells", "burst", "melee", "survival", "healing")
-GOAL_WORDS = {"spells": "spell damage", "burst": "burst combo", "melee": "highest DPS", "survival": "survival",
+SECOND_GOALS = ("spells", "burst", "melee", "mixed", "survival", "healing")
+GOAL_WORDS = {"spells": "spell damage", "burst": "burst combo", "melee": "main attack DPS", "survival": "survival",
               "balanced": "damage and survival", "healing": "healing", "ability": "one ability",
-              "mixed": "spells + main attacks"}
+              "mixed": "most damage (any style)"}
 
 
 def clean_goal2(goal, goal2, weight):
@@ -3905,25 +3906,30 @@ def suggest_gear(build: Build, owned, armor, weapon, extra_fn, per_slot: int = 3
 
 
 def mixed_lines(ev, goal) -> list:
-    """Report lines for spells and main attacks together (shown for the mixed goal, or when it beats both)."""
+    """Report lines for the most damage in any style (shown for the mixed goal, or when it beats both other styles)."""
     mi = ev.get("mixed") or {}
     gv = ev.get("goal_values") or {}
     mx, sp, ml = gv.get("mixed", 0), gv.get("spells", 0), gv.get("melee", 0)
     if goal != "mixed" and not (mx > 1.02 * max(sp, ml) and min(sp, ml) > 0):
         return []
     res = ev.get("results") or {}
-    out = [f"  Spells + main attacks together: {fmt_num(mx)}/s (the helper's own estimate; Wynnbuilder has no such number)."]
+    out = [f"  Most damage, any style: {fmt_num(mx)}/s (the helper's own estimate; Wynnbuilder has no such number)."]
     if mi.get("rotation"):
         names = " + ".join(res[b]["name"] for b in mi["rotation"] if b in res)
-        out.append(f"     Cast {names} about {mi['rate']:.1f} times a second ({fmt_num(mi.get('spell_part', 0))}/s), "
-                   f"and main attack the rest of the time ({mi['melee_share'] * 100:.0f}%: {fmt_num(mi.get('melee_part', 0))}/s).")
+        if mi["melee_share"] <= 1e-9:
+            out.append(f"     Best style: spells. Cast {names} at full speed ({mi['rate']:.1f} a second, "
+                       f"{fmt_num(mi.get('spell_part', 0))}/s); there's no time left for main attacks.")
+        else:
+            out.append(f"     Best style: spells and main attacks together. Cast {names} about {mi['rate']:.1f} times a "
+                       f"second ({fmt_num(mi.get('spell_part', 0))}/s), main attack the rest of the time "
+                       f"({mi['melee_share'] * 100:.0f}%: {fmt_num(mi.get('melee_part', 0))}/s).")
         out.append("     A cast takes 3 clicks at 9 clicks a second, like Wynnbuilder's mana model; summons, poison (once) "
                    "and the weapon special are added like for spells.")
     else:
-        out.append("     Main attacks only is best here: casting would cost more main-attack damage than the spells add.")
+        out.append("     Best style: main attacks only (casting would cost more main-attack damage than the spells add).")
     if goal != "mixed":
         out.append(f"     That's more than spells alone ({fmt_num(sp)}/s) or main attacks alone ({fmt_num(ml)}/s): "
-                   "try the \"spells + main attacks\" goal.")
+                   "try the \"most damage (any style)\" goal.")
     return out
 
 
@@ -5026,7 +5032,7 @@ def run(args):
         ftxt = (getattr(args, "focus", "") or "").strip()
         if re.sub(r"[^a-z]", "", ftxt.lower()) in ("melee", "mainattack", "main", "attack", "dps", ""):
             if not ftxt:
-                print("  No ability given for the ability goal (use --focus, e.g. \"Puppet\"); using highest DPS instead.")
+                print("  No ability given for the ability goal (use --focus, e.g. \"Puppet\"); using main attack DPS instead.")
             goal = "melee"
             args.goal = goal
         else:
@@ -5036,7 +5042,7 @@ def run(args):
                                 if e.get("type") == "replace_spell" and e.get("name")})
                 sys.exit(f'Couldn\'t find an ability matching "{ftxt}" for {CLASS_TITLE[cls]}. Try one of: ' + ", ".join(names))
             if focus[0] == 0:                       # the main attack: that's the highest-DPS goal
-                print("  That's your main attack, so this uses the highest DPS goal (Wynnbuilder's Average DPS).")
+                print("  That's your main attack, so this uses the main attack DPS goal (Wynnbuilder's Average DPS).")
                 focus, goal = None, "melee"
                 args.goal = goal
             else:
@@ -5552,7 +5558,7 @@ def run(args):
                 for line in mana_lines(fin.get("mana")):
                     print("  Best build's " + line[0].lower() + line[1:] if line.startswith("Mana") else "  " + line)
             for line in mixed_lines(fin, goal):
-                print(line.replace("Spells + main attacks together", "Best build's spells + main attacks", 1))
+                print(line.replace("Most damage, any style", "Best build's most damage, any style", 1))
             if fin.get("goal_parts"):
                 sp_, fp_ = st.get("goal_parts") or {}, fin["goal_parts"]
                 print("  Goal mix: " + "   ".join(f"{GOAL_WORDS.get(k, k).capitalize()} {fmt_num(sp_.get(k, 0))} -> "

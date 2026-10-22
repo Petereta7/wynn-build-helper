@@ -714,7 +714,7 @@ label.deep input[type=checkbox] { width: auto; flex: 0 0 auto; margin-top: 3px; 
         <div class="field"><label for="f-goal">What matters most</label><select id="f-goal"></select></div>
         <div class="row">
           <div class="field"><label for="f-goal2">Also care about (optional)</label>
-            <select id="f-goal2"><option value="">Nothing else</option><option value="survival">Survival</option><option value="spells">Spell damage</option><option value="melee">Highest DPS</option><option value="burst">Biggest combo</option><option value="healing">Healing others</option></select></div>
+            <select id="f-goal2"><option value="">Nothing else</option><option value="survival">Survival</option><option value="spells">Spell damage</option><option value="mixed">Most damage (any style)</option><option value="melee">Main attack DPS</option><option value="burst">Biggest combo</option><option value="healing">Healing others</option></select></div>
           <div class="field" id="goal2wField" hidden><label for="f-goal2w">How much: <b id="goal2wVal">30%</b></label>
             <input id="f-goal2w" type="range" min="10" max="90" step="5" value="30" aria-describedby="goal2hint"></div>
         </div>
@@ -1505,7 +1505,7 @@ function manaHTML(S) {
   const b = S.best || {}, m = b.mana, parts = b.goal_parts;
   let h = "";
   if (parts) {
-    const words = { spells: "Spell damage", melee: "Highest DPS", burst: "Biggest combo", survival: "Survival", healing: "Healing", balanced: "Damage and survival", ability: "Ability" };
+    const words = { spells: "Spell damage", melee: "Main attack DPS", mixed: "Most damage (any style)", burst: "Biggest combo", survival: "Survival", healing: "Healing", balanced: "Damage and survival", ability: "Ability" };
     h += `<p class="mixnote">Goal mix: ${Object.entries(parts).map(([k, v]) => `${esc(words[k] || k)} <b>${fmtBig(v)}</b>`).join(" · ")}</p>`;
   }
   const spelly = m && (S.goal === "spells" || S.goal === "burst" || S.goal === "balanced" || (parts && "spells" in parts));
@@ -1920,7 +1920,7 @@ function showReport(text, S) {
   requestAnimationFrame(() => { const m = $("#main"); if (rise && !reveal) { m.classList.remove("rise"); void m.offsetWidth; m.classList.add("rise"); setTimeout(() => m.classList.remove("rise"), 1200); } });
   const { head, secs } = splitSections(text);
   const title = pick(/·\s*(\w+), level (\d+), goal: (\w+)/, head.join("\n"));
-  const goalWords = { ability: "one ability's damage", spells: "spell damage", burst: "burst damage", melee: "highest DPS", survival: "survival", balanced: "damage and survival", healing: "healing" };
+  const goalWords = { ability: "one ability's damage", spells: "spell damage", burst: "burst damage", melee: "main attack DPS", mixed: "most damage (any style)", survival: "survival", balanced: "damage and survival", healing: "healing" };
   const rot = pick(/Best spell rotation: (.+?)\s+≈ ([\d,.]+) damage\/s/, text);
   const melee = pick(/Main attack: ([\d,.]+) (?:DPS|damage\/s)/, text);
   const ehp = pick(/Effective HP ([\d,.]+)/, text);
@@ -2564,7 +2564,7 @@ async function init() {
   await loadMeta();
   $("#f-class").innerHTML = '<option value="" selected disabled>Choose your class</option>' +
     META.classes.map((c) => `<option value="${c}">${c[0].toUpperCase() + c.slice(1)}</option>`).join("");
-  const goalLabels = { ability: "One ability's damage (e.g. puppets)", spells: "Spell damage", burst: "Biggest combo", melee: "Highest DPS (like Wynnbuilder)", mixed: "Spells + main attacks together", survival: "Survival", balanced: "Damage and survival", healing: "Healing others" };
+  const goalLabels = { ability: "One ability's damage (e.g. puppets)", spells: "Spell damage", burst: "Biggest combo", mixed: "Most damage possible (main attacks, spells or both)", melee: "Main attack DPS only (like Wynnbuilder)", survival: "Survival", balanced: "Damage and survival", healing: "Healing others" };
   $("#f-goal").innerHTML = Object.keys(META.goals).map((g) => `<option value="${g}">${goalLabels[g] || g}</option>`).join("");
   const buffNames = { totem: "Totem", fortitude: "Fortitude", chantlunatic: "Chant of the Lunatic", warscream: "War Scream", emboldeningcry: "Emboldening Cry", hauntingfanatic: "Haunting (Fanatic)", hauntinglunatic: "Haunting (Lunatic)", eldritchcall: "Eldritch Call", judgement: "Judgement", chantfanatic: "Chant of the Fanatic", weathering: "Weathering", acidrain: "Acid Rain" };
   $("#buffChips").innerHTML = META.buffs.map((b) => `<button type="button" class="toggle-chip" aria-pressed="false" data-buff="${b}">${buffNames[b] || b}</button>`).join("");

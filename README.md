@@ -136,8 +136,8 @@ python3 wynn_helper.py --class warrior --level 60 --goal melee --min "hp=6000, w
 |---|---|
 | `spells` | Spell damage you can keep up, limited by your mana (summons and sigils included) |
 | `burst` | Biggest one-time combo |
-| `melee` | Highest DPS, exactly as Wynnbuilder shows it (Average DPS: damage per hit × attack speed). Use this for "highest DPS". |
-| `mixed` | Spells and main attacks together: the spell rotation your mana keeps up, with main attacks in the time between casts (a cast is 3 clicks at 9 clicks a second, like Wynnbuilder's mana model). This is the helper's own estimate: Wynnbuilder has no such number. The report also mentions it whenever it beats spells alone and main attacks alone. |
+| `melee` | Main attack DPS, exactly as Wynnbuilder shows it (Average DPS: damage per hit × attack speed). For main-attack (M1) builds and comparing with Wynnbuilder. |
+| `mixed` | **Most damage possible, any style.** This is what "max DPS" means. It scores main attacks only, spells only, and both together (the spell rotation your mana keeps up, with main attacks in the time between casts; a cast is 3 clicks at 9 clicks a second, like Wynnbuilder's mana model), and counts whichever is highest, so it never rates a build below its main-attack or spell damage. Summons, poison and the weapon special count as for spells. This is the helper's own estimate: Wynnbuilder has no such number. |
 | `survival` | Effective HP, plus healing and regen |
 | `balanced` | Damage and effective HP together |
 | `ability` | Highest damage of one ability you choose with `--focus`, e.g. `--focus "puppets"`, `"Meteor"`, `"Bash"`. The tree and gear are chosen for that ability alone. In the chat, just say "maximum puppet damage". |

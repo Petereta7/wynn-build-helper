@@ -259,9 +259,9 @@ def run_report(params: dict) -> dict:
     return {"ok": ok, "text": text, "args": used, "summary": summary, "character_id": char["id"] if char else None}
 
 
-GOAL_SHORT = {"spells": "spell damage", "burst": "burst combo", "melee": "highest DPS", "survival": "survival",
+GOAL_SHORT = {"spells": "spell damage", "burst": "burst combo", "melee": "main attack DPS", "survival": "survival",
               "balanced": "damage + survival", "ability": "one ability", "healing": "healing",
-              "mixed": "spells + main attacks"}
+              "mixed": "most damage (any style)"}
 
 
 def notify_done(ok: bool, args, text: str):
@@ -382,7 +382,7 @@ def autocomplete(q: str, kind: str = "") -> list:
 
 HISTORY_PATH = os.path.join(wh.DATA_DIR, "build_history.json")
 GOAL_LABELS = {"melee": "Average DPS", "spells": "Spell damage per second", "burst": "Burst combo damage",
-               "mixed": "Spells + main attacks per second",
+               "mixed": "Most damage per second (any style)",
                "survival": "Survival score", "balanced": "Damage × survival score", "healing": "Healing per second"}
 
 
@@ -1103,8 +1103,8 @@ How to work:
 - If no build meets every minimum, the report says so and shows the closest one; tell them which minimum couldn't be met and suggest relaxing it.
 - The report shows health, effective HP and walk speed for the best build next to the current gear; mention any big drop in health or walk speed so they can set a minimum.
 - If they want the most damage from one specific ability ("maximum puppet damage", "biggest Meteor", "strongest Bash"), use goal ability with focus set to that ability.
-- If they want spells and main attacks together ("weave M1s between spells", "spell cycling with melee", "use everything"), use goal mixed: the spell rotation their mana keeps up with main attacks in the time between (the helper's own estimate; Wynnbuilder has no such number, so say so). Plain "highest DPS" still means melee. When the report says spells + main attacks together beat both, mention it.
-- Otherwise pick the goal from what they say: melee whenever they ask for "DPS" or "highest DPS" (this is exactly Wynnbuilder's Average DPS: main attack damage per hit x attack speed, which is what players compare), spells only when they talk about spell damage or casting, burst for one big combo, survival (tanky / keeps dying), balanced (damage and survival), healing (support). If unclear, use melee for "damage/DPS". If they keep dying to a particular boss or element, pass that as the enemy hit.
+- Damage goals. "Max DPS", "highest DPS", "as much DPS/damage as possible", "most damage" and plain "DPS" or "damage" mean goal mixed: the most damage per second possible in any style (main attacks only, spells, or both together, whichever is highest; it never scores a build below its main-attack or spell-only damage). It's the helper's own estimate (Wynnbuilder has no such number), so say so; the report says which style wins and the rotation. Use melee only when they ask specifically for main attacks / a melee or M1 build / Wynnbuilder's Average DPS (main attack damage per hit x attack speed, the number Wynnbuilder shows), and spells only when they want a spell-only build.
+- Other goals from what they say: burst for one big combo, survival (tanky / keeps dying), balanced (damage and survival), healing (support). If they keep dying to a particular boss or element, pass that as the enemy hit.
 - Pass item and ability names exactly as the player wrote them; the calculator corrects spelling and says so. "Mana bank" means the Mage ability Arcane Transfer.
 - Crafted items are written as codes starting with CR- (and custom items CI-); pass them as gear.
 - Crafted items are off unless the player asks for them. Set crafted to true only when they say they want crafted items in the build (e.g. "with crafted items", "I can craft", "include crafteds"); otherwise leave it out. With crafted on, the search designs crafted items for the build (recipe, materials and the 6-ingredient grid, following the game's crafting rules) and uses them where they beat normal items, and the report's "Crafted pieces" part says how to make each one and where its ingredients drop. When the best build has crafted pieces, say which and what they add; someone has to craft them (the player, with the profession level the report gives, or a crafter). If they ask whether crafted items would help, you can offer to run it with crafted on.

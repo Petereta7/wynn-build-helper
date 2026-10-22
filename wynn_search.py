@@ -482,7 +482,7 @@ _HOOK = {"best": None}
 
 
 GOAL_LABELS = {"melee": "Average DPS", "spells": "Spell damage per second", "burst": "Burst combo damage",
-               "mixed": "Spells + main attacks per second",
+               "mixed": "Most damage per second (any style)",
                "survival": "Survival score", "balanced": "Damage × survival score", "healing": "Healing per second"}
 
 
