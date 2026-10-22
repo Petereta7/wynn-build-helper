@@ -557,6 +557,11 @@ label.deep input[type=checkbox] { width: auto; flex: 0 0 auto; margin-top: 3px; 
 .char-hero .edit { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 12px 0 4px; }
 .char-hero .edit input { padding: 7px 10px; border-radius: var(--r-sm); border: 1px solid var(--line); background: var(--night); }
 .char-hero .edit input.lvl { width: 80px; }
+.myitems { padding: 16px 20px; margin-bottom: 22px; }
+.myitems .sub { margin: 0 0 10px; color: var(--muted); }
+.myitems .edit { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 12px 0 4px; }
+.myitems .edit input { flex: 1 1 260px; min-width: 0; padding: 7px 10px; border-radius: var(--r-sm); border: 1px solid var(--line); background: var(--night); }
+.myitems .actions { margin-top: 10px; }
 .lib { display: flex; flex-direction: column; gap: 12px; }
 .lcard { padding: 14px 16px; border: 1px solid var(--line); border-radius: var(--r-md); background: rgba(16, 6, 26, .6); }
 .lcard.cur { border-color: color-mix(in srgb, var(--set) 60%, var(--line)); box-shadow: inset 0 0 22px -14px var(--set); }
@@ -767,6 +772,8 @@ label.deep input[type=checkbox] { width: auto; flex: 0 0 auto; margin-top: 3px; 
               <div class="field"><label for="f-poison">Poison</label>
                 <select id="f-poison"><option value="wynnbuilder">Wynnbuilder's figures</option><option value="low">Cautious estimate</option></select></div>
             </div>
+            <div class="field"><label for="f-only">Only use these items (the ones you have; empty = every item)</label>
+              <textarea id="f-only" rows="2" placeholder="Comma-separated, e.g. Ajax, Horseshoe x2 (x2 = you have two of that ring)"></textarea></div>
             <label><input type="checkbox" id="f-drops"> Only suggest items that drop from mobs, chests or dungeons</label>
             <label><input type="checkbox" id="f-crafted"> Design crafted items for my build too (you or a crafter make them; the report shows the recipe)</label>
             <div class="field"><label for="f-levels">Items to search</label>
@@ -1362,6 +1369,7 @@ function formParams() {
     powders: $("#f-powders").value, enemy: $("#f-enemy").value, tomes: $("#f-tomes").value, aspects: $("#f-aspects").value,
     sliders: $("#f-sliders").value, raid_buffs: $("#f-raid").value, rolls: $("#f-rolls").value, poison: $("#f-poison").value,
     drops_only: $("#f-drops").checked, crafted: $("#f-crafted").checked, deep_search: $("#f-deep").checked,
+    only_items: $("#f-only").value.trim() ? $("#f-only").value.split(/[,;\n]/).map((s) => s.trim()).filter(Boolean) : undefined,
     second_goal: $("#f-goal2").value || undefined, second_goal_weight: $("#f-goal2").value ? +$("#f-goal2w").value : undefined,
     item_levels: $("#f-levels").value ? +$("#f-levels").value : undefined,
     buffs: [...document.querySelectorAll("#buffChips [aria-pressed=true]")].map((b) => b.dataset.buff),
@@ -1384,6 +1392,7 @@ function fillForm(a) {
   const set = (id, v) => { if (v !== undefined) $(id).value = Array.isArray(v) ? v.join(", ") : v; };
   set("#f-keep", a.keep); set("#f-link", a.wynnbuilder_link); set("#f-powders", a.powders); set("#f-enemy", a.enemy);
   set("#f-tomes", a.tomes); set("#f-aspects", a.aspects); set("#f-sliders", a.sliders); set("#f-raid", a.raid_buffs);
+  set("#f-only", a.only_items);
   if (a.minimums && typeof a.minimums === "object") {
     for (const [k, id] of Object.entries(MIN_FIELDS)) $(id).value = a.minimums[k] !== undefined ? a.minimums[k] : "";
   }
@@ -2152,11 +2161,19 @@ async function showCharacter(id) {
         <button class="btn-quiet" id="chForm" type="button">Use the form instead</button></div>
       <div class="edit"><input id="chName" value="${esc(c.name)}" maxlength="40" aria-label="Name"><input id="chLevel" class="lvl" type="number" min="1" max="121" value="${c.level || ""}" aria-label="Level">
         <button class="btn-quiet" id="chSave" type="button">Save changes</button><button class="btn-quiet" id="chDel" type="button">Delete character</button></div></section>
+    <h3 style="font-family:var(--display);font-size:22px;margin:0 0 8px">My items</h3>
+    <section class="tip myitems"><p class="sub">Items ${esc(c.name)} has. <b>Build from my items</b> makes the best build out of only these, and lists what's worth getting next.</p>
+      <div class="chips" id="miChips">${myItemChips(c)}</div>
+      <div class="edit"><input id="miAdd" type="text" list="miList" placeholder="Add items: type a name and press Enter (x2 for a second ring)" aria-label="Add items"><datalist id="miList"></datalist>
+        <button class="btn-quiet" id="miAddBtn" type="button">Add</button></div>
+      <div class="actions"><button class="btn" id="miBuild" type="button"${(c.items || []).length ? "" : " disabled"}>Build from my items</button>
+        ${(c.items || []).length ? '<button class="btn-quiet" id="miClear" type="button">Clear the list</button>' : ""}</div></section>
     <h3 style="font-family:var(--display);font-size:22px;margin:0 0 12px">Library</h3><div class="lib">${lib}</div>`;
   $("#main").scrollTop = 0;
   $("#toClass").addEventListener("click", () => showClassPage(c.class));
   $("#chForm").addEventListener("click", () => startBuildFor(c, "form"));
   $("#chChat").addEventListener("click", () => startBuildFor(c, "chat"));
+  bindMyItems(c);
   $("#chSave").addEventListener("click", async () => {
     const r = await api("/api/library", { action: "update", id: c.id, name: $("#chName").value, level: +$("#chLevel").value || undefined });
     if (r.ok) { LIB = r; toast("Saved"); showCharacter(c.id); } else toast(r.error || "Couldn't save");
@@ -2178,6 +2195,47 @@ async function showCharacter(id) {
     const r = await api("/api/library", { action: "remove", character_id: c.id, build_id: b.dataset.rm }); if (r.ok) { LIB = r; showCharacter(c.id); }
   }));
 }
+/* ---------- a character's "My items": what it has, for "build from my items" ---------- */
+function myItemChips(c) {
+  const items = c.items || [];
+  if (!items.length) return '<span class="hd">No items yet. Add the ones you have (gear in your bank counts too).</span>';
+  return items.map((x, i) => `<span class="chip">${esc(/^C[RI]-/i.test(x) ? "Crafted piece" : x)}<button type="button" aria-label="Remove ${esc(x)}" data-mi="${i}">×</button></span>`).join("");
+}
+async function saveMyItems(c, items) {
+  const r = await api("/api/library", { action: "items", id: c.id, items });
+  if (!r.ok) { toast(r.error || "Couldn't save the list"); return false; }
+  LIB = r; return true;
+}
+function bindMyItems(c) {
+  const add = async () => {
+    const parts = $("#miAdd").value.split(/[,;\n]/).map((s) => s.trim()).filter(Boolean);
+    if (!parts.length) return;
+    if (await saveMyItems(c, (c.items || []).concat(parts))) { showCharacter(c.id); setTimeout(() => $("#miAdd") && $("#miAdd").focus(), 0); }
+  };
+  let t;
+  $("#miAdd").addEventListener("input", () => {
+    clearTimeout(t);
+    const q = $("#miAdd").value.split(",").pop().trim();
+    t = setTimeout(async () => {
+      if (q.length < 2) return;
+      const items = await fetch("/api/items?q=" + encodeURIComponent(q)).then((r) => r.json()).catch(() => []);
+      const l = $("#miList"); if (l) l.innerHTML = items.map((i) => `<option value="${esc(i.name)}">${esc(i.tier)} ${esc(i.type)}, level ${i.level}</option>`).join("");
+    }, 150);
+  });
+  $("#miAdd").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); add(); } });
+  $("#miAddBtn").addEventListener("click", add);
+  $("#miChips").addEventListener("click", async (e) => {
+    const i = e.target.dataset.mi; if (i === undefined) return;
+    const items = (c.items || []).slice(); items.splice(+i, 1);
+    if (await saveMyItems(c, items)) showCharacter(c.id);
+  });
+  const clr = $("#miClear");
+  if (clr) clr.addEventListener("click", async () => {
+    if (!confirm(`Clear all ${c.items.length} items from ${c.name}'s list?`)) return;
+    if (await saveMyItems(c, [])) showCharacter(c.id);
+  });
+  $("#miBuild").addEventListener("click", () => startBuildFor(c, "items"));
+}
 function startBuildFor(c, mode) {
   if (!homeGuard()) return;
   ACTIVE_CHAR = c.id;
@@ -2189,9 +2247,9 @@ function startBuildFor(c, mode) {
     toast(`Filled in for ${c.name}. Choose what matters most, then Find my best build.`);
   } else {
     tab("talk");
-    // the bot already knows the character (class, level, current gear), so its name is enough
+    // the bot already knows the character (class, level, current gear, its items), so its name is enough
     const t = $("#input");
-    t.value = `Make a build for ${c.name}: `;
+    t.value = mode === "items" ? `Make a build for ${c.name} using only my items: ` : `Make a build for ${c.name}: `;
     t.focus(); t.setSelectionRange(t.value.length, t.value.length);
     t.dispatchEvent(new Event("input"));
     toast(META && !META.has_key ? "Add your API key in Settings to use the chat, or use the form instead"

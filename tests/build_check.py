@@ -9,6 +9,7 @@ For every class it checks:
   * skill points, worked out from scratch: gear needs + spare points fit the level, no skill over 100
   * the ability tree is legal and fits the ability points for the level
   * any minimums asked for are met
+  * "build from my items": only the player's items, and a ring they have one of is worn once
   * crafted pieces (when asked for) can be made in game, and their crafter codes read back the same
   * the build as a share code opens as exactly the same build (items, powders, crafts, tree, skill points)
   * every ability in the tree says why it's there, and a "spare" one really doesn't change the goal's number
@@ -52,6 +53,14 @@ CASES = [
     {"name": "warrior L50 melee, no crafted items", "class": "warrior", "level": 50, "goal": "melee"},
     {"name": "shaman L70 spells 70% + survival 30%", "class": "shaman", "level": 70, "goal": "spells",
      "second_goal": "survival", "second_goal_weight": 30, "crafted": True},
+    # "build from my items": only these items, and Brass Knuckle (the ring this build wears twice when it can)
+    # is listed once, so it may only be worn once
+    {"name": "archer L60 melee, only my items", "class": "archer", "level": 60, "goal": "melee",
+     "only_items": ["Heliophobia", "Call of the Void", "Illuminite", "Nesaak's Shadow", "Balm", "Cage of Bones",
+                    "Unrefined Leggings", "Creek", "Nettle Tangle", "Bladerunners", "Tainted Step", "Galena",
+                    "Brass Knuckle", "Fingertrap", "Return", "Insulation", "Adventurous", "Bamboo Cuff", "Devotion",
+                    "Shiny Coin", "Luminis", "Ballista", "Dorian", "Flawless Light Jungle Bow", "Scarlet Veil",
+                    "Heartbreak", "Binding Brace", "Electric Torc", "Soundwave"]},
 ]
 
 RESULTS = []
@@ -103,6 +112,14 @@ def problems_with(case, res):
             back = wh.armor_with_powders(back, it.powders)
         if back.max_stats != it.max_stats or back.reqs != it.reqs or back.bonus != it.bonus:
             out.append(f"crafted {it.type}'s code doesn't read back the same")
+    if case.get("only_items"):                   # only the player's items, a ring they have one of worn once
+        counts = wh.parse_owned_items(wh.LAST_RESULT["build"].data, case["only_items"], cls)["counts"]
+        for it in armor + [weapon]:
+            if wh.item_key(it) not in counts:
+                out.append(f"{it.name} isn't one of the player's items")
+        r1, r2 = best["armor"][4], best["armor"][5]
+        if r1 is not None and r2 is not None and wh.item_key(r1) == wh.item_key(r2) and counts.get(wh.item_key(r1), 0) < 2:
+            out.append(f"wears two {r1.name} but the player has one")
     fin = best["eval"]
     if case.get("minimums") and not fin.get("floors_met", True):
         out.append("misses the minimums: " + "; ".join(wh.floor_misses(wh.parse_floors(

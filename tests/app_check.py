@@ -304,6 +304,93 @@ def check_library():
             wynn_app.LIBRARY_PATH, wynn_app.HISTORY_PATH = saved
 
 
+def check_my_items():
+    """"Build from my items": a character's My items list (page and bot), reading the list (x2 rings, unknown names,
+    other classes' weapons), and the search's item lists holding only those items, with a ring you have one of never
+    worn twice. On a temporary library."""
+    import wynn_app
+    import wynn_helper as wh
+    import wynn_search as ws
+    from http.server import ThreadingHTTPServer
+    with tempfile.TemporaryDirectory() as tmp:
+        saved = (wynn_app.LIBRARY_PATH, wynn_app.HISTORY_PATH)
+        wynn_app.LIBRARY_PATH, wynn_app.HISTORY_PATH = os.path.join(tmp, "library.json"), os.path.join(tmp, "history.json")
+        srv = ThreadingHTTPServer(("127.0.0.1", 0), wynn_app.Handler)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        base = f"http://127.0.0.1:{srv.server_address[1]}"
+
+        def call(path, body=None):
+            data = None if body is None else json.dumps(body).encode()
+            req = urllib.request.Request(base + path, data=data, headers={"Content-Type": "application/json"})
+            with urllib.request.urlopen(req, timeout=60) as r:
+                return json.loads(r.read())
+        real_run = wynn_app.wh.run
+        try:
+            ok = True
+            cid = call("/api/library", {"action": "create", "class": "mage", "name": "Sparky", "level": 50})["character_id"]
+            seen = {}
+            wynn_app.wh.run = lambda a: (seen.update(only=a.only_items, gear=a.gear), print("fake report"))
+            out = wynn_app.run_report({"character": "Sparky", "use_my_items": True})     # nothing saved yet: says so
+            ok &= not out["ok"] and "no items saved" in out["text"]
+            r = call("/api/library", {"action": "items", "id": cid, "items": ["Ajax, Horseshoe x2", " ajax ", "", "Alarm"]})
+            ok &= r["ok"] and r["characters"][0]["items"] == ["Ajax", "Horseshoe x2", "Alarm"]
+            msg = wynn_app.manage_characters({"action": "add_items", "name": "Sparky", "items": ["Desert Wretch", "horseshoe"]})
+            ok &= "4 item" in msg
+            msg = wynn_app.manage_characters({"action": "remove_items", "name": "Sparky", "items": ["alarm"]})
+            ok &= "3 item" in msg
+            ctx = wynn_app.characters_context()
+            ok &= "My items (3): Ajax, Horseshoe x2, Desert Wretch" in ctx
+            out = wynn_app.run_report({"character": "Sparky", "use_my_items": True, "goal": "spells"})
+            ok &= out["ok"] and seen["only"] == "Ajax, Horseshoe x2, Desert Wretch" and not seen["gear"]
+            wynn_app.run_report({"class": "mage", "level": 50, "only_items": ["Ajax", "Alarm"]})
+            ok &= seen["only"] == "Ajax, Alarm"
+            wynn_app.run_report({"class": "mage", "level": 50})
+            ok &= seen["only"] is None
+            ok &= len(wynn_app.clean_items(["x"] * 5 + [f"Item {i}" for i in range(500)])) == wynn_app.MAX_ITEMS
+            check("My items: saved per character, used by the bot and the form", ok)
+        except Exception as exc:
+            check("My items: saved per character, used by the bot and the form", False, f"{type(exc).__name__}: {exc}")
+        finally:
+            wynn_app.wh.run = real_run
+            srv.shutdown()
+            wynn_app.LIBRARY_PATH, wynn_app.HISTORY_PATH = saved
+    try:
+        d = wh.load_game_data(offline=True)
+        mine = wh.parse_owned_items(d, "Ajax, 2x Horseshoe, Electrode (2), Brass Knuckle, Nonsense Itemzzz, Stratiformis, "
+                                       "Alarm x2", "mage")
+        c = mine["counts"]
+        ok = c == {"Ajax": 1, "Horseshoe": 2, "Electrode": 2, "Brass Knuckle": 1, "Alarm": 2}
+        ok &= any("Nonsense Itemzzz" in n for n in mine["notes"]) and any("Stratiformis" in n for n in mine["notes"])
+        sp = wh.only_spec(mine, "mage", 50)
+        ok &= sp["one"] == {"Brass Knuckle"} and not sp["any_weapon"]
+        ok &= wh.only_spec(wh.parse_owned_items(d, "Ajax", "mage"), "mage", 50)["any_weapon"]
+        bk, hs = d.find_item("Brass Knuckle")[0], d.find_item("Horseshoe")[0]
+        old = wh.ONLY_ONE
+        wh.ONLY_ONE = sp["one"]
+        try:
+            arm = [None] * 8
+            ok &= wh.double_ring_blocked(arm[:4] + [bk, bk] + arm[6:]) and not wh.double_ring_blocked(arm[:4] + [hs, hs] + arm[6:])
+            ok &= not wh._wearable(arm[:4] + [bk, bk] + arm[6:], d.find_item("Alarm")[0], 60)
+            ok &= not wh.double_ring_blocked(arm[:4] + [bk, hs] + arm[6:])
+        finally:
+            wh.ONLY_ONE = old
+        b = wh.Build(d, wh.Tree(d, "mage"), 60, "spells")
+        st0 = ws._settings(b, True, 1)
+        ws._ONLY.update(sp)
+        try:
+            rings = ws.item_pool(b, "ring")
+            helmets = ws.item_pool(b, "helmet")
+            st1 = ws._settings(b, True, 1)
+        finally:
+            ws._ONLY.clear()
+        ok &= sorted(it.name for it in rings) == ["Brass Knuckle", "Electrode", "Horseshoe"]
+        ok &= [it.name for it in helmets] == ["Ajax"] and st0 != st1 and "only" in st1
+        ok &= len(ws.item_pool(b, "ring")) > 50                   # back to every item afterwards
+        check("My items: the search only picks from your items", ok)
+    except Exception as exc:
+        check("My items: the search only picks from your items", False, f"{type(exc).__name__}: {exc}")
+
+
 def _share_entry(wynn_app, wh, d, cls, n):
     """A saved build for this class made of real items: powdered weapon and helmet, a crafted ring, an empty slot."""
     import random
@@ -605,6 +692,7 @@ def main():
     check_server()
     check_library()
     check_sharing()
+    check_my_items()
     check_craft_table()
     check_chat()
     print(f"\n{sum(RESULTS)}/{len(RESULTS)} checks passed.")

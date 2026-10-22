@@ -6,8 +6,9 @@ You get:
 
 - **Best whole build**: every piece of gear picked together, not the strongest item per slot. Skill points items give and need from each other, set bonuses, elements, major IDs and the ability tree all count.
 - **Minimum stats you choose**: for example "max DPS, but at least 20,000 health, 60,000 effective HP and no slower walk speed". The best build is picked only among builds that keep them, and every result shows health, effective HP and walk speed next to your current gear.
-- **Ability tree**: the best legal tree for your level, in click order.
-- **Skill points**: what to assign, and the order to equip items.
+- **Build from the items you have**: list your items (on a character's page under **My items**, in the form, or just tell the bot "I have these items, make a build") and the best build is made from only those. A ring you list once is never worn twice (write "x2" if you have two). It also lists what's **worth getting next**: the items you don't have that would raise that build the most.
+- **Ability tree**: the best legal tree for your level, in click order. Points that wouldn't raise your goal are left unspent, with ideas for them.
+- **Skill points**: what to assign, and the order to equip items. Worked out in the game's own equip order (boots, leggings, chestplate, helmet, rings, bracelet, necklace), like Wynnbuilder.
 - **Powders** for your weapon and armor, and the special they unlock.
 - **Gear upgrades** you can wear now, plus set combos. Items that need a quest, can't be traded, or don't drop from mobs are marked.
 - **Crafted and custom items** from Wynnbuilder links or `CR-...` / `CI-...` codes.
@@ -41,12 +42,13 @@ The build appears on the right. When the search finishes, every item flies into 
 
 - **Before → after bars** for your goal, main attack and spell damage, effective HP, health, walk speed and mana regen, with your minimums marked on the bars. "Before" is the gear you entered; if you didn't enter any, your last build for the same class and goal; and for your very first build, zero.
 - **Your equipment screen**: every piece in its slot as a Wynncraft-style card (hover or tap for its stats, requirements and powders), "NEW" on pieces that changed, and your skill points split into what you assign and what your gear gives.
-- **The ability tree map**: the real tree with your abilities lit up and numbered in click order, coloured by archetype (hover for what each does). Above it, "What matters for your goal" lists the abilities that raise your goal and by how much (marked on the map with a gold ring and their %), how many are only there to reach those, and the **spare points**: abilities that don't change your goal's number (dashed on the map), picked for small extras. Hover any ability for why it's there. Swap spare points for anything you like.
+- **The ability tree map**: the real tree with your abilities lit up and numbered in click order, coloured by archetype (hover for what each does). Above it, "What matters for your goal" lists the abilities that raise your goal and by how much (marked on the map with a gold ring and their %), how many are only there to reach those, and abilities that add something else worth having (like an ultimate's combo damage). Ability points that wouldn't change your goal's number are **left unspent**, and it lists ideas for them (for example an ultimate, and the abilities on the way to it). Hover any ability for why it's there.
 - **The crafting table** (when you asked for crafted items): each crafted piece's 3 x 2 grid like the game's, with every ingredient's tier, how strong its spot makes it, what it does to its neighbours, and on hover its stats and where it drops. While the search designs them, The Forge shows a crafting bench where each slot's grid shuffles, lands, and lights up when it's kept.
 - **Save to your library**: when a build is ready, a big banner at the top asks whether to save it to your library. Pick which character it's for (or make a new one) and it's kept there.
 - **Compare builds**: every saved build has a **Compare** button. Two builds of the same class side by side: the numbers with who's ahead and by how much, the gear slot by slot, skill points, and the abilities only one has. Pick any two builds from any of your characters (or a friend's).
 - **Share a build**: the **Share** button (on saved builds, in History and on a finished build) makes a code that starts with `WBH1-`. It fits in one Discord message. A friend pastes it into their app, on the Home page or just in the chat, to see your exact build, compare it with theirs, and save it to their library. Their app rebuilds every item from its own game data (a code can't carry made-up stats); the numbers shown are the ones your app worked out, and settings like party buffs are listed with them.
-- **The bot knows your characters**: say "make my shaman tankier", or use a character's name, and it uses that character's class, level and current gear. Tell it a character is "level 60 now", or "save that to" a character, and it updates the library.
+- **The bot knows your characters**: say "make my shaman tankier", or use a character's name, and it uses that character's class, level and current gear. Tell it a character is "level 60 now", or "save that to" a character, and it updates the library. It knows each character's **My items** too: "make a build for Sparky from my items", or "add Ajax and two Horseshoes to my items".
+- **My items** (on each character's page): the items that character has. Type a name and press Enter to add one (write "x2" for a second copy of a ring), × to remove. **Build from my items** opens the chat ready to make the best build out of only those. A slot with nothing in your list stays empty; if you list no weapon you can use, any weapon can be picked (the report says so). Gear you're wearing counts as yours. The list is kept on your computer with your library.
 - **Home page and characters**: the app opens on your characters. Pick a class, then a character, to see its library of saved builds (the current one marked), view any of them in full, and **Make a build for** that character: the chat opens with "Make a build for (name):" typed in, so you only add what it should be good at (the bot already knows its class, level and current gear). **Use the form instead** fills in the form with the same details. Characters and their libraries are kept on your computer only (`wynn_data/library.json`), and updates never touch them. The **Home** button at the top goes back there anytime.
 - **History**: every build you make is saved on your computer only (the History tab) and kept through updates. Everyone starts with an empty history. When a build is ready, a small white box pops up in the top-left corner of your screen, on top of other windows, and disappears by itself, so you can play while it searches. (Games in exclusive fullscreen can cover it; turn the pop-up off in Settings if you don't want it.)
 
@@ -150,6 +152,7 @@ python3 wynn_helper.py --class warrior --level 60 --goal melee --min "hp=6000, w
 |---|---|
 | `--from-link` | Load your build from a Wynnbuilder link: class, level, gear, powders, tomes, aspects and tree. The report compares your tree with the best one. |
 | `--class`, `--level` | Your class and combat level |
+| `--only-items` | Build only from these items (the ones you have), comma-separated, e.g. `"Ajax, Horseshoe x2, Alarm"`; `x2` for two of a ring. What you wear (`--gear`) counts too. The report then lists what's worth getting next. |
 | `--gear` | Your items, comma-separated. Spelling can be a bit off; it picks the closest match and tells you. Crafted and custom items go in as their Wynnbuilder codes (`CR-...`, `CI-...`). |
 | `--keep` | Abilities you want no matter what, e.g. `"Arcane Transfer"` for the mana bank |
 | `--powders` | Powders you already have, e.g. `"weapon=t6 t6; chestplate=w4 w4"`. Leave the weapon out to get a recommendation. |
@@ -194,7 +197,7 @@ The app and the command line use the same calculator. Each part was run side by 
 |---|---|---|
 | Damage calculation (including part- and element-specific multipliers) | 2,000 | Identical |
 | Item roll ranges | 22,427 stats on 5,420 items | Identical |
-| Skill point solver | 1,900 real gear sets | Identical except one tie (same total points) |
+| Skill point solver (in the game's equip order) | 1,500 gear sets | Identical |
 | Weapon powder damage | 500 | Identical |
 | Effective HP, regen and defenses | 1,000 | Identical |
 | Wynnbuilder links | 300 builds | Identical links; all decode back correctly |

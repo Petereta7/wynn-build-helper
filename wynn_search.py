@@ -173,8 +173,19 @@ def slot_kinds(cls: str):
     return [(s, wh.SLOT_TYPES[s]) for s in range(8)] + [("weapon", wh.CLASS_WEAPON[cls])]
 
 
+# "Build from my items": while a search runs with only=..., the item lists hold only the player's items
+# (names = allowed item keys, extra = their crafted/custom pieces, any_weapon = no usable weapon listed).
+_ONLY: dict = {}
+
+
 def item_pool(build, kind: str, include_never: bool = True, min_level: int = 1):
     cls, level = build.tree.cls, build.level
+    names = _ONLY.get("names")
+    if names is not None and not (kind == wh.CLASS_WEAPON.get(cls) and _ONLY.get("any_weapon")):
+        # the player's own items: every level up to theirs counts (they have them), drops or not
+        return ([it for it in build.data.items.values()
+                 if it.type == kind and it.level <= level and it.class_req in (None, cls) and wh.item_key(it) in names]
+                + [it for it in _ONLY.get("extra", ()) if it.type == kind and it.level <= level])
     return [it for it in build.data.items.values()
             if it.type == kind and min_level <= it.level <= level and it.class_req in (None, cls)
             and (include_never or it.drop != "never")]
@@ -579,6 +590,8 @@ def _report(frac, msg):
 
 def _wearable_fresh(build, armor, weapon) -> bool:
     """Can this gear be worn at this level? Worked out from scratch (no remembered answers)."""
+    if wh.double_ring_blocked(armor):
+        return False
     assigned, _, _ = wh._solve_skill_points_uncached([a for a in armor if a is not None], weapon)
     return (sum(assigned) <= wh.skill_points_available(build.level)
             and max(assigned) <= wh.MAX_ASSIGNED_PER_SKILL)
@@ -629,7 +642,9 @@ def _settings(build, include_never, min_level):
             **({"floors": sorted(build.floors.items())} if getattr(build, "floors", None) else {}),
             **({"toggle_share": sorted(build.toggle_share.items())} if getattr(build, "toggle_share", None) else {}),
             **({"auto_masks": True} if getattr(build, "auto_masks", False) else {}),
-            **({"goal2": [build.goal2, build.goal2_weight]} if getattr(build, "goal2", None) else {})}
+            **({"goal2": [build.goal2, build.goal2_weight]} if getattr(build, "goal2", None) else {}),
+            **({"only": [sorted(_ONLY["names"]), sorted(_ONLY.get("one", ())), bool(_ONLY.get("any_weapon"))]}
+               if _ONLY.get("names") is not None else {})}
 
 
 def _key(settings: dict, level: int) -> str:
@@ -661,6 +676,10 @@ def remembered_starts(build, include_never, min_level):
         if wpn is None or any(n and by_name.get(n) is None for n in b.get("armor", [])):
             continue
         if wpn.level > build.level or any(a is not None and a.level > build.level for a in arm):
+            continue
+        if _ONLY.get("names") is not None and (wh.double_ring_blocked(arm) or any(
+                a is not None and wh.item_key(a) not in _ONLY["names"] for a in arm)
+                or (not _ONLY.get("any_weapon") and wh.item_key(wpn) not in _ONLY["names"])):
             continue
         out.append((arm, wpn))
     return out
@@ -1230,11 +1249,13 @@ def _build_spec(build):
             "toggle_share": dict(getattr(build, "toggle_share", {}) or {}), "auto_masks": getattr(build, "auto_masks", False),
             "toggles_off": sorted(getattr(build, "toggles_off", ()) or ()),
             "auto_toggles": sorted(getattr(build, "auto_toggles", ()) or ()),
-            "goal2": getattr(build, "goal2", None), "goal2_weight": getattr(build, "goal2_weight", 0.0)}
+            "goal2": getattr(build, "goal2", None), "goal2_weight": getattr(build, "goal2_weight", 0.0),
+            "only_one": sorted(wh.ONLY_ONE)}
 
 
 def _worker_init(spec, stop_event, q=None):
     wh.ROLL_MODE, wh.POISON_MODE = spec["rolls"], spec["poison"]
+    wh.ONLY_ONE = frozenset(spec.get("only_one") or ())
     data = wh.load_game_data(offline=True, data_dir=spec["data_dir"], version=spec["version"])
     tree = wh.Tree(data, spec["cls"])
     tomes = [t for n in spec["tomes"] for t in [data.find_tome(n)] if t is not None]
@@ -1350,7 +1371,25 @@ def _run_weapon_jobs(build, cur_own, pools, jobs, armor0, base_extra, P, deadlin
 
 def search_best_build(build, owned, armor0, weapon0, base_weapon0, keep=(), ap_budget=0, include_never=True,
                       min_level=1, deep=False, time_limit=None, log=None, pools_override=None, effort=2,
-                      crafted=False):
+                      crafted=False, only=None):
+    """The whole-build search (see _search_best_build). only: the player's own items (wh.only_spec): the search
+    picks only from them, and a ring they have one of is never worn twice."""
+    _ONLY.clear()
+    old_one = wh.ONLY_ONE
+    if only is not None:
+        _ONLY.update(only)
+        wh.ONLY_ONE = frozenset(only.get("one", ()))
+    try:
+        return _search_best_build(build, owned, armor0, weapon0, base_weapon0, keep, ap_budget, include_never,
+                                  min_level, deep, time_limit, log, pools_override, effort, crafted)
+    finally:
+        _ONLY.clear()
+        wh.ONLY_ONE = old_one
+
+
+def _search_best_build(build, owned, armor0, weapon0, base_weapon0, keep=(), ap_budget=0, include_never=True,
+                       min_level=1, deep=False, time_limit=None, log=None, pools_override=None, effort=2,
+                       crafted=False):
     """
     Search for the best whole build:
       1. safe filtering (items that provably can't win are dropped),

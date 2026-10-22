@@ -145,11 +145,23 @@ def run_report(params: dict) -> dict:
             params["level"] = char.get("level")
         cur = next((b for b in char.get("builds", []) if b.get("id") == char.get("current")), None) or \
             (char.get("builds") or [None])[-1]
+        if params.get("use_my_items"):              # a saved build isn't necessarily gear they have
+            params.setdefault("use_saved_gear", False)
         if not params.get("gear") and params.get("use_saved_gear", True) is not False and cur:
             params["gear"] = _gear_of(cur)
         char_note = (f"Character: {char['name']} (level {params['level']} {wh.CLASS_TITLE.get(char['class'], char['class'])})"
                      + (f", starting from the gear of its current build" if params.get("gear") and cur and
-                        params.get("use_saved_gear", True) is not False else "") + ".\n")
+                        params.get("use_saved_gear", True) is not False else "")
+                     + (f", only from its {len(char.get('items') or [])} saved items" if params.get("use_my_items") else "")
+                     + ".\n")
+    only_txt = _as_list_text(params.get("only_items"))
+    if params.get("use_my_items"):                   # "build from my items": the character's saved list
+        if char is None:
+            return {"ok": False, "text": "Whose items? Pass the character too (use_my_items uses a saved character's items)."}
+        if not char.get("items"):
+            return {"ok": False, "text": f"{char['name']} has no items saved yet. Ask the player which items they have "
+                                         "(they can also add them on the character's page, under My items)."}
+        only_txt = ", ".join(([only_txt] if only_txt else []) + list(char["items"]))
     cls = (params.get("class") or params.get("cls") or "").strip().lower() or None
     if cls and cls not in wh.CLASSES:
         return {"ok": False, "text": f'Unknown class "{cls}". Choose one of: {", ".join(wh.CLASSES)}.'}
@@ -173,6 +185,7 @@ def run_report(params: dict) -> dict:
     args.focus = params.get("focus") or ""
     args.from_link = link or None
     args.gear = _as_list_text(params.get("gear"))
+    args.only_items = only_txt or None
     args.keep = _as_list_text(params.get("keep"))
     args.powders = params.get("powders") or ""
     args.tomes = _as_list_text(params.get("tomes"))
@@ -546,10 +559,36 @@ def library_summary(lib: dict) -> dict:
                    "items": [[x["name"], x["tier"]] if x else None for x in b.get("items", [])],
                    "gear": _gear_of(b)} for b in reversed(c.get("builds", []))]
         chars.append({"id": c["id"], "name": c["name"], "class": c["class"], "class_title": wh.CLASS_TITLE.get(c["class"], c["class"]),
-                      "level": c.get("level"), "created": c.get("created"), "current": c.get("current"), "builds": builds})
+                      "level": c.get("level"), "created": c.get("created"), "current": c.get("current"), "builds": builds,
+                      "items": list(c.get("items") or [])})
     counts = {cls: sum(1 for c in chars if c["class"] == cls) for cls in wh.CLASSES}
     return {"classes": [{"class": cls, "title": wh.CLASS_TITLE[cls], "count": counts[cls]} for cls in wh.CLASSES],
             "characters": chars}
+
+
+MAX_ITEMS = 300
+
+
+def _item_base(x: str) -> str:
+    """'Horseshoe x2' -> 'horseshoe' (for matching names in the list)."""
+    return re.sub(r"\s+[x\u00d7]\s*\d+$|\s*\(\d+\)$|^\d+\s*[x\u00d7]\s+", "", x.strip()).lower()
+
+
+def clean_items(items) -> list:
+    """A character's item list: names (any spelling; 'x2' for two of a ring) or CR-/CI- codes, one per entry,
+    without repeats, at most MAX_ITEMS."""
+    if isinstance(items, str):
+        items = [items]
+    out, seen = [], set()
+    for x in items or []:
+        for part in re.split(r"[,;\n]", str(x)):
+            part = " ".join(part.split())[:200 if part.strip()[:3].upper() in ("CR-", "CI-") else 60]
+            k = _item_base(part)
+            if not part or k in seen:
+                continue
+            seen.add(k)
+            out.append(part)
+    return out[:MAX_ITEMS]
 
 
 def _gear_of(b) -> list:
@@ -589,6 +628,11 @@ def library_action(body: dict) -> dict:
         elif act == "delete":
             lib["characters"] = [c for c in chars if c["id"] != body.get("id")]
             c = None
+        elif act == "items":                          # "My items": the items this character has
+            c = find(body.get("id"))
+            if c is None:
+                return {"ok": False, "error": "That character isn't there any more."}
+            c["items"] = clean_items(body.get("items"))
         elif act == "save":
             h = next((x for x in load_history() if x.get("id") == body.get("history_id")), None)
             if h is None:
@@ -680,8 +724,13 @@ def characters_context() -> str:
         if cur:
             gear = ", ".join(x if not x.startswith("CR-") else "a crafted piece" for x in _gear_of(cur))
             what = f"; current build for {cur.get('label', cur.get('goal', ''))}: {gear or 'no gear'}"
+        items = c.get("items") or []
+        mine = ""
+        if items:
+            shown = [x if not x[:3].upper() in ("CR-", "CI-") else "a crafted piece" for x in items[:60]]
+            mine = f"; My items ({len(items)}): " + ", ".join(shown) + (" ..." if len(items) > 60 else "")
         lines.append(f"- {c['name']}: level {c.get('level')} {wh.CLASS_TITLE.get(c['class'], c['class'])}, "
-                     f"{len(c.get('builds', []))} saved build(s){what}")
+                     f"{len(c.get('builds', []))} saved build(s){what}{mine}")
     return "\n\nThe player's saved characters (their library):\n" + "\n".join(lines)
 
 
@@ -700,6 +749,21 @@ def manage_characters(inp: dict) -> str:
         if inp.get("level"):
             body["level"] = inp["level"]
         r = library_action(body)
+    elif act in ("set_items", "add_items", "remove_items"):
+        c, why = find_character(inp.get("name"))
+        if c is None:
+            return why
+        new = clean_items(inp.get("items"))
+        old = list(c.get("items") or [])
+        if act == "add_items":
+            new = clean_items(old + new)
+        elif act == "remove_items":
+            gone = {_item_base(x) for x in new}
+            new = [x for x in old if _item_base(x) not in gone]
+        r = library_action({"action": "items", "id": c["id"], "items": new})
+        if r.get("ok"):
+            STATE["library_changed"] = True
+            return f"Done. {c['name']} has {len(new)} item(s) saved in My items."
     elif act == "save_last_build":
         if not STATE.get("last_history_id"):
             return "There's no build to save yet."
@@ -975,7 +1039,8 @@ def build_summary():
            "focus": focus[1] if focus else None, "floors": dict(b.floors), "toggles_on": sorted(on),
            "toggle_share": dict(b.toggle_share), "mask": mask,
            "no_gear": R["no_gear"], "current": pack(R["current"]), "best": pack(R["best"]) if R.get("best") else None,
-           "best_link": R.get("best_link"), "tree": tree_static(tree), "settings": settings_notes(b),
+           "best_link": R.get("best_link"), "tree": tree_static(tree),
+           "settings": settings_notes(b) + ([f"Only your items ({R['only_items']['count']} listed)"] if R.get("only_items") else []),
            "rolls": wh.ROLL_MODE}
     hist = load_history()
     if out["best"]:
@@ -1026,6 +1091,7 @@ How to work:
 - Baseline stats: the first time they ask for a build (or a new goal), ask whether they want any minimums kept, as one short line like the example above. Put it in the same message as any other question you need to ask; if you have everything else, ask it on its own and wait. If they say no or don't care, run without minimums and don't ask again for follow-ups. Pass what they say as minimums (health, ehp, walk_speed in %, mana_regen, health_regen, elemental defenses). "No negative walk speed" means walk_speed 0.
 - Some abilities only give their bonus while a toggle is on. By default the calculator only counts buffs whose timing is known: Bullwhip (on), the best Mystic Mask (you always wear one), Coursing Restraints for the share of time its duration and cooldown allow, and ultimate buffs for the same share as ultimate damage. Everything else (Holy Power, Tricks, Unstable, Blood Pool, Corrupted, "next hit" effects) is off so numbers aren't inflated. If the player says they keep a buff up, pass it in toggles, with a share if it's only part of the time, e.g. "Contamination=70%, Activate Luster Purge". Pass toggles_off for buffs they say they don't keep up. The report's "Toggles and sliders" section shows what each off toggle would add; mention a big one and ask if they keep it up.
 - Characters: the player's saved characters come with each message, in a note from the app (the player didn't type it). When they mean one ("my shaman", "Sparky", "my main"), pass character with its name instead of asking for class and level: its class, level and current gear are filled in (pass gear only to change it, use_saved_gear false to start from nothing). If they say a character leveled up or was renamed, update it with manage_characters. After a build the app itself asks whether to save it to a character's library; save it with manage_characters only if they ask you to. Don't create characters unless they ask.
+- Building from their own items: when the player says which items they have and wants a build out of them ("I have these items, make a build", "only use what I own"), pass only_items with those names (add x2 to a ring they have two of; a ring listed once is never worn twice). What they wear (gear) counts as theirs too. When they mean a character's saved items ("use my items"), pass character and use_my_items true. If they want their list kept for next time, save it with manage_characters (set_items, add_items or remove_items). The report's "Worth getting next" part lists single items they don't have that would raise that build the most; mention the best one or two. A slot with nothing in their list stays empty, and with no usable weapon listed the weapon can be any.
 - Sharing and comparing: every saved build has a Share button that makes a share code (starts with WBH1-) a friend pastes into their app (Home page, or in this chat, which opens it straight away), and a Compare button that puts two saved builds side by side (numbers, gear, skill points, abilities). Point the player to those when they ask; you can't make or read share codes yourself.
 - If they want a mix ("mostly damage but I want to survive too", "70/30 spells and tankiness"), pass the main goal plus second_goal and second_goal_weight (the share for the second goal, default 30). This is a weighted mix, softer than a minimum: use minimums when they name a number ("at least 20k health"), the mix when they describe a preference. balanced is the same idea at 50/50 for damage and effective HP.
 - The report's "Abilities that matter most" lines say which abilities in the best build's tree raise the goal and by how much, which are only there to reach those (a path or an archetype count), and which are spare points that don't change the goal's number. When the player asks why an ability is there or says the tree looks odd, explain with that, and say spare points can go anywhere they like. Points that wouldn't raise the goal are left unspent on purpose (the report says how many and lists ideas, e.g. an ultimate that adds combo damage); say so if they ask why the tree doesn't use every point.
@@ -1076,6 +1142,11 @@ TOOLS = [
                                          "e.g. 'puppets', 'Meteor', 'Bash', 'Totem'"},
                 "gear": {"type": "array", "items": {"type": "string"},
                          "description": "Items they wear, any spelling; crafted/custom items as CR-/CI- codes"},
+                "only_items": {"type": "array", "items": {"type": "string"},
+                               "description": "Build only from these items (the ones the player has), any spelling; "
+                                              "'Horseshoe x2' for two of a ring. What they wear counts too."},
+                "use_my_items": {"type": "boolean",
+                                 "description": "With character: build only from that character's saved items (My items)."},
                 "keep": {"type": "array", "items": {"type": "string"},
                          "description": "Abilities they want no matter what"},
                 "wynnbuilder_link": {"type": "string", "description": "A wynnbuilder.github.io/builder link"},
@@ -1138,10 +1209,14 @@ TOOLS = [
         "description": "The player's saved characters (listed in your instructions). create: a new character "
                        "(name, class, level). update: change a character's level or name (name = current name). "
                        "save_last_build: save the build from the last report to a character's library (name; "
-                       "create_if_missing true to make a new character with that name). Only when the player asks.",
+                       "create_if_missing true to make a new character with that name). set_items / add_items / "
+                       "remove_items: the character's My items list (name, items; 'x2' for two of a ring). "
+                       "Only when the player asks.",
         "input_schema": {"type": "object", "properties": {
-            "action": {"type": "string", "enum": ["create", "update", "save_last_build"]},
+            "action": {"type": "string", "enum": ["create", "update", "save_last_build", "set_items", "add_items",
+                                                  "remove_items"]},
             "name": {"type": "string"}, "class": {"type": "string", "enum": wh.CLASSES},
+            "items": {"type": "array", "items": {"type": "string"}},
             "level": {"type": "integer"}, "new_name": {"type": "string"}, "create_if_missing": {"type": "boolean"}},
             "required": ["action"]},
     },

@@ -81,7 +81,10 @@ Measured deep search on the owner's PC (1.6 -> 1.7): Warrior L106 7.0 -> 4.1 min
 
 - Skill point solving: fast solvers verified against the reference on thousands of cases (speed_check); item
   signatures are per-process (`_SIG_EPOCH`) because a cross-process collision once over-assigned skill points.
-  Every final build's skill points are re-checked from scratch.
+  Every final build's skill points are re-checked from scratch. Gear is put on in Wynncraft's equip order (boots,
+  leggings, chestplate, helmet, ring, ring, bracelet, necklace: Wynnbuilder's `wynn_equip`; `_wynn_sorted`), because
+  the skip rules depend on input order: helmet-first once called a friend's L50 build wearable with 97 points when the
+  game needs 99 (about 2% of random gear sets with negative skill bonuses differed). Build check scores didn't change.
 - Toggles (ability buffs): only buffs with known timing count by default (Bullwhip on when the tree can keep it
   up, best Mystic Mask, Coursing Restraints 4s/12s, ultimate buffs at ULT_DPS_UPTIME 25%). Everything else off;
   users can turn any on, fully or "Name=70%". Part-time buffs are blended exactly (not scaled) when they don't
@@ -94,7 +97,7 @@ Measured deep search on the owner's PC (1.6 -> 1.7): Warrior L106 7.0 -> 4.1 min
   the search path is unchanged and builds only gain. (Putting them mid-search once made a build worse.)
 - Crafted items: designed per slot for the finished best builds, all slots designed against the same build so
   results don't depend on core count; designer shake-ups (kicks) matter most for quality; checked against
-  brute force (craft_check). Crafts use best rolls like every item. On by default; "crafted": false turns off.
+  brute force (craft_check). Crafts use best rolls like every item. Off unless asked (see below).
 - Search results are deterministic: same answer on 2 or 16 cores, Python 3.10-3.14, Windows (verified), which
   is what makes the never-worse check reliable.
 - Share codes (`WBH1-` + zlib + base64 with "." for "_", which Discord turns into italics): item names / crafter
@@ -110,8 +113,16 @@ Measured deep search on the owner's PC (1.6 -> 1.7): Warrior L106 7.0 -> 4.1 min
   `analyze_build` with `character` fills in class, level and current gear.
 - Crafted items are off unless the player asks (form box, `crafted: true`, `--crafted`).
 - Tree roles (`tree_roles`): each ability is goal (% it adds), path (needed to reach abilities that count; whole
-  branch value), spare (doesn't change the goal's number; text says what else it adds) or start. Spare points come from
-  the score's small tie-breakers (other damage); owner hasn't decided whether spare points should favour survival.
+  branch value), extra (adds 5%+ to something else, e.g. an ultimate's combo damage; kept), spare or start. Owner
+  decided: spare points are left unspent (`prune_spare` removes an ability only when the goal number stays exactly the
+  same), and the report lists ideas for them (one per branch, with the abilities on the way).
+- Build from my items (`only_items`, `--only-items`, a character's `items` list = "My items"): `parse_owned_items`
+  reads names / CR- codes with x2 / 2x / (2) counts (unknown names left out and said); worn gear counts as owned.
+  While the search runs, `wynn_search._ONLY` limits `item_pool` (all levels up to theirs, drops or not) and
+  `wh.ONLY_ONE` (rings owned once, also sent to workers in the spec) makes `_wearable` refuse the same ring twice;
+  both reset afterwards. Remembered builds are keyed by the list. No usable weapon listed = any weapon (said in the
+  report). The report swaps "Gear upgrades" for "Worth getting next": single items not owned, on top of the best
+  owned build. Item keys: name, or the recipe for crafted pieces (they share names).
 - Search headroom (Oct 2026, tests/headroom.py in the dev repo): more weapons was the big win; the 'Maximum' search's
   other extras added nothing beyond it. A wider ingredient candidate list for crafts helped single slots but not
   whole builds (one case -0.03%), so it was dropped. Crafting for more top builds helps Shaman/Assassin most; with 30
@@ -120,6 +131,9 @@ Measured deep search on the owner's PC (1.6 -> 1.7): Warrior L106 7.0 -> 4.1 min
 
 ## History (newest first)
 
+- 1.10.0: build from the items you have (My items per character, form box, bot; "worth getting next"); skill points
+  in the game's equip order (fixes a build needing 2 more points than shown); spare ability points left unspent, with
+  ideas.
 - 1.9.0: deep search 30 weapons (was 16) and crafts for 6 builds x 150 shake-ups (was 3 x 40); crafted items off
   unless asked; crafting table + Forge crafting bench; tree roles (why each ability is there); chat 400 fix (thinking
   blocks are tied to the system prompt, so the characters list moved out of it); shorter bot questions.
@@ -142,7 +156,6 @@ Measured deep search on the owner's PC (1.6 -> 1.7): Warrior L106 7.0 -> 4.1 min
 ## Open ideas (not done yet)
 
 - Armor powder specials (Rage, Kill Streak, Concentration, Endurance, Dodge): situational, off by default.
-- Owned-items mode: build only from items the player lists as owned.
 - New item alerts: after a game data update, re-check saved builds.
 - Report-a-problem button (pack build, settings and report into a file).
 - Faster search / faster CI build check (currently ~20 min on GitHub).

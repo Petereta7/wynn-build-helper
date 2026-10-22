@@ -33,7 +33,7 @@ This needs no internet and no other software. It checks the helper against resul
 - Wynnbuilder links (with normal, crafted and custom items)
 - spell damage, skill points, weapon powders and defenses
 
-It also checks a few known builds, and that the tree search gives a legal tree for every class.
+It also checks a few known builds, that the tree search gives a legal tree for every class, and that skill points are worked out in the game's equip order (boots first): a friend's level 50 build that needs 99 points that way (Wynnbuilder agrees) must not be called wearable at level 50.
 
 It takes about 15 seconds. Every line should say PASS. If you change the code, run it to make sure nothing broke.
 
@@ -84,7 +84,7 @@ Checks that a buff that's fully on gives the same numbers as Wynnbuilder's on sw
 python3 tests/app_check.py
 ```
 
-The things that would break the app for everyone: every Python file compiles, the page's JavaScript has no syntax errors (needs Node.js, skipped without), no real API key is in any file, `version.json` matches `versions.json`, an update and a switch back (run on a copy of the app) never touch the API key, settings, history or saved builds, and the app's server answers the page and its data for every class. It also checks the character library and share codes: a build of real items (powdered and crafted) for every class comes back exactly from its code, even pasted inside a message or broken over lines; damaged codes are refused; tampered ones are cleaned (bad links dropped, unknown items shown as missing); a friend's build saves to the library once. Takes a few seconds.
+The things that would break the app for everyone: every Python file compiles, the page's JavaScript has no syntax errors (needs Node.js, skipped without), no real API key is in any file, `version.json` matches `versions.json`, an update and a switch back (run on a copy of the app) never touch the API key, settings, history or saved builds, and the app's server answers the page and its data for every class. It also checks the character library and share codes: a build of real items (powdered and crafted) for every class comes back exactly from its code, even pasted inside a message or broken over lines; damaged codes are refused; tampered ones are cleaned (bad links dropped, unknown items shown as missing); a friend's build saves to the library once. And "build from my items": a character's My items list saves and cleans up (repeats, "x2"), the bot can add and remove items and sees the list, a build from a character's items passes exactly that list; reading a list (x2 / 2x / (2) counts, unknown names and other classes' weapons left out and said so), a ring listed once can't be worn twice, and the search's item lists hold only the listed items while it runs (and every item again afterwards). Takes a few seconds.
 
 ## 6. Build check (every class, never worse)
 
@@ -92,7 +92,7 @@ The things that would break the app for everyone: every Python file compiles, th
 python3 tests/build_check.py
 ```
 
-Runs the whole app, the same way as asking the bot, for one build per class (each with a different goal), plus one with a minimum health and one with an ability buff part of the time. Each build must be wearable (items in level range, the class's weapon, skill points worked out from scratch, a legal ability tree, minimums met, its share code opens as exactly the same build), and its score must be at least the one recorded in `tests/golden/build_baseline.json`, so a change can never make builds worse without this failing. After a change that makes builds better, run `python3 tests/build_check.py --record` to save the higher scores (it never lowers one). Takes about 10 minutes.
+Runs the whole app, the same way as asking the bot, for one build per class (each with a different goal), plus one with a minimum health, one with an ability buff part of the time, and one built only from a list of the player's items (every piece must be from the list, and a ring listed once worn once). Each build must be wearable (items in level range, the class's weapon, skill points worked out from scratch, a legal ability tree, minimums met, its share code opens as exactly the same build), and its score must be at least the one recorded in `tests/golden/build_baseline.json`, so a change can never make builds worse without this failing. After a change that makes builds better, run `python3 tests/build_check.py --record` to save the higher scores (it never lowers one). Takes about 10 minutes.
 
 ## 7. Craft check
 

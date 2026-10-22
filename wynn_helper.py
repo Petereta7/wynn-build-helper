@@ -3538,15 +3538,76 @@ def parse_powder_arg(text: str) -> dict:
     return out
 
 
-def default_weapon(data: GameData, cls: str, level: int, build=None, armor=None):
+_OWN_COUNT = re.compile(r"^(?:(\d+)\s*[x\u00d7]\s+)?(.*?)(?:\s+[x\u00d7]\s*(\d+)|\s*\((\d+)\))?$", re.I)
+
+
+def parse_owned_items(data: GameData, text, cls: str):
+    """
+    The player's own items for "build from my items": "Ajax, Horseshoe x2, CR-..." (commas, semicolons or new
+    lines; "x2", "2x" or "(2)" for two of a ring). Returns a dict:
+      counts {item_key: how many (1 or 2)}, extra [crafted/custom Items], items [Items], notes [plain words].
+    Names are matched like the gear box (closest match is said out loud); unknown names are left out, never guessed.
+    """
+    if isinstance(text, (list, tuple)):
+        text = ", ".join(str(x) for x in text)
+    counts, extra, items, notes, unknown = {}, [], [], [], []
+    for raw in [p.strip() for p in re.split(r"[,;\n]", str(text or ""))[:400] if p.strip()]:
+        m = _OWN_COUNT.match(raw[:200])
+        name = (m.group(2) if m else raw).strip()
+        n = int((m and (m.group(1) or m.group(3) or m.group(4))) or 1)
+        if not name:
+            continue
+        if name[:3].upper() in ("CR-", "CI-"):
+            try:
+                it = crafted_from_code(data, name) if name[:3].upper() == "CR-" else custom_from_code(name)
+            except Exception as exc:
+                notes.append(f"Couldn't read {name[:12]}... ({exc}); left out.")
+                continue
+        else:
+            it, warn = data.find_item(name)
+            if it is None:
+                unknown.append(name)
+                continue
+            if warn:
+                notes.append(warn + ".")
+        if it.category == "weapon" and it.type != CLASS_WEAPON[cls]:
+            notes.append(f"{it.name} is a {it.type}; a {CLASS_TITLE[cls]} uses a {CLASS_WEAPON[cls]}, so it's left out.")
+            continue
+        k = item_key(it)
+        if k not in counts:
+            items.append(it)
+            if it.crafted or it.custom:
+                extra.append(it)
+        counts[k] = min(2, counts.get(k, 0) + max(1, n))
+    if unknown:
+        notes.append("Not found in the item data, so left out: " + ", ".join(unknown[:12])
+                     + (f" and {len(unknown) - 12} more" if len(unknown) > 12 else "") + ".")
+    return {"counts": counts, "extra": extra, "items": items, "notes": notes}
+
+
+def only_spec(owned_items: dict, cls: str, level: int) -> dict:
+    """What the search needs from the player's items: allowed names, rings they have only one of, crafted pieces,
+    and whether any weapon may be used (when they listed none they can use)."""
+    counts = owned_items["counts"]
+    kind = CLASS_WEAPON[cls]
+    has_weapon = any(it.type == kind and it.level <= level for it in owned_items["items"])
+    return {"names": frozenset(counts), "extra": list(owned_items["extra"]), "any_weapon": not has_weapon,
+            "one": frozenset(item_key(it) for it in owned_items["items"] if it.type == "ring" and counts[item_key(it)] < 2)}
+
+
+def default_weapon(data: GameData, cls: str, level: int, build=None, armor=None, allowed=None):
     """
     Best class weapon you could use at this level (used when you don't name one).
     With a build, the top candidates are scored for your goal; otherwise highest damage wins.
+    `allowed`: only these items (the player's own items, by item_key).
     """
     kind = CLASS_WEAPON[cls]
     avail = skill_points_available(level)
     options = [it for it in data.items.values() if it.type == kind and it.level <= level
                and it.drop != "never" and sum(it.reqs) <= avail]
+    if allowed is not None:
+        options = [it for it in data.items.values() if it.type == kind and it.level <= level
+                   and item_key(it) in allowed]
     if not options:
         options = [it for it in data.items.values() if it.type == kind and it.level <= max(level, 1)] or \
                   sorted((it for it in data.items.values() if it.type == kind), key=lambda it: it.level)[:1]
@@ -3622,10 +3683,28 @@ def _sp_bounds(armor, weapon):
 
 
 _WEAR_CACHE: dict = {}
+ONLY_ONE: frozenset = frozenset()   # "build from my items": rings the player has only one of (so can't wear two)
+
+
+def item_key(it) -> str:
+    """What identifies an item in the player's list of items: its name, or for a crafted/custom piece its recipe
+    (crafted pieces share names)."""
+    code = getattr(it, "link_code", None)
+    return repr(code) if code else it.name
+
+
+def double_ring_blocked(armor) -> bool:
+    """True if this gear wears the same ring twice and the player only has one."""
+    if not ONLY_ONE or len(armor) < 6 or armor[4] is None or armor[5] is None:
+        return False
+    k = item_key(armor[4])
+    return k == item_key(armor[5]) and k in ONLY_ONE
 
 
 def _wearable(armor, weapon, level) -> bool:
     """Can this gear be worn at this level (enough skill points, none over the per-skill cap)? Remembered."""
+    if ONLY_ONE and double_ring_blocked(armor):
+        return False
     key = (_sp_key(armor, weapon), level)
     hit = _WEAR_CACHE.get(key)
     if hit is None:
@@ -3702,6 +3781,42 @@ def suggest_gear(build: Build, owned, armor, weapon, extra_fn, per_slot: int = 3
         suggestions[slot] = [(v / base_val - 1 if base_val > 0 else 0, it) for v, it in top[:per_slot]
                              if v > base_val * 1.005]
     return suggestions, base_val
+
+
+def print_worth_getting(build: Build, wb: dict, only: dict, extra_fn, include_never: bool, per_slot: int = 3):
+    """'Build from my items': single items the player doesn't have that would raise the best build from their
+    items the most (each on its own, with the rest of that build kept)."""
+    print_header(f"Worth getting next (items level {max(1, build.level - 12)}–{build.level} you don't have)")
+    armor, weapon, owned = list(wb["armor"]), wb["weapon"], frozenset(wb["owned"])
+    sugg, _ = suggest_gear(build, owned, armor, weapon, extra_fn, per_slot=per_slot * 3, include_never=include_never)
+    names, one = only["names"], only["one"]
+    shown = set()
+    any_s = False
+    for slot, lst in sugg.items():
+        label = "Weapon" if slot == "weapon" else SLOT_LABELS[slot]
+        cur = weapon if slot == "weapon" else armor[slot]
+        keep = []
+        for gain, it in lst:
+            k = item_key(it)
+            second = it.type == "ring" and k in one     # a second copy of a ring you have one of
+            if (k in names and not second) or (it.type == "ring" and (k, "ring") in shown):
+                continue
+            keep.append((gain, it, second))
+            if it.type == "ring":
+                shown.add((k, "ring"))
+            if len(keep) >= per_slot:
+                break
+        if not keep:
+            continue
+        any_s = True
+        print(f"  {label} (now: {cur.name if cur is not None else '(empty)'})")
+        for gain, it, second in keep:
+            print(f"     +{gain * 100:5.1f}%  {it.name:<24} {it.short()}" + ("  (a second one)" if second else ""))
+    if not any_s:
+        print("  No single item in range beats the build from your items one piece at a time for this goal.")
+    else:
+        print("  Each gain is that one item swapped into the build from your items (skill points re-spent, same tree).")
+        print("  With a new item, run the build again: the rest of the gear may change around it.")
 
 
 def suggest_sets(build: Build, owned, armor, weapon, extra_fn, level_window: int = 12, include_never: bool = True,
@@ -4658,9 +4773,39 @@ def run(args):
             unplaced.append(it.name)
     if unplaced:
         print("  No free slot for: " + ", ".join(unplaced))
+    # ---- "build from my items": only the items the player says they have (plus what they wear)
+    only = None
+    if getattr(args, "only_items", None):
+        mine = parse_owned_items(data, args.only_items, cls)
+        worn_now = [a for a in armor if a is not None] + ([weapon] if weapon is not None else [])
+        for it in worn_now:                      # what you wear is yours too (two of a ring if you wear two)
+            k = item_key(it)
+            n = sum(1 for a in worn_now if item_key(a) == k)
+            if k not in mine["counts"]:
+                mine["items"].append(it)
+                if it.crafted or it.custom:
+                    mine["extra"].append(it)
+            mine["counts"][k] = max(mine["counts"].get(k, 0), min(2, n))
+        only = only_spec(mine, cls, level)
+        usable = [it for it in mine["items"] if it.level <= level]
+        print(f"  Building only from your items: {len(mine['items'])} item(s) listed"
+              + (f", {len(usable)} usable at level {level}" if len(usable) != len(mine["items"]) else "") + ".")
+        for n in mine["notes"]:
+            print("  " + n)
+        missing = [lab for s_i, lab in enumerate(SLOT_LABELS[:8])
+                   if not any(it.type == SLOT_TYPES[s_i] and it.level <= level for it in mine["items"])]
+        missing = list(dict.fromkeys("Rings" if m.startswith("Ring") else m for m in missing))
+        if missing:
+            print("  Nothing in your list for: " + ", ".join(missing) + " (left empty).")
+        if only["any_weapon"]:
+            print(f"  No {CLASS_WEAPON[cls]} you can use at level {level} in your list, so the weapon can be any {CLASS_WEAPON[cls]}.")
+        if only["one"]:
+            print("  Rings you have one of are never worn twice (add \"x2\" to a ring you have two of).")
+        LAST_RESULT["only_items"] = {"count": len(mine["items"]), "names": [it.name for it in mine["items"]][:400]}
     assumed_weapon = False
     if weapon is None:
-        weapon = default_weapon(data, cls, level, Build(data, tree, level, goal), armor)
+        allowed = None if (only is None or only["any_weapon"]) else only["names"]
+        weapon = default_weapon(data, cls, level, Build(data, tree, level, goal), armor, allowed=allowed)
         assumed_weapon = True
     no_gear = assumed_weapon and all(a is None for a in armor)
     worn = [a for a in armor if a] + [weapon]
@@ -5091,7 +5236,7 @@ def run(args):
             print("  New gear is compared with what you wear now (only items that unlock at that level, +3% or more).")
 
     # ---- gear suggestions
-    if not args.no_gear:
+    if not args.no_gear and only is None:
         print_header(f"Gear upgrades you can wear (items level {max(1, level - 12)}–{level})")
         sugg, base_val = suggest_gear(build, chosen, armor, weapon, extra_fn, per_slot=args.per_slot,
                                       include_never=include_never)
@@ -5132,7 +5277,8 @@ def run(args):
         wb = ws.search_best_build(floor_build, search_start, armor, weapon, base_weapon, keep=keep_ids, ap_budget=budget,
                                   include_never=include_never, min_level=min_lvl,
                                   deep=getattr(args, "deep", False), time_limit=getattr(args, "time_limit", None),
-                                  log=lambda m: print("  " + m), crafted=not getattr(args, "no_crafted", True))
+                                  log=lambda m: print("  " + m), crafted=not getattr(args, "no_crafted", True),
+                                  only=only)
         if wb.get("stopped"):
             print("  (Stopped early: this is the best build found so far.)")
         bs = wb.get("bonus_search") or {}
@@ -5259,6 +5405,8 @@ def run(args):
                 print("  use --drops-only (or the drops option in the app) to build only from mob drops.")
             print_crafts(data, [(SLOT_LABELS[i], x) for i, x in enumerate(wb["armor"]) if x is not None]
                          + [("Weapon", w)], wb.get("crafted") or {})
+        if only is not None:
+            print_worth_getting(floor_build, wb, only, extra_fn, include_never, args.per_slot)
 
     # ---- tomes and aspects
     if data.tomes:
@@ -5407,6 +5555,9 @@ def make_parser():
     p.add_argument("--goal2-weight", type=float, default=30,
                    help="how much the second goal counts, in percent (default 30)")
     p.add_argument("--gear", help='comma-separated item names, e.g. "Haqherphix, Ridge, Phosphene"')
+    p.add_argument("--only-items", dest="only_items", default=None,
+                   help='build only from these items (the ones you have), e.g. "Ajax, Horseshoe x2, Alarm"; '
+                        'what you wear (--gear) counts too')
     p.add_argument("--keep", help='abilities you want no matter what, e.g. "Arcane Transfer"')
     p.add_argument("--rank-ap", type=int, default=0, help="extra ability points from rank (VIP+ 2, HERO 4)")
     p.add_argument("--powders", default="",
