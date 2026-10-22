@@ -2164,7 +2164,7 @@ async function showCharacter(id) {
     <h3 style="font-family:var(--display);font-size:22px;margin:0 0 8px">My items</h3>
     <section class="tip myitems"><p class="sub">Items ${esc(c.name)} has. <b>Build from my items</b> makes the best build out of only these, and lists what's worth getting next.</p>
       <div class="chips" id="miChips">${myItemChips(c)}</div>
-      <div class="edit"><input id="miAdd" type="text" list="miList" placeholder="Add items: type a name and press Enter (x2 for a second ring)" aria-label="Add items"><datalist id="miList"></datalist>
+      <div class="edit"><input id="miAdd" type="text" list="miList" placeholder="Item name, then Enter (x2 = a second ring)" aria-label="Add items"><datalist id="miList"></datalist>
         <button class="btn-quiet" id="miAddBtn" type="button">Add</button></div>
       <div class="actions"><button class="btn" id="miBuild" type="button"${(c.items || []).length ? "" : " disabled"}>Build from my items</button>
         ${(c.items || []).length ? '<button class="btn-quiet" id="miClear" type="button">Clear the list</button>' : ""}</div></section>
