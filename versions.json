@@ -3,7 +3,7 @@
     {
       "version": "1.10.3",
       "date": "2026-10-22",
-      "notes": "\"Max DPS\" now means the most damage possible in any style: main attacks only, spells, or both together, whichever is highest, after your minimums. It first finds the best spell-only and main-attack-only builds, then searches from those, so it never ends up below either. It's the first goal in the form (\"Most damage possible\"), and what the bot uses when you ask for max DPS. Wynnbuilder's main-attack number is still there as \"Main attack DPS only\".",
+      "notes": "\"Max DPS\" now means the most damage possible in any style: main attacks only, spells, or both together, whichever is highest, after your minimums. It first finds the best spell-only and main-attack-only builds with full deep searches, then searches from those, so it never ends up below either. That takes about three times as long as a single search. It's the first goal in the form (\"Most damage possible\"), and what the bot uses when you ask for max DPS. Wynnbuilder's main-attack number is still there as \"Main attack DPS only\".",
       "warning": ""
     },
     {
