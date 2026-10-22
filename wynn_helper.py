@@ -3529,7 +3529,7 @@ def auto_tomes(build: Build, owned, armor, weapon, extra) -> list:
     # number doesn't change). gain None marks them.
     free = dict(TOME_SLOTS)["armorTome"] - sum(1 for k, _t, _g in picks if k == "armorTome")
     hp = sorted((t for t in build.data.tomes if t.type == "armorTome" and t.level <= build.level
-                 and t.raw.get("remapID") is None and t.max_stats.get("hpBonus", 0) > 0
+                 and t.raw.get("remapID") is None and t.max_stats.get("hpBonus", 0) > 0 and mythic_ok(t)
                  and all(t.name != p[1].name for p in picks)),
                 key=lambda t: (-t.max_stats.get("hpBonus", 0), -t.max_stats.get("hprRaw", 0), t.name))
     picks += [("armorTome", t, None) for t in hp[:max(0, free)]]
@@ -3559,7 +3559,7 @@ def recommend_tomes(build: Build, owned, armor, weapon, extra, types=None):
             for t in build.data.tomes:
                 if t.type != ttype or t.level > build.level or any(c.name == t.name for c in chosen):
                     continue
-                if t.raw.get("remapID") is not None:     # an old name kept for old links: same tome as a current one
+                if t.raw.get("remapID") is not None or not mythic_ok(t):   # old name kept for old links / mythic
                     continue
                 v = build.copy_with(tomes=chosen + [t]).evaluate(owned, armor, weapon, extra)["value"]
                 if best_v is None or v > best_v:
@@ -3693,12 +3693,12 @@ def default_weapon(data: GameData, cls: str, level: int, build=None, armor=None,
     kind = CLASS_WEAPON[cls]
     avail = skill_points_available(level)
     options = [it for it in data.items.values() if it.type == kind and it.level <= level
-               and it.drop != "never" and sum(it.reqs) <= avail]
+               and it.drop != "never" and sum(it.reqs) <= avail and mythic_ok(it)]
     if allowed is not None:
         options = [it for it in data.items.values() if it.type == kind and it.level <= level
                    and item_key(it) in allowed]
     if not options:
-        options = [it for it in data.items.values() if it.type == kind and it.level <= max(level, 1)] or \
+        options = [it for it in data.items.values() if it.type == kind and it.level <= max(level, 1) and mythic_ok(it)] or \
                   sorted((it for it in data.items.values() if it.type == kind), key=lambda it: it.level)[:1]
     options.sort(key=lambda it: (it.raw.get("averageDps") or 0, it.level), reverse=True)
     if build is None:
@@ -3723,11 +3723,19 @@ def click_order(tree: Tree, owned, level):
     return tree.validate(owned, level)["order"]
 
 
+ALLOW_MYTHIC = False      # mythic items only when the player says so (--mythics / "mythics": true); set by run()
+
+
+def mythic_ok(it) -> bool:
+    """Mythic items (and mythic tomes) are left out of every search and suggestion unless the player allows them."""
+    return ALLOW_MYTHIC or getattr(it, "tier", None) != "Mythic"
+
+
 def _gear_pool(build: Build, kind: str, level_window: int, include_never: bool):
     cls, level = build.tree.cls, build.level
     return [it for it in build.data.items.values() if it.type == kind
             and level - level_window <= it.level <= level and (include_never or it.drop != "never")
-            and it.class_req in (None, cls)]
+            and it.class_req in (None, cls) and mythic_ok(it)]
 
 
 def _swap(armor, weapon, slot, it, build, owned, extra):
@@ -4211,7 +4219,7 @@ def level_plan(build: Build, owned, armor, weapon, keep_ids, levels_ahead: int, 
             for it in build.data.items.values():
                 if it.type != kind or it.level != lvl or it.class_req not in (None, tree.cls):
                     continue
-                if not include_never and it.drop == "never":
+                if (not include_never and it.drop == "never") or not mythic_ok(it):
                     continue
                 a2, w2 = _swap(armor, weapon, slot, it, b2, cur, ex2)
                 if not _wearable(a2, w2, lvl):
@@ -4781,6 +4789,8 @@ def run(args):
     CLICKS_PER_SECOND = getattr(args, "cps", CLICKS_PER_SECOND) or CLICKS_PER_SECOND
     t0 = time.time()
     LAST_RESULT.clear()
+    global ALLOW_MYTHIC
+    ALLOW_MYTHIC = bool(getattr(args, "mythics", False))
     data = load_game_data(offline=args.offline)
     link = None
     if getattr(args, "from_link", None):
@@ -4892,6 +4902,8 @@ def run(args):
             print("  Rings you have one of are never worn twice (add \"x2\" to a ring you have two of).")
         if not getattr(args, "tomes", None) and level >= AUTO_TOMES_LEVEL:
             print("  Tomes: only ones you list in the Tomes box (none listed, so none are used).")
+        if not ALLOW_MYTHIC and any(it.tier == "Mythic" for it in mine["items"]):
+            print("  Mythic items in your list are used (they're yours).")
         LAST_RESULT["only_items"] = {"count": len(mine["items"]), "names": [it.name for it in mine["items"]][:400]}
     assumed_weapon = False
     if weapon is None:
@@ -5361,7 +5373,8 @@ def run(args):
         rng = getattr(args, "item_levels", None)
         min_lvl = max(1, level - rng) if rng else 1
         mode = "Deep search" if getattr(args, "deep", False) else "Searching"
-        print(f"  {mode}: every item from level {min_lvl} to {level}, built around each top weapon"
+        print(f"  {mode}: every item from level {min_lvl} to {level}" + ("" if ALLOW_MYTHIC else " except mythics (say you can use mythics to include them)")
+              + ", built around each top weapon"
               + (f" (stops after {args.time_limit:.0f}s)" if getattr(args, "time_limit", None) else "") + "...")
         if ws.PROGRESS.get("cb") is None:
             ws.PROGRESS["cb"] = lambda f, m: None
@@ -5691,6 +5704,8 @@ def make_parser():
                    help='powders you have, e.g. "weapon=t6 t6; chestplate=w4 w4". Weapon left out = recommend best')
     p.add_argument("--max-powder-tier", type=int, default=7, help="highest powder tier you can get (default 7)")
     p.add_argument("--tomes", default="", help='tomes you have, comma-separated (by name)')
+    p.add_argument("--mythics", action="store_true", default=False,
+                   help="allow mythic items (and mythic tomes) in the search and suggestions (off by default)")
     p.add_argument("--no-auto-tomes", dest="auto_tomes", action="store_false", default=True,
                    help="don't pick tomes for the build (from level 55 the best weapon and armor tomes are added)")
     p.add_argument("--aspects", default="", help='aspects you have with tier, e.g. "Comet 2, Ray of Frost 1"')

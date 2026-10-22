@@ -273,14 +273,18 @@ def check_library():
             ok_bot &= "Zap: level 25 Mage" in ctx and "Temporal Cage" in ctx and "a crafted piece" in ctx
             seen = {}
             real_run = wynn_app.wh.run
-            wynn_app.wh.run = lambda a: (seen.update(cls=a.cls, level=a.level, gear=a.gear, crafted=not a.no_crafted), print("fake report"))
+            wynn_app.wh.run = lambda a: (seen.update(cls=a.cls, level=a.level, gear=a.gear, crafted=not a.no_crafted,
+                                                     mythics=a.mythics, tomes=a.auto_tomes), print("fake report"))
             try:
                 out = wynn_app.run_report({"character": "Zap", "goal": "spells"})
-                ok_bot &= seen == {"cls": "mage", "level": 25, "gear": "Temporal Cage, CR-ABC", "crafted": False} and out["character_id"] == cid
+                ok_bot &= seen == {"cls": "mage", "level": 25, "gear": "Temporal Cage, CR-ABC", "crafted": False,
+                                   "mythics": False, "tomes": True} and out["character_id"] == cid
                 out = wynn_app.run_report({"character": "Zap", "level": 30, "use_saved_gear": False})
                 ok_bot &= seen["level"] == 30 and not seen["gear"]
                 wynn_app.run_report({"character": "Zap", "crafted": True})       # crafted items only when asked
                 ok_bot &= seen["crafted"] is True
+                wynn_app.run_report({"character": "Zap", "mythics": True, "auto_tomes": False})   # mythics only when asked
+                ok_bot &= seen["mythics"] is True and seen["tomes"] is False
             finally:
                 wynn_app.wh.run = real_run
             wynn_app.save_history([{"id": "h2", "class": "mage", "class_title": "Mage", "level": 30, "goal": "melee",

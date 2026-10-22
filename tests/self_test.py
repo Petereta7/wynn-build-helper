@@ -127,6 +127,22 @@ def main():
                and not any(k == "guildTome" for k, _t, _g in picks))
     report("tomes picked for the build", ok, total)
 
+    # ---- mythic items are left out of searches and suggestions unless the player allows them
+    import wynn_search as ws
+    old_m = wh.ALLOW_MYTHIC
+    try:
+        wh.ALLOW_MYTHIC = False
+        bw = wh.Build(d, wh.Tree(d, "warrior"), 106, "melee")
+        no = [ws.item_pool(bw, "spear"), wh._gear_pool(bw, "spear", 12, True), [wh.default_weapon(d, "warrior", 106, bw)]]
+        tm = wh.auto_tomes(bw, frozenset(bw.tree.roots), [None] * 8, no[2][0], None)
+        wh.ALLOW_MYTHIC = True
+        yes = ws.item_pool(bw, "spear")
+        ok = all(it.tier != "Mythic" for lst in no for it in lst) + all(t.tier != "Mythic" for _k, t, _g in tm) \
+            + any(it.tier == "Mythic" for it in yes)
+    finally:
+        wh.ALLOW_MYTHIC = old_m
+    report("mythics only when allowed", ok, 3)
+
     # ---- weapon powders
     cases = golden("powder_cases.json")
     if cases:

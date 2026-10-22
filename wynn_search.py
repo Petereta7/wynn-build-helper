@@ -188,7 +188,7 @@ def item_pool(build, kind: str, include_never: bool = True, min_level: int = 1):
                 + [it for it in _ONLY.get("extra", ()) if it.type == kind and it.level <= level])
     return [it for it in build.data.items.values()
             if it.type == kind and min_level <= it.level <= level and it.class_req in (None, cls)
-            and (include_never or it.drop != "never")]
+            and (include_never or it.drop != "never") and wh.mythic_ok(it)]
 
 
 def max_possible_bonus(pools: dict, exclude_slot=None):
@@ -639,6 +639,7 @@ def _settings(build, include_never, min_level):
             "buffs": sorted(build.buffs), "raid_buffs": sorted(build.raid_buffs),
             "enemy": sorted(build.enemy.items()), "rolls": wh.ROLL_MODE, "poison": wh.POISON_MODE,
             "drops_only": not include_never, "min_level": min_level, "focus": build.focus,
+            **({"mythics": True} if wh.ALLOW_MYTHIC else {}),
             **({"floors": sorted(build.floors.items())} if getattr(build, "floors", None) else {}),
             **({"toggle_share": sorted(build.toggle_share.items())} if getattr(build, "toggle_share", None) else {}),
             **({"auto_masks": True} if getattr(build, "auto_masks", False) else {}),

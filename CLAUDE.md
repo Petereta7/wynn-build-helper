@@ -136,6 +136,10 @@ Measured deep search on the owner's PC (1.6 -> 1.7): Warrior L106 7.0 -> 4.1 min
   Old-name copies (`remapID`) and duplicates never picked; unused armor slots get the most health; no guild tomes
   unless listed; off when the player lists tomes, unticks it (`auto_tomes: false`, `--no-auto-tomes`) or builds from
   their items.
+- Mythics (owner, Oct 2026): never in searches/suggestions/default weapon/tomes unless allowed (`mythics: true`,
+  `--mythics`, form box): `wh.ALLOW_MYTHIC` set by run() each report, `mythic_ok()` in item_pool, _gear_pool,
+  default_weapon, level plan, tomes; part of the remembered-builds key. Worn mythics and mythics in the player's own
+  item list are still used.
 - Search headroom (Oct 2026, tests/headroom.py in the dev repo): more weapons was the big win; the 'Maximum' search's
   other extras added nothing beyond it. A wider ingredient candidate list for crafts helped single slots but not
   whole builds (one case -0.03%), so it was dropped. Crafting for more top builds helps Shaman/Assassin most; with 30
@@ -145,7 +149,8 @@ Measured deep search on the owner's PC (1.6 -> 1.7): Warrior L106 7.0 -> 4.1 min
 ## History (newest first)
 
 - 1.10.1: item special effects: report and item cards say what each does and whether it's counted; Pas De Deux,
-  Grand Design and Self-Sufficient now counted (Wynnbuilder doesn't). Tomes in the build from level 55 (owner asked).
+  Grand Design and Self-Sufficient now counted (Wynnbuilder doesn't). Tomes in the build from level 55 (owner asked). Mythics left
+  out unless the player allows them.
 - 1.10.0: build from the items you have (My items per character, form box, bot; "worth getting next"); skill points
   in the game's equip order (fixes a build needing 2 more points than shown); spare ability points left unspent, with
   ideas.

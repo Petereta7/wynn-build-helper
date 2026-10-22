@@ -13,6 +13,7 @@ You get:
 - **Gear upgrades** you can wear now, plus set combos. Items that need a quest, can't be traded, or don't drop from mobs are marked.
 - **Crafted and custom items** from Wynnbuilder links or `CR-...` / `CI-...` codes.
 - **Tomes in the build**: from level 55 the best weapon and armor tomes are picked as part of the build (tomes themselves need level 60), and the gear is chosen with them on. Armor tome slots your goal doesn't use get the tomes with the most health. Guild tomes need a guild, so they're only used if you list them. If you list the tomes you have, only those are used; untick "Add the best tomes" (or tell the bot you don't use tomes) to leave them out.
+- **Mythic items are left out** of every search and suggestion unless you say so: tick "Allow mythic items" in the form, tell the bot "you can use mythics", or use `--mythics`. Mythics you're wearing or list in My items count as yours. (Mythic tomes too.)
 - **Aspects** that help your goal most.
 - **Damage and survival**: spells, main attack, poison, summons, ultimates, effective HP, regen, life steal and healing, and how many hits of a given enemy attack you can take.
 - **Level plan**: for each upcoming level, the abilities to click, where your 2 new skill points go, and gear that unlocks then.
@@ -153,6 +154,8 @@ python3 wynn_helper.py --class warrior --level 60 --goal melee --min "hp=6000, w
 |---|---|
 | `--from-link` | Load your build from a Wynnbuilder link: class, level, gear, powders, tomes, aspects and tree. The report compares your tree with the best one. |
 | `--class`, `--level` | Your class and combat level |
+| `--mythics` | Allow mythic items (and mythic tomes) in the search and suggestions; they're left out otherwise |
+| `--no-auto-tomes` | Don't add tomes to the build (from level 55 the best weapon and armor tomes are added) |
 | `--only-items` | Build only from these items (the ones you have), comma-separated, e.g. `"Ajax, Horseshoe x2, Alarm"`; `x2` for two of a ring. What you wear (`--gear`) counts too. The report then lists what's worth getting next. |
 | `--gear` | Your items, comma-separated. Spelling can be a bit off; it picks the closest match and tells you. Crafted and custom items go in as their Wynnbuilder codes (`CR-...`, `CI-...`). |
 | `--keep` | Abilities you want no matter what, e.g. `"Arcane Transfer"` for the mana bank |
