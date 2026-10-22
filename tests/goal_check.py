@@ -145,7 +145,13 @@ def main():
     empty = wh.Build(d, tree, 106, "melee", floors={"ls": 0, "ms": 0}).evaluate(owned, [None] * 8, wpn, [0] * 5)
     ok = (kb.max_stats.get("ls", 0) < 0 and not with_floor["floors_met"] and with_floor["value"] < no_floor["value"]
           and empty["floors_met"] and wh.parse_floors("life steal=0, mana steal=3") == {"ls": 0.0, "ms": 3.0})
-    check("life steal and mana steal minimums", ok, f"(Knucklebones life steal {kb.max_stats.get('ls')})")
+    # never losing health: health regen / 4 + life steal / 3 (wiki: regen every 4 s, life steal per 3 s), so a negative
+    # one is fine when the other makes up for it
+    net = wh.Build(d, tree, 106, "melee", floors={"net health": 0}).evaluate(owned, arm, wpn, [0] * 5)
+    fv = net["floor_values"]
+    ok = ok and abs(fv["net"] - (fv["hpr"] / 4 + fv["ls"] / 3)) < 1e-9 and net["floors_met"] == (fv["net"] >= 0) \
+        and wh.parse_floors("never lose health=0") == {"net": 0.0}
+    check("life steal, mana steal and never-lose-health minimums", ok, f"(Knucklebones life steal {kb.max_stats.get('ls')})")
 
     # 5. armor powders in the search: added where they help (survival), never for a damage-only goal, and the
     #    element of an enemy hit is the one chosen against it

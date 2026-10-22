@@ -764,6 +764,8 @@ label.deep input[type=checkbox] { width: auto; flex: 0 0 auto; margin-top: 3px; 
               <div class="field"><label for="f-min-ls">Life steal at least</label><input id="f-min-ls" type="number" step="10" placeholder="optional (0 = no negative)"></div>
               <div class="field"><label for="f-min-ms">Mana steal at least</label><input id="f-min-ms" type="number" step="1" placeholder="optional"></div>
             </div>
+            <div class="field"><label for="f-min-net">Health gained per second at least (health regen + life steal)</label>
+              <input id="f-min-net" type="number" step="10" placeholder="optional (0 = never lose health)"></div>
             <div class="row">
               <div class="field"><label for="f-tomes">Tomes</label><input id="f-tomes" type="text" placeholder="comma-separated"></div>
               <div class="field"><label for="f-aspects">Aspects</label><input id="f-aspects" type="text" placeholder="Comet 2, Ray of Frost 1"></div>
@@ -1384,7 +1386,7 @@ function formParams() {
     minimums: minimumsFromForm(),
   };
 }
-const MIN_FIELDS = { health: "#f-min-hp", walk_speed: "#f-min-spd", ehp: "#f-min-ehp", mana_regen: "#f-min-mr", health_regen: "#f-min-hpr", life_steal: "#f-min-ls", mana_steal: "#f-min-ms" };
+const MIN_FIELDS = { health: "#f-min-hp", walk_speed: "#f-min-spd", ehp: "#f-min-ehp", mana_regen: "#f-min-mr", health_regen: "#f-min-hpr", life_steal: "#f-min-ls", mana_steal: "#f-min-ms", net_health: "#f-min-net" };
 function minimumsFromForm() {
   const out = {};
   for (const [k, id] of Object.entries(MIN_FIELDS)) { const v = $(id).value.trim(); if (v !== "") out[k] = +v; }

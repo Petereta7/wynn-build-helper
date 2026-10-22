@@ -1,4 +1,4 @@
 {
   "version": "1.10.4",
-  "notes": "You can now set life steal and mana steal minimums (in the form, or tell the bot \"no negative life steal\"). Like every minimum they're checked on the build's final total, so single items can still have negative life steal as long as the whole build doesn't. The bot no longer patches a build by hand or guesses numbers: if a build breaks something you asked for, it runs the calculator again with that as a minimum."
+  "notes": "New minimums: life steal, mana steal, and \"never lose health\" (health gained per second: health regen plus life steal together, so one can be negative as long as the other makes up for it). Tell the bot \"no negative health\", or use the new boxes in the form. Every minimum is checked on the build's final total. The bot no longer patches a build by hand or guesses numbers: if a build breaks something you asked for, it runs the calculator again with that as a minimum."
 }

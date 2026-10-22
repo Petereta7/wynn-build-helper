@@ -2972,6 +2972,10 @@ FLOOR_STATS = {
     "hpr": ("Health regen", "", lambda st, df: df.get("hpr", 0.0)),
     "ls": ("Life steal", "/3s", lambda st, df: st.get("ls", 0.0)),
     "ms": ("Mana steal", "/3s", lambda st, df: st.get("ms", 0.0)),
+    # Never losing health: health gained per second from health regen (ticks every 4 s, wiki) plus life steal (per
+    # 3 s while you keep main-attacking, wiki). Either can be negative as long as the total isn't.
+    "net": ("Health gained per second (regen + life steal)", "/s",
+            lambda st, df: df.get("hpr", 0.0) / 4 + st.get("ls", 0.0) / 3),
     "eDef": ("Earth defense", "", lambda st, df: df.get("elem_def_eff", [0] * 5)[0]),
     "tDef": ("Thunder defense", "", lambda st, df: df.get("elem_def_eff", [0] * 5)[1]),
     "wDef": ("Water defense", "", lambda st, df: df.get("elem_def_eff", [0] * 5)[2]),
@@ -2983,6 +2987,8 @@ FLOOR_ALIASES = {
     "spd": "spd", "walkspeed": "spd", "speed": "spd", "walk": "spd", "ws": "spd", "movespeed": "spd",
     "mr": "mr", "manaregen": "mr", "mana": "mr", "hpr": "hpr", "healthregen": "hpr", "regen": "hpr", "hpregen": "hpr",
     "ls": "ls", "lifesteal": "ls", "lifestealing": "ls", "ms": "ms", "manasteal": "ms",
+    "net": "net", "nethealth": "net", "nethp": "net", "netregen": "net", "healthpersecond": "net", "sustain": "net",
+    "neverlosehealth": "net", "nohealthloss": "net", "healthgain": "net",
     "earth": "eDef", "earthdef": "eDef", "earthdefense": "eDef", "edef": "eDef",
     "thunder": "tDef", "thunderdef": "tDef", "thunderdefense": "tDef", "tdef": "tDef",
     "water": "wDef", "waterdef": "wDef", "waterdefense": "wDef", "wdef": "wDef",
@@ -3016,7 +3022,7 @@ def parse_floors(text: str) -> dict:
         key = FLOOR_ALIASES.get(re.sub(r"[^a-z]", "", m.group(1).lower()))
         if key is None:
             raise ValueError(f"unknown stat {m.group(1).strip()!r} for a minimum; use one of: health, ehp, "
-                             "walk speed, mana regen, health regen, life steal, mana steal, earth/thunder/water/fire/air defense")
+                             "walk speed, mana regen, health regen, life steal, mana steal, net health, earth/thunder/water/fire/air defense")
         out[key] = float(m.group(2).replace(",", ""))
     return out
 
