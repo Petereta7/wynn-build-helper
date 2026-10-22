@@ -1375,9 +1375,10 @@ def _run_weapon_jobs(build, cur_own, pools, jobs, armor0, base_extra, P, deadlin
 
 def search_best_build(build, owned, armor0, weapon0, base_weapon0, keep=(), ap_budget=0, include_never=True,
                       min_level=1, deep=False, time_limit=None, log=None, pools_override=None, effort=2,
-                      crafted=False, only=None):
+                      crafted=False, only=None, extra_starts=None):
     """The whole-build search (see _search_best_build). only: the player's own items (wh.only_spec): the search
-    picks only from them, and a ring they have one of is never worn twice."""
+    picks only from them, and a ring they have one of is never worn twice. extra_starts: [(armor, base weapon)]
+    more builds to start from (like remembered ones), e.g. the best builds for other goals."""
     _ONLY.clear()
     old_one = wh.ONLY_ONE
     if only is not None:
@@ -1385,7 +1386,7 @@ def search_best_build(build, owned, armor0, weapon0, base_weapon0, keep=(), ap_b
         wh.ONLY_ONE = frozenset(only.get("one", ()))
     try:
         return _search_best_build(build, owned, armor0, weapon0, base_weapon0, keep, ap_budget, include_never,
-                                  min_level, deep, time_limit, log, pools_override, effort, crafted)
+                                  min_level, deep, time_limit, log, pools_override, effort, crafted, extra_starts)
     finally:
         _ONLY.clear()
         wh.ONLY_ONE = old_one
@@ -1393,7 +1394,7 @@ def search_best_build(build, owned, armor0, weapon0, base_weapon0, keep=(), ap_b
 
 def _search_best_build(build, owned, armor0, weapon0, base_weapon0, keep=(), ap_budget=0, include_never=True,
                        min_level=1, deep=False, time_limit=None, log=None, pools_override=None, effort=2,
-                       crafted=False):
+                       crafted=False, extra_starts=None):
     """
     Search for the best whole build:
       1. safe filtering (items that provably can't win are dropped),
@@ -1491,6 +1492,8 @@ def _search_best_build(build, owned, armor0, weapon0, base_weapon0, keep=(), ap_
         weapons.append((base_weapon0, weapon0))
         seen_w.add(base_weapon0.name)
     memory = remembered_starts(build, include_never, min_level) if pools_override is None else []
+    memory += [(list(a), w) for a, w in (extra_starts or []) if w is not None and w.level <= level
+               and all(x is None or x.level <= level for x in a)]
     if memory and log:
         log(f"Starting from {len(memory)} build(s) remembered from earlier scans with these settings.")
     for arm, wpn in memory:

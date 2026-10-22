@@ -5439,11 +5439,35 @@ def run(args):
         tome_base, tome_picks = floor_build, []
         auto_on = (not build.tomes and getattr(args, "auto_tomes", True) and level >= AUTO_TOMES_LEVEL
                    and only is None)        # building from your items: only tomes you list (--tomes)
-        wb = ws.search_best_build(floor_build, search_start, armor, weapon, base_weapon, keep=keep_ids, ap_budget=budget,
-                                  include_never=include_never, min_level=min_lvl,
-                                  deep=getattr(args, "deep", False), time_limit=getattr(args, "time_limit", None),
-                                  log=lambda m: print("  " + m), crafted=not getattr(args, "no_crafted", True),
-                                  only=only)
+        # Most damage in any style: first a quick search for the best spell-only and main-attack-only builds, and
+        # the main search starts from those too, so it can only end at or above them (in any-style damage).
+        seeds, orig_cb, stopped = [], ws.PROGRESS.get("cb"), False
+        if goal == "mixed":
+            by_name = {it.name: it for it in data.items.values()}
+            tl = getattr(args, "time_limit", None)
+            for k, g in enumerate(("spells", "melee")):
+                ws.PROGRESS["cb"] = (lambda lo, g: lambda f, m: orig_cb(lo + 0.08 * f, f"First, the best {GOAL_WORDS[g]} build: {m}"))(0.08 * k, g)
+                wg = ws.search_best_build(floor_build.copy_with(goal=g, goal2=None), search_start, armor, weapon, base_weapon,
+                                          keep=keep_ids, ap_budget=budget, include_never=include_never, min_level=min_lvl,
+                                          deep=False, time_limit=(tl / 5 if tl else None), log=None, crafted=False, only=only)
+                arm = [by_name.get(a.name) if (a is not None and not a.crafted and not a.custom) else None for a in wg["armor"]]
+                bw = wg.get("base_weapon") or wg["weapon"]
+                if not (bw.crafted or bw.custom):
+                    seeds.append((arm, by_name.get(bw.name, bw)))
+                if wg.get("stopped"):
+                    stopped = True
+                    break
+            ws.PROGRESS["cb"] = lambda f, m: orig_cb(0.16 + 0.84 * f, m)
+            print("  Most damage in any style: the search also starts from the best spell-only and main-attack-only builds.")
+        try:
+            wb = ws.search_best_build(floor_build, search_start, armor, weapon, base_weapon, keep=keep_ids, ap_budget=budget,
+                                      include_never=include_never, min_level=min_lvl,
+                                      deep=getattr(args, "deep", False),
+                                      time_limit=(1 if stopped else getattr(args, "time_limit", None)),
+                                      log=lambda m: print("  " + m), crafted=not getattr(args, "no_crafted", True),
+                                      only=only, extra_starts=seeds)
+        finally:
+            ws.PROGRESS["cb"] = orig_cb
         if auto_on:
             picks = auto_tomes(tome_base, frozenset(wb["owned"]), wb["armor"], wb["weapon"], wb["extra"])
             if picks:

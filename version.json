@@ -1,4 +1,4 @@
 {
-  "version": "1.10.2",
-  "notes": "New goal: spells + main attacks together. It counts the spell rotation your mana keeps up, with main attacks in the time between casts, so builds that weave M1s between spells are judged fairly. Pick \"Spells + main attacks together\" in the form or ask the bot. This is the helper's own estimate (Wynnbuilder has no such number). The report also points it out when it beats spells alone and main attacks alone."
+  "version": "1.10.3",
+  "notes": "\"Max DPS\" now means the most damage possible in any style: main attacks only, spells, or both together, whichever is highest, after your minimums. It first finds the best spell-only and main-attack-only builds, then searches from those, so it never ends up below either. It's the first goal in the form (\"Most damage possible\"), and what the bot uses when you ask for max DPS. Wynnbuilder's main-attack number is still there as \"Main attack DPS only\"."
 }

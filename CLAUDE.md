@@ -19,8 +19,10 @@ this repository and get updates through the app's update bar. Each friend uses t
   of everything. tests/build_check.py enforces it against recorded scores (tests/golden/build_baseline.json).
   If a change lowers any recorded score, find out why and fix it (don't just re-record).
 - **Everything must work for every class** (Archer, Warrior, Mage, Assassin, Shaman). Test all five.
-- **"Highest DPS" means Wynnbuilder's Average DPS** (goal melee). Best builds are chosen as a whole, never best
-  item per slot.
+- **"Max DPS" / "highest DPS" / "as much DPS as possible" means the most damage in ANY style** (goal mixed: main
+  attacks only, spells, or both together, whichever is highest), after the player's minimums (owner, Oct 2026; it
+  used to mean Wynnbuilder's Average DPS). Goal melee (Average DPS) is for M1-only builds / comparing with
+  Wynnbuilder. Best builds are chosen as a whole, never best item per slot.
 - **Always prioritise updates:** the update bar always offers the newest version when a newer one exists,
   including after switching back to an older version. No "skip this version".
 - **Windows only.** Don't add Mac/Linux work.
@@ -141,9 +143,12 @@ Measured deep search on the owner's PC (1.6 -> 1.7): Warrior L106 7.0 -> 4.1 min
   `--mythics`, form box): `wh.ALLOW_MYTHIC` set by run() each report, `mythic_ok()` in item_pool, _gear_pool,
   default_weapon, level plan, tomes; part of the remembered-builds key. Worn mythics and mythics in the player's own
   item list are still used.
-- Mixed goal (owner asked, Oct 2026): spell rotation at the rate clicks+mana allow, main attacks in the remaining
-  1 - r/3 of the time; linear in r so best is r=0 or r=max per rotation; poison once (larger), summons/special added
-  as for spells. Helper's own estimate (Wynnbuilder has none). "Highest DPS" still means melee.
+- Mixed goal = "most damage, any style" (owner asked, Oct 2026): spell rotation at the rate clicks+mana allow, main
+  attacks in the remaining 1 - r/3 of the time; linear in r so best is r=0 or r=max per rotation; poison once
+  (larger), summons/special added as for spells; always >= spells goal and >= melee goal on the same build
+  (goal_check). Helper's own estimate (Wynnbuilder has none). The search first runs quick spells-only and
+  melee-only searches and passes their builds as `extra_starts`, because alone it once ended 0.24% below the spells
+  goal's build (archer L60); with seeds every class at L60 is at or above both (tests/style_check.py in the dev repo).
 - Search headroom (Oct 2026, tests/headroom.py in the dev repo): more weapons was the big win; the 'Maximum' search's
   other extras added nothing beyond it. A wider ingredient candidate list for crafts helped single slots but not
   whole builds (one case -0.03%), so it was dropped. Crafting for more top builds helps Shaman/Assassin most; with 30
@@ -152,6 +157,8 @@ Measured deep search on the owner's PC (1.6 -> 1.7): Warrior L106 7.0 -> 4.1 min
 
 ## History (newest first)
 
+- 1.10.3: "max DPS" means the most damage in any style (mixed goal, first in the form); seeded by quick spell-only
+  and main-attack-only searches.
 - 1.10.2: "spells + main attacks" goal (mixed).
 - 1.10.1: item special effects: report and item cards say what each does and whether it's counted; Pas De Deux,
   Grand Design and Self-Sufficient now counted (Wynnbuilder doesn't). Tomes in the build from level 55 (owner asked). Mythics left

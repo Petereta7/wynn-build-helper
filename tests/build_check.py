@@ -53,6 +53,8 @@ CASES = [
     {"name": "warrior L50 melee, no crafted items", "class": "warrior", "level": 50, "goal": "melee"},
     {"name": "shaman L70 spells 70% + survival 30%", "class": "shaman", "level": 70, "goal": "spells",
      "second_goal": "survival", "second_goal_weight": 30, "crafted": True},
+    # "max DPS": the most damage in any style (here main attacks + spells + summons together win)
+    {"name": "shaman L60 most damage (any style)", "class": "shaman", "level": 60, "goal": "mixed"},
     # "build from my items": only these items, and Brass Knuckle (the ring this build wears twice when it can)
     # is listed once, so it may only be worn once
     {"name": "archer L60 melee, only my items", "class": "archer", "level": 60, "goal": "melee",
