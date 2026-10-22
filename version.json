@@ -1,4 +1,4 @@
 {
-  "version": "1.10.3",
-  "notes": "\"Max DPS\" now means the most damage possible in any style: main attacks only, spells, or both together, whichever is highest, after your minimums. It first finds the best spell-only and main-attack-only builds with full deep searches, then searches from those, so it never ends up below either. That takes about three times as long as a single search. It's the first goal in the form (\"Most damage possible\"), and what the bot uses when you ask for max DPS. Wynnbuilder's main-attack number is still there as \"Main attack DPS only\"."
+  "version": "1.10.4",
+  "notes": "You can now set life steal and mana steal minimums (in the form, or tell the bot \"no negative life steal\"). Like every minimum they're checked on the build's final total, so single items can still have negative life steal as long as the whole build doesn't. The bot no longer patches a build by hand or guesses numbers: if a build breaks something you asked for, it runs the calculator again with that as a minimum."
 }

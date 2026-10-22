@@ -795,7 +795,7 @@ def manage_characters(inp: dict) -> str:
 SHARE_PREFIX = "WBH1-"
 _SHARE_CHARS = re.compile(r"[A-Za-z0-9._\-]+")
 _NUM_KEYS = ("goal", "spell", "melee", "ehp", "hp", "spd", "mr")
-_FLOOR_KEYS = ("hp", "ehp", "spd", "mr", "hpr")
+_FLOOR_KEYS = ("hp", "ehp", "spd", "mr", "hpr", "ls", "ms")
 _LINK_OK = re.compile(r"https://wynnbuilder\.github\.io/builder/#[A-Za-z0-9_\-+/=.~]*")
 SHARE_DAMAGED = "That share code is incomplete or damaged. Ask your friend to copy it again (the whole thing)."
 
@@ -1093,7 +1093,8 @@ How to work:
   - Gear you're wearing? (or skip)"
   Don't ask about crafted items; they're only used when the player brings them up.
   Save longer explanations for when you explain a decision or a result.
-- Baseline stats: the first time they ask for a build (or a new goal), ask whether they want any minimums kept, as one short line like the example above. Put it in the same message as any other question you need to ask; if you have everything else, ask it on its own and wait. If they say no or don't care, run without minimums and don't ask again for follow-ups. Pass what they say as minimums (health, ehp, walk_speed in %, mana_regen, health_regen, elemental defenses). "No negative walk speed" means walk_speed 0.
+- Baseline stats: the first time they ask for a build (or a new goal), ask whether they want any minimums kept, as one short line like the example above. Put it in the same message as any other question you need to ask; if you have everything else, ask it on its own and wait. If they say no or don't care, run without minimums and don't ask again for follow-ups. Pass what they say as minimums (health, ehp, walk_speed in %, mana_regen, health_regen, life_steal, mana_steal, elemental defenses). "No negative walk speed" means walk_speed 0; "no negative health regen / life steal" means health_regen 0 / life_steal 0.
+- Numbers only come from the calculator. Never estimate a build's numbers yourself ("should add about +44%"), and never hand-edit a build the calculator chose and present it as a result. If a build breaks something the player asked for, pass it as a minimum and run again; if the calculator can't enforce it, say so plainly and ask before changing anything. To check a changed build, run analyze_build with that gear.
 - Some abilities only give their bonus while a toggle is on. By default the calculator only counts buffs whose timing is known: Bullwhip (on), the best Mystic Mask (you always wear one), Coursing Restraints for the share of time its duration and cooldown allow, and ultimate buffs for the same share as ultimate damage. Everything else (Holy Power, Tricks, Unstable, Blood Pool, Corrupted, "next hit" effects) is off so numbers aren't inflated. If the player says they keep a buff up, pass it in toggles, with a share if it's only part of the time, e.g. "Contamination=70%, Activate Luster Purge". Pass toggles_off for buffs they say they don't keep up. The report's "Toggles and sliders" section shows what each off toggle would add; mention a big one and ask if they keep it up.
 - Characters: the player's saved characters come with each message, in a note from the app (the player didn't type it). When they mean one ("my shaman", "Sparky", "my main"), pass character with its name instead of asking for class and level: its class, level and current gear are filled in (pass gear only to change it, use_saved_gear false to start from nothing). If they say a character leveled up or was renamed, update it with manage_characters. After a build the app itself asks whether to save it to a character's library; save it with manage_characters only if they ask you to. Don't create characters unless they ask.
 - Building from their own items: when the player says which items they have and wants a build out of them ("I have these items, make a build", "only use what I own"), pass only_items with those names (add x2 to a ring they have two of; a ring listed once is never worn twice). What they wear (gear) counts as theirs too. When they mean a character's saved items ("use my items"), pass character and use_my_items true. If they want their list kept for next time, save it with manage_characters (set_items, add_items or remove_items). The report's "Worth getting next" part lists single items they don't have that would raise that build the most; mention the best one or two. A slot with nothing in their list stays empty, and with no usable weapon listed the weapon can be any.
@@ -1186,6 +1187,8 @@ TOOLS = [
                                        "description": "Walk speed bonus in %, e.g. 0 for 'no slower than normal', 20 for +20%"},
                         "mana_regen": {"type": "number"},
                         "health_regen": {"type": "number"},
+                        "life_steal": {"type": "number", "description": "Life steal per 3 s, e.g. 0 for 'no negative life steal'"},
+                        "mana_steal": {"type": "number", "description": "Mana steal per 3 s"},
                         "earth_defense": {"type": "number"}, "thunder_defense": {"type": "number"},
                         "water_defense": {"type": "number"}, "fire_defense": {"type": "number"},
                         "air_defense": {"type": "number"},

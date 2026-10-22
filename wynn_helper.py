@@ -2970,6 +2970,8 @@ FLOOR_STATS = {
     "spd": ("Walk speed", "%", lambda st, df: st.get("spd", 0.0)),
     "mr": ("Mana regen", "/5s", lambda st, df: st.get("mr", 0.0)),
     "hpr": ("Health regen", "", lambda st, df: df.get("hpr", 0.0)),
+    "ls": ("Life steal", "/3s", lambda st, df: st.get("ls", 0.0)),
+    "ms": ("Mana steal", "/3s", lambda st, df: st.get("ms", 0.0)),
     "eDef": ("Earth defense", "", lambda st, df: df.get("elem_def_eff", [0] * 5)[0]),
     "tDef": ("Thunder defense", "", lambda st, df: df.get("elem_def_eff", [0] * 5)[1]),
     "wDef": ("Water defense", "", lambda st, df: df.get("elem_def_eff", [0] * 5)[2]),
@@ -2980,6 +2982,7 @@ FLOOR_ALIASES = {
     "hp": "hp", "health": "hp", "life": "hp", "ehp": "ehp", "effectivehp": "ehp", "effective": "ehp",
     "spd": "spd", "walkspeed": "spd", "speed": "spd", "walk": "spd", "ws": "spd", "movespeed": "spd",
     "mr": "mr", "manaregen": "mr", "mana": "mr", "hpr": "hpr", "healthregen": "hpr", "regen": "hpr", "hpregen": "hpr",
+    "ls": "ls", "lifesteal": "ls", "lifestealing": "ls", "ms": "ms", "manasteal": "ms",
     "earth": "eDef", "earthdef": "eDef", "earthdefense": "eDef", "edef": "eDef",
     "thunder": "tDef", "thunderdef": "tDef", "thunderdefense": "tDef", "tdef": "tDef",
     "water": "wDef", "waterdef": "wDef", "waterdefense": "wDef", "wdef": "wDef",
@@ -3013,7 +3016,7 @@ def parse_floors(text: str) -> dict:
         key = FLOOR_ALIASES.get(re.sub(r"[^a-z]", "", m.group(1).lower()))
         if key is None:
             raise ValueError(f"unknown stat {m.group(1).strip()!r} for a minimum; use one of: health, ehp, "
-                             "walk speed, mana regen, health regen, earth/thunder/water/fire/air defense")
+                             "walk speed, mana regen, health regen, life steal, mana steal, earth/thunder/water/fire/air defense")
         out[key] = float(m.group(2).replace(",", ""))
     return out
 

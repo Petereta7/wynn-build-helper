@@ -136,6 +136,17 @@ def main():
     check("spells + main attacks together: never below either alone", not bad and seen >= 5,
           f"({seen} with spells)" + (" " + "; ".join(bad[:2]) if bad else ""))
 
+    # 4c. life steal / mana steal minimums: a bracelet with negative life steal misses "no negative life steal"
+    kb = d.find_item("Knucklebones")[0]
+    tree, owned, wpn = setup(d, "archer", 106)
+    arm = [None] * 6 + [kb, None]
+    no_floor = wh.Build(d, tree, 106, "melee").evaluate(owned, arm, wpn, [0] * 5)
+    with_floor = wh.Build(d, tree, 106, "melee", floors={"life steal": 0}).evaluate(owned, arm, wpn, [0] * 5)
+    empty = wh.Build(d, tree, 106, "melee", floors={"ls": 0, "ms": 0}).evaluate(owned, [None] * 8, wpn, [0] * 5)
+    ok = (kb.max_stats.get("ls", 0) < 0 and not with_floor["floors_met"] and with_floor["value"] < no_floor["value"]
+          and empty["floors_met"] and wh.parse_floors("life steal=0, mana steal=3") == {"ls": 0.0, "ms": 3.0})
+    check("life steal and mana steal minimums", ok, f"(Knucklebones life steal {kb.max_stats.get('ls')})")
+
     # 5. armor powders in the search: added where they help (survival), never for a damage-only goal, and the
     #    element of an enemy hit is the one chosen against it
     lvl = 80

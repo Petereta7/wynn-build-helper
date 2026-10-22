@@ -91,7 +91,9 @@ Measured deep search on the owner's PC (1.6 -> 1.7): Warrior L106 7.0 -> 4.1 min
   up, best Mystic Mask, Coursing Restraints 4s/12s, ultimate buffs at ULT_DPS_UPTIME 25%). Everything else off;
   users can turn any on, fully or "Name=70%". Part-time buffs are blended exactly (not scaled) when they don't
   scale linearly. The report says what to tick in Wynnbuilder.
-- Floors/minimums: a build missing one always scores below every build that meets them.
+- Floors/minimums: a build missing one always scores below every build that meets them. Checked on the build's
+  final totals (owner: "no negative life steal" = the total, not each item). Keys: hp, ehp, spd, mr, hpr, ls, ms
+  (ls/ms added Oct 2026 after the bot hand-patched a build with negative life steal), elemental defenses.
 - Goal mix: main^(1-w) x second^w (like balanced at 50/50). Search filter and fast scoring keep what the second
   goal needs.
 - Mana check: Wynnbuilder's model (3 casts/s at 9 clicks/s, income 5 + mr/5 + ms/3, bar 100 + maxMana + Int%).
@@ -158,6 +160,7 @@ Measured deep search on the owner's PC (1.6 -> 1.7): Warrior L106 7.0 -> 4.1 min
 
 ## History (newest first)
 
+- 1.10.4: life steal / mana steal minimums (final totals); the bot may not estimate or hand-edit builds.
 - 1.10.3: "max DPS" means the most damage in any style (mixed goal, first in the form); seeded by spell-only and
   main-attack-only searches as deep as the main one (about 3x the time).
 - 1.10.2: "spells + main attacks" goal (mixed).

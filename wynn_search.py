@@ -65,6 +65,8 @@ FLOOR_REL = {
     "spd": ({"spd"}, set()),
     "mr": ({"mr"}, set()),
     "hpr": ({"hprRaw", "hprPct"}, set()),
+    "ls": ({"ls"}, set()),
+    "ms": ({"ms"}, set()),
 }
 for _e in "etwfa":
     FLOOR_REL[_e + "Def"] = ({_e + "Def"}, {_e + "DefPct", "rDefPct"})
