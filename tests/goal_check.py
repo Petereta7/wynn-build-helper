@@ -115,6 +115,27 @@ def main():
     check("mana check matches the spell damage it describes", not bad and seen >= 10,
           f"({seen} builds)" + (" " + "; ".join(bad[:2]) if bad else ""))
 
+    # 4b. spells + main attacks together ("mixed"): never below spells alone or main attacks alone, the parts add up
+    # (casting r spells a second leaves 1 - r/3 of the time for main attacks), every class
+    bad, seen = [], 0
+    for cls in wh.CLASSES:
+        for lvl in (40, 80, 106):
+            tree = wh.Tree(d, cls)
+            build = wh.Build(d, tree, lvl, "mixed")
+            wpn = wh.default_weapon(d, cls, lvl)
+            owned, _ = wh.optimize_tree(build, [None] * 8, wpn, wh.ability_points(lvl), beam_width=6)
+            r = build.evaluate(owned, [None] * 8, wpn, [0] * 5)
+            gv, mi = r["goal_values"], r["mixed"]
+            if r["main"] < max(gv["spells"], gv["melee"]) - 1e-6 * max(1, r["main"]):
+                bad.append(f"{cls} L{lvl}: mixed {r['main']:.1f} < spells {gv['spells']:.1f} / melee {gv['melee']:.1f}")
+            if mi["rotation"]:
+                seen += 1
+                if abs(mi["melee_share"] - max(0.0, 1 - mi["rate"] * 3 / wh.CLICKS_PER_SECOND)) > 1e-12 \
+                        or abs(mi["melee_part"] - r["melee_dps"] * mi["melee_share"]) > 1e-6 * max(1, mi["melee_part"]):
+                    bad.append(f"{cls} L{lvl}: parts don't add up")
+    check("spells + main attacks together: never below either alone", not bad and seen >= 5,
+          f"({seen} with spells)" + (" " + "; ".join(bad[:2]) if bad else ""))
+
     # 5. armor powders in the search: added where they help (survival), never for a damage-only goal, and the
     #    element of an enemy hit is the one chosen against it
     lvl = 80

@@ -2564,7 +2564,7 @@ async function init() {
   await loadMeta();
   $("#f-class").innerHTML = '<option value="" selected disabled>Choose your class</option>' +
     META.classes.map((c) => `<option value="${c}">${c[0].toUpperCase() + c.slice(1)}</option>`).join("");
-  const goalLabels = { ability: "One ability's damage (e.g. puppets)", spells: "Spell damage", burst: "Biggest combo", melee: "Highest DPS (like Wynnbuilder)", survival: "Survival", balanced: "Damage and survival", healing: "Healing others" };
+  const goalLabels = { ability: "One ability's damage (e.g. puppets)", spells: "Spell damage", burst: "Biggest combo", melee: "Highest DPS (like Wynnbuilder)", mixed: "Spells + main attacks together", survival: "Survival", balanced: "Damage and survival", healing: "Healing others" };
   $("#f-goal").innerHTML = Object.keys(META.goals).map((g) => `<option value="${g}">${goalLabels[g] || g}</option>`).join("");
   const buffNames = { totem: "Totem", fortitude: "Fortitude", chantlunatic: "Chant of the Lunatic", warscream: "War Scream", emboldeningcry: "Emboldening Cry", hauntingfanatic: "Haunting (Fanatic)", hauntinglunatic: "Haunting (Lunatic)", eldritchcall: "Eldritch Call", judgement: "Judgement", chantfanatic: "Chant of the Fanatic", weathering: "Weathering", acidrain: "Acid Rain" };
   $("#buffChips").innerHTML = META.buffs.map((b) => `<button type="button" class="toggle-chip" aria-pressed="false" data-buff="${b}">${buffNames[b] || b}</button>`).join("");

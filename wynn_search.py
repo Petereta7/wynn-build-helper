@@ -45,6 +45,8 @@ def goal_stats(goal: str):
         rel, eq = dmg, set()
     elif goal == "spells":
         rel, eq = dmg | MANA | {"poison"}, set()
+    elif goal == "mixed":         # spells and main attacks: faster attacks can change poison, so atkTier must match
+        rel, eq = dmg | MANA | {"poison"}, {"atkTier"}
     elif goal == "survival":
         rel, eq = DEFENSE | HEALING | MANA | {"ls"}, set()
     elif goal == "ability":       # one ability's damage; attack speed tiers kept equal to be safe
@@ -480,6 +482,7 @@ _HOOK = {"best": None}
 
 
 GOAL_LABELS = {"melee": "Average DPS", "spells": "Spell damage per second", "burst": "Burst combo damage",
+               "mixed": "Spells + main attacks per second",
                "survival": "Survival score", "balanced": "Damage × survival score", "healing": "Healing per second"}
 
 

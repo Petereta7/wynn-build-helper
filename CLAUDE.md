@@ -141,6 +141,9 @@ Measured deep search on the owner's PC (1.6 -> 1.7): Warrior L106 7.0 -> 4.1 min
   `--mythics`, form box): `wh.ALLOW_MYTHIC` set by run() each report, `mythic_ok()` in item_pool, _gear_pool,
   default_weapon, level plan, tomes; part of the remembered-builds key. Worn mythics and mythics in the player's own
   item list are still used.
+- Mixed goal (owner asked, Oct 2026): spell rotation at the rate clicks+mana allow, main attacks in the remaining
+  1 - r/3 of the time; linear in r so best is r=0 or r=max per rotation; poison once (larger), summons/special added
+  as for spells. Helper's own estimate (Wynnbuilder has none). "Highest DPS" still means melee.
 - Search headroom (Oct 2026, tests/headroom.py in the dev repo): more weapons was the big win; the 'Maximum' search's
   other extras added nothing beyond it. A wider ingredient candidate list for crafts helped single slots but not
   whole builds (one case -0.03%), so it was dropped. Crafting for more top builds helps Shaman/Assassin most; with 30
@@ -149,6 +152,7 @@ Measured deep search on the owner's PC (1.6 -> 1.7): Warrior L106 7.0 -> 4.1 min
 
 ## History (newest first)
 
+- 1.10.2: "spells + main attacks" goal (mixed).
 - 1.10.1: item special effects: report and item cards say what each does and whether it's counted; Pas De Deux,
   Grand Design and Self-Sufficient now counted (Wynnbuilder doesn't). Tomes in the build from level 55 (owner asked). Mythics left
   out unless the player allows them.

@@ -260,7 +260,8 @@ def run_report(params: dict) -> dict:
 
 
 GOAL_SHORT = {"spells": "spell damage", "burst": "burst combo", "melee": "highest DPS", "survival": "survival",
-              "balanced": "damage + survival", "ability": "one ability", "healing": "healing"}
+              "balanced": "damage + survival", "ability": "one ability", "healing": "healing",
+              "mixed": "spells + main attacks"}
 
 
 def notify_done(ok: bool, args, text: str):
@@ -381,6 +382,7 @@ def autocomplete(q: str, kind: str = "") -> list:
 
 HISTORY_PATH = os.path.join(wh.DATA_DIR, "build_history.json")
 GOAL_LABELS = {"melee": "Average DPS", "spells": "Spell damage per second", "burst": "Burst combo damage",
+               "mixed": "Spells + main attacks per second",
                "survival": "Survival score", "balanced": "Damage × survival score", "healing": "Healing per second"}
 
 
@@ -1101,6 +1103,7 @@ How to work:
 - If no build meets every minimum, the report says so and shows the closest one; tell them which minimum couldn't be met and suggest relaxing it.
 - The report shows health, effective HP and walk speed for the best build next to the current gear; mention any big drop in health or walk speed so they can set a minimum.
 - If they want the most damage from one specific ability ("maximum puppet damage", "biggest Meteor", "strongest Bash"), use goal ability with focus set to that ability.
+- If they want spells and main attacks together ("weave M1s between spells", "spell cycling with melee", "use everything"), use goal mixed: the spell rotation their mana keeps up with main attacks in the time between (the helper's own estimate; Wynnbuilder has no such number, so say so). Plain "highest DPS" still means melee. When the report says spells + main attacks together beat both, mention it.
 - Otherwise pick the goal from what they say: melee whenever they ask for "DPS" or "highest DPS" (this is exactly Wynnbuilder's Average DPS: main attack damage per hit x attack speed, which is what players compare), spells only when they talk about spell damage or casting, burst for one big combo, survival (tanky / keeps dying), balanced (damage and survival), healing (support). If unclear, use melee for "damage/DPS". If they keep dying to a particular boss or element, pass that as the enemy hit.
 - Pass item and ability names exactly as the player wrote them; the calculator corrects spelling and says so. "Mana bank" means the Mage ability Arcane Transfer.
 - Crafted items are written as codes starting with CR- (and custom items CI-); pass them as gear.

@@ -2586,6 +2586,8 @@ GOALS = {
     "balanced": "Best mix of damage and effective HP",
     "healing": "Most healing per second (support)",
     "ability": "Highest damage of one ability you choose (--focus), e.g. puppets, Meteor or Bash",
+    "mixed": "Spells and main attacks together: the spell rotation your mana keeps up, main attacks in between "
+             "(the helper's own estimate; Wynnbuilder has no such number)",
 }
 
 
@@ -2594,7 +2596,8 @@ GOALS = {
 # doesn't change which build wins, so the two never need to be in the same units.
 SECOND_GOALS = ("spells", "burst", "melee", "survival", "healing")
 GOAL_WORDS = {"spells": "spell damage", "burst": "burst combo", "melee": "highest DPS", "survival": "survival",
-              "balanced": "damage and survival", "healing": "healing", "ability": "one ability"}
+              "balanced": "damage and survival", "healing": "healing", "ability": "one ability",
+              "mixed": "spells + main attacks"}
 
 
 def clean_goal2(goal, goal2, weight):
@@ -2771,10 +2774,31 @@ def score_build(results: dict, stats: dict, weapon, goal: str, ult_spells=frozen
     melee_total = melee_dps + (poison_melee if melee_dps > 0 else 0.0)
     spell_goal = spell_total + sustained_extra + special_dps
     melee_goal = melee_dps          # Wynnbuilder's "Average DPS": per-hit average x attack speed, nothing added
+    # Spells and main attacks together (the helper's own estimate; Wynnbuilder has none). A cast is 3 clicks at
+    # Wynnbuilder's 9 clicks a second, so casting r spells a second takes r/3 of the time; main attacks fill the
+    # rest at the weapon's attack speed. Damage is straight-line in r, so the best is either no spells or the
+    # fastest rate your clicks and mana allow, for whichever rotation is best. Poison counts once (the larger).
+    mixed_goal, mixed_info = melee_dps + poison_melee + special_dps, {"rotation": None, "rate": 0.0, "melee_share": 1.0}
+    for size in (2, 3, 4):
+        for combo in itertools.combinations(usable, size):
+            rs = [results[b] for b in combo]
+            dmg = sum(r["cast"] for r in rs) / size
+            if dmg <= 0:
+                continue
+            net_cost = sum(r["cost"] - r["mana_gained"] for r in rs) / size
+            rate = CLICKS_PER_SECOND / 3
+            if net_cost > 0:
+                rate = min(rate, income / net_cost)
+            share = max(0.0, 1 - rate * 3 / CLICKS_PER_SECOND)
+            tot = (rate * dmg + melee_dps * share + max(poison_spell, poison_melee if share > 0 else 0.0)
+                   + sustained_extra + special_dps)
+            if tot > mixed_goal:
+                mixed_goal, mixed_info = tot, {"rotation": combo, "rate": rate, "melee_share": share,
+                                               "spell_part": rate * dmg, "melee_part": melee_dps * share}
     best_damage = max(spell_goal, melee_total + special_dps)
     self_heal = SURVIVAL_HEAL_SECONDS * (heal_ps + life_steal_ps) + 2 * max(defense.get("hpr", 0), 0)
     focus_val = results.get(focus_bs, {}).get("damage", 0.0) if focus_bs is not None else 0.0
-    goals = {"ability": focus_val, "spells": spell_goal, "burst": burst, "melee": melee_goal,
+    goals = {"ability": focus_val, "spells": spell_goal, "burst": burst, "melee": melee_goal, "mixed": mixed_goal,
              "survival": ehp + (ehp / max(defense.get("hp", 1), 1)) * self_heal,
              "balanced": math.sqrt(max(best_damage, 0) * max(ehp, 0)),
              "healing": heal_ps}
@@ -2792,7 +2816,7 @@ def score_build(results: dict, stats: dict, weapon, goal: str, ult_spells=frozen
             "poison_spell": poison_spell, "poison_melee": poison_melee, "life_steal_ps": life_steal_ps,
             "triggered_dps": triggered_extra, "triggered_names": triggered_names, "spell_goal": spell_goal,
             "melee_goal": melee_goal, "dps_style": "spells" if spell_goal >= melee_goal else "main attack",
-            "focus_value": focus_val, "goal_parts": parts, "goal_values": goals, "mana": mana}
+            "focus_value": focus_val, "goal_parts": parts, "goal_values": goals, "mana": mana, "mixed": mixed_info}
 
 
 # ============================================================================== toggles
@@ -3878,6 +3902,29 @@ def suggest_gear(build: Build, owned, armor, weapon, extra_fn, per_slot: int = 3
         suggestions[slot] = [(v / base_val - 1 if base_val > 0 else 0, it) for v, it in top[:per_slot]
                              if v > base_val * 1.005]
     return suggestions, base_val
+
+
+def mixed_lines(ev, goal) -> list:
+    """Report lines for spells and main attacks together (shown for the mixed goal, or when it beats both)."""
+    mi = ev.get("mixed") or {}
+    gv = ev.get("goal_values") or {}
+    mx, sp, ml = gv.get("mixed", 0), gv.get("spells", 0), gv.get("melee", 0)
+    if goal != "mixed" and not (mx > 1.02 * max(sp, ml) and min(sp, ml) > 0):
+        return []
+    res = ev.get("results") or {}
+    out = [f"  Spells + main attacks together: {fmt_num(mx)}/s (the helper's own estimate; Wynnbuilder has no such number)."]
+    if mi.get("rotation"):
+        names = " + ".join(res[b]["name"] for b in mi["rotation"] if b in res)
+        out.append(f"     Cast {names} about {mi['rate']:.1f} times a second ({fmt_num(mi.get('spell_part', 0))}/s), "
+                   f"and main attack the rest of the time ({mi['melee_share'] * 100:.0f}%: {fmt_num(mi.get('melee_part', 0))}/s).")
+        out.append("     A cast takes 3 clicks at 9 clicks a second, like Wynnbuilder's mana model; summons, poison (once) "
+                   "and the weapon special are added like for spells.")
+    else:
+        out.append("     Main attacks only is best here: casting would cost more main-attack damage than the spells add.")
+    if goal != "mixed":
+        out.append(f"     That's more than spells alone ({fmt_num(sp)}/s) or main attacks alone ({fmt_num(ml)}/s): "
+                   "try the \"spells + main attacks\" goal.")
+    return out
 
 
 def print_worth_getting(build: Build, wb: dict, only: dict, extra_fn, include_never: bool, per_slot: int = 3):
@@ -5291,6 +5338,8 @@ def run(args):
         print(f"  Poison: +{fmt_num(final['poison_spell'])}/s while hitting with spells, "
               f"+{fmt_num(final['poison_melee'])}/s with main attacks (included above in your goal score)")
     print("  (Mana income counts mana steal from main attacks, as Wynnbuilder does.)")
+    for line in mixed_lines(final, goal):
+        print(line)
     dfn = final["defense"]
     print_header("Survivability")
     print(f"  Health {fmt_num(dfn['hp'])}   Effective HP {fmt_num(dfn['ehp_agi'])} "
@@ -5502,6 +5551,8 @@ def run(args):
             if fin.get("mana") and goal in ("spells", "burst", "balanced") or fin.get("mana") and build.goal2 == "spells":
                 for line in mana_lines(fin.get("mana")):
                     print("  Best build's " + line[0].lower() + line[1:] if line.startswith("Mana") else "  " + line)
+            for line in mixed_lines(fin, goal):
+                print(line.replace("Spells + main attacks together", "Best build's spells + main attacks", 1))
             if fin.get("goal_parts"):
                 sp_, fp_ = st.get("goal_parts") or {}, fin["goal_parts"]
                 print("  Goal mix: " + "   ".join(f"{GOAL_WORDS.get(k, k).capitalize()} {fmt_num(sp_.get(k, 0))} -> "
