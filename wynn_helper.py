@@ -571,6 +571,67 @@ WEAPON_SPECIALS = [
 ]
 ARMOR_SPECIALS = ["Rage", "Kill Streak", "Concentration", "Endurance", "Dodge"]
 SPECIAL_CHARGE_SECONDS = 5.0     # wiki: about 5 s of continuous main attacks fills a weapon special
+SELF_CHARGE_SECONDS = 100 / 8     # Self-Sufficient major ID: specials fill by themselves at 8% a second
+
+# Item special effects (major IDs) that Wynnbuilder's data only describes in words but that change numbers this
+# helper works out. Written in Wynnbuilder's own ability format and used exactly like its modeled ones, so they only
+# apply with the ability they change (dependencies) and land after it (merged after every tree ability, the item's
+# weapon last). Only effects whose size the game's text states exactly; the rest stay
+# uncounted and the report says so. (Self-Sufficient changes the weapon special timing; see SELF_CHARGE_SECONDS.)
+HELPER_MAJIDS = {
+    # Pas De Deux: "Frog Dance deals no damage" (the bigger Pool of Rejuvenation isn't counted)
+    "AUBRIS_TEARS": [{"class": "Shaman", "base_abil": 5, "dependencies": [68], "properties": {}, "effects": [
+        {"type": "add_spell_prop", "behavior": "overwrite", "base_spell": 2, "target_part": "Hop Damage",
+         "multipliers": [0, 0, 0, 0, 0, 0]},
+        {"type": "add_spell_prop", "behavior": "overwrite", "base_spell": 2, "target_part": "Total Damage",
+         "hits": {"Hop Damage": 0}}]}],
+    # Grand Design: "Storm Dance instead lets your Totems pull enemies": Storm Dance's +30% air on Aura is gone
+    "ERGOSPHERE": [{"class": "Shaman", "base_abil": 9, "dependencies": [65], "properties": {}, "effects": [
+        {"type": "add_spell_prop", "base_spell": 3, "target_part": "Single Wave", "multipliers": [0, 0, 0, 0, 0, -30]}]}],
+}
+HELPER_SPECIAL = {"SELFSUFFICIENT"}      # counted outside the ability format
+
+
+def majid_abilities(data, mid) -> list:
+    """A major ID's abilities: Wynnbuilder's, or the helper's for effects Wynnbuilder only describes."""
+    mj = data.majids.get(mid) or {}
+    return mj.get("abilities") or HELPER_MAJIDS.get(mid, [])
+
+
+MAJID_STATUS_WORDS = {
+    "counted": "counted (the way Wynnbuilder counts it)",
+    "helper": "counted by this helper (Wynnbuilder doesn't count it)",
+    "not counted": "not counted (movement, help for allies, only some of the time, or no exact size given)",
+}
+
+
+def special_effect_lines(data, items) -> list:
+    """Report lines: each special effect (major ID) in this gear, what it does and whether its effect is counted."""
+    out, seen = [], set()
+    for it in items:
+        for mid in (getattr(it, "major_ids", None) or []):
+            if mid in seen:
+                continue
+            seen.add(mid)
+            mj = data.majids.get(mid) or {}
+            name = mj.get("displayName") or mid.replace("_", " ").title()
+            desc = re.sub(r"\[(earth|thunder|water|fire|air|neutral)\]\s*", lambda m: m.group(1) + " ",
+                          re.sub(r"<[^>]+>", " ", strip_mc(mj.get("description", "")))).strip()
+            desc = " ".join(desc.split())
+            out.append(f"     {name} ({it.name}): {desc} -> {MAJID_STATUS_WORDS[majid_status(data, mid)]}")
+    if out:
+        out.insert(0, "  Special effects (major IDs) in this build (one copy counts; they don't stack):")
+    return out
+
+
+def majid_status(data, mid) -> str:
+    """'counted' (Wynnbuilder's numbers), 'helper' (counted by this helper; Wynnbuilder doesn't), or 'not counted'."""
+    if (data.majids.get(mid) or {}).get("abilities"):
+        return "counted"
+    if mid in HELPER_MAJIDS or mid in HELPER_SPECIAL:
+        return "helper"
+    return "not counted"
+
 
 
 class Powder:
@@ -3029,7 +3090,7 @@ class Build:
                 if mid in seen or mid not in self.data.majids:
                     continue
                 seen.add(mid)
-                for j, ab in enumerate(self.data.majids[mid].get("abilities", [])):
+                for j, ab in enumerate(majid_abilities(self.data, mid)):
                     if ab.get("class") in (cls_title, "Any"):
                         out.append((("mid", mid, j), ab))
         return tuple(out)
@@ -3171,6 +3232,8 @@ class Build:
             elem, lvl = weapon.special
             name, dmg_list, boost_list, dur = WEAPON_SPECIALS[elem]
             cycle = SPECIAL_CHARGE_SECONDS + 1 if self.goal in ("melee", "dps") else 3 * SPECIAL_CHARGE_SECONDS
+            if any("SELFSUFFICIENT" in (x.major_ids or ()) for x in list(armor) + [weapon] if x is not None):
+                cycle = SELF_CHARGE_SECONDS        # fills by itself, and can't be charged by hitting any more
             uptime = 1.0 if self.goal == "burst" else min(1.0, dur / cycle)
             dmg = 0.0
             if dmg_list:
@@ -5356,6 +5419,8 @@ def run(args):
                 counted.append(f"{fin['mask']} (the mask you'd wear)")
             if counted:
                 print("  Ability buffs counted in this build: " + ", ".join(counted) + ". (See \"Toggles and sliders\" for why.)")
+            for line in special_effect_lines(data, list(wb["armor"]) + [w]):
+                print(line)
             def nums(r):
                 return (r["spell_dps"] + (r["poison_spell"] if r["spell_dps"] else 0),
                         r["melee_dps"] + (r["poison_melee"] if r["melee_dps"] else 0), r["defense"].get("ehp_agi", 0))

@@ -123,6 +123,13 @@ Measured deep search on the owner's PC (1.6 -> 1.7): Warrior L106 7.0 -> 4.1 min
   both reset afterwards. Remembered builds are keyed by the list. No usable weapon listed = any weapon (said in the
   report). The report swaps "Gear upgrades" for "Worth getting next": single items not owned, on top of the best
   owned build. Item keys: name, or the recipe for crafted pieces (they share names).
+- Item special effects (major IDs): Wynnbuilder's abilities where it has them (`majid_abilities`); for ones it only
+  describes, `HELPER_MAJIDS` adds exact ones in its ability format (AUBRIS_TEARS: Frog Dance no damage; ERGOSPHERE:
+  Storm Dance's +30 air removed; attached to the base ability the node merges into, with the node as dependency) and
+  SELFSUFFICIENT sets the weapon special cycle to 12.5 s. Others (movement, ally, conditional, unstated sizes) aren't
+  counted; the report's "Special effects" lines and item cards say which (`majid_status`). Audit Oct 2026: 254
+  Fabled items, 118 effects modeled by Wynnbuilder, 88 text-only (mostly movement/ally). Recheck HELPER_MAJIDS after
+  game data updates (if Wynnbuilder starts modeling one, its abilities win automatically).
 - Search headroom (Oct 2026, tests/headroom.py in the dev repo): more weapons was the big win; the 'Maximum' search's
   other extras added nothing beyond it. A wider ingredient candidate list for crafts helped single slots but not
   whole builds (one case -0.03%), so it was dropped. Crafting for more top builds helps Shaman/Assassin most; with 30
@@ -131,6 +138,8 @@ Measured deep search on the owner's PC (1.6 -> 1.7): Warrior L106 7.0 -> 4.1 min
 
 ## History (newest first)
 
+- 1.10.1: item special effects: report and item cards say what each does and whether it's counted; Pas De Deux,
+  Grand Design and Self-Sufficient now counted (Wynnbuilder doesn't).
 - 1.10.0: build from the items you have (My items per character, form box, bot; "worth getting next"); skill points
   in the game's equip order (fixes a build needing 2 more points than shown); spare ability points left unspent, with
   ideas.

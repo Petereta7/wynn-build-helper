@@ -1,6 +1,12 @@
 {
   "versions": [
     {
+      "version": "1.10.1",
+      "date": "2026-10-22",
+      "notes": "Fabled and Mythic special effects: the report now lists every special effect (major ID) in your build, what it does, and whether it's counted in the numbers; item cards say the same. Most are counted the way Wynnbuilder counts them. Three that Wynnbuilder skips are now counted too: Pas De Deux (Frog Dance deals no damage, so builds no longer overrate it), Grand Design (Storm Dance no longer adds air damage to Aura) and Self-Sufficient (the weapon special fills by itself every 12.5 seconds). Movement effects, help for allies and effects that only work some of the time aren't counted, and the report says so.",
+      "warning": ""
+    },
+    {
       "version": "1.10.0",
       "date": "2026-10-22",
       "notes": "Build from the items you have: each character's page has a My items list (type a name and press Enter; \"x2\" for a second copy of a ring). \"Build from my items\" makes the best build out of only those, and lists what's worth getting next: the items you don't have that would help that build most. You can also just tell the bot \"I have these items, make a build\", or use the new box in the form. A ring you have one of is never worn twice. Fixed: skill points are now worked out in the game's own equip order (boots first, like Wynnbuilder). Before, a few builds with negative skill point items could need a couple more points than shown (a friend's level 50 build needed 99, not 97). Ability points that wouldn't help your goal are now left unspent, with ideas for where to put them.",

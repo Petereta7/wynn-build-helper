@@ -84,6 +84,31 @@ def main():
         ok = sum(g == [20, 52, 0, 0, 27] for g in got) + (not wh._wearable(gear, wpn, 50)) + wh._wearable(gear, wpn, 51)
         report("skill points in the game's equip order", ok, 5, f"got {got}")
 
+    # ---- item special effects (major IDs) Wynnbuilder only describes in words, counted by the helper where the
+    # game states the size: Pas De Deux (Frog Dance deals no damage), Grand Design (no Storm Dance air on Aura),
+    # Self-Sufficient (weapon special fills by itself in 12.5 s); Wynnbuilder's own (Devil's Oath) unchanged.
+    sh = wh.Tree(d, "shaman")
+    every = frozenset(n.id for n in sh.nodes)
+    bs = wh.Build(d, sh, 106, "spells")
+
+    def parts(it, spell):
+        ex = bs.extra_abilities([None] * 8, it) if it.category == "weapon" else bs.extra_abilities([None] * 6 + [it, None], None)
+        return {p["name"]: (p.get("multipliers"), p.get("hits")) for p in sh.spells(every, ex)[0][spell]["parts"]}
+    names = ("Narcissist", "Pas De Deux", "Grand Design", "Devil's Oath", "Episode")
+    it = {n: d.find_item(n)[0] for n in names}
+    if all(it.values()) and all(x.name == n for n, x in it.items()):
+        base_h, pdd_h, oath_h = parts(it["Narcissist"], 2), parts(it["Pas De Deux"], 2), parts(it["Devil's Oath"], 2)
+        ok = (base_h["Hop Damage"][0] == [180, 0, 0, 60, 0, 0] and pdd_h["Hop Damage"][0] == [0] * 6
+              and pdd_h["Total Damage"][1]["Hop Damage"] == 0 and oath_h["Hop Damage"][0] == [180, 0, 400, 60, 0, 0])
+        ok += (parts(it["Narcissist"], 3)["Single Wave"][0][5] - parts(it["Grand Design"], 3)["Single Wave"][0][5] == 30)
+        bwm = wh.Build(d, sh, 120, "melee")
+        ep = wh.weapon_with_powders(it["Episode"], [wh.Powder(0, 6)] * 2)
+        r = bwm.evaluate(frozenset(sh.roots), [None] * 8, ep, None)
+        ok += abs((r.get("special") or {}).get("cycle", 0) - 12.5) < 1e-9
+        ok += [wh.majid_status(d, m) for m in ("FAUSTIAN_GAMBIT", "AUBRIS_TEARS", "SELFSUFFICIENT", "CLAMBER")] == \
+            ["counted", "helper", "helper", "not counted"]
+        report("item special effects the helper counts", ok, 4)
+
     # ---- weapon powders
     cases = golden("powder_cases.json")
     if cases:

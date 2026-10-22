@@ -335,7 +335,7 @@ def item_summary(name: str) -> str:
     if it.major_ids:
         for m in it.major_ids:
             desc = wh.strip_mc((d.majids.get(m) or {}).get("description", ""))
-            lines.append(f"Major ID {m}: {desc}")
+            lines.append(f"Major ID {m}: {desc} [in the calculator: {wh.MAJID_STATUS_WORDS[wh.majid_status(d, m)]}]")
     if it.set:
         lines.append(f"Part of the {it.set} set")
     notes = it.source_notes()
@@ -455,8 +455,8 @@ def item_card(it, slot: str, rolls=None):
     card = {"slot": slot, "name": it.name, "tier": it.tier, "type": it.type, "level": it.level,
             "reqs": list(it.reqs), "bonus": list(it.bonus), "stats": stats[:22], "slots": it.slots,
             "powders": [p.label() for p in (it.powders or [])], "set": it.set,
-            "major_ids": [[m, _clean_desc((game_data().majids.get(m) or {}).get("description", ""))[:240]]
-                          for m in (it.major_ids or [])],
+            "major_ids": [[m, _clean_desc((game_data().majids.get(m) or {}).get("description", ""))[:240],
+                           wh.majid_status(game_data(), m)] for m in (it.major_ids or [])],
             "notes": it.source_notes()}
     lc = getattr(it, "link_code", None)
     if getattr(it, "crafted", False) and lc and lc[0] == "craft":          # how to make it
@@ -1108,6 +1108,7 @@ How to work:
 - Match the build to the play style they describe. A DPS or melee build is judged on Wynnbuilder's Average DPS (goal melee: damage per hit x attack speed, so attack speed matters as much as damage); a spell build on spell damage within its mana; if they want both damage and to stay alive, use balanced. If the best whole build trades away something they care about (for example less health, or a new element), point it out and offer the alternative.
 - After a report, the player sees the full report in the panel next to the chat, so don't repeat it. Reply with a short plain summary: the build as a whole and why it fits together, then the 3 to 5 most useful things to do (skill points, what to click next in the tree, powders), plus anything surprising. Use short paragraphs or a few bullets, under about 220 words unless they ask for detail.
 - When they change something ("I'm level 50 now", "make it tankier", "what if I use X"), run the calculator again with the change and say what's different.
+- Item special effects (major IDs, common on Fabled and Mythic items): the report's "Special effects" lines say what each one in the build does and whether it's counted. Most are counted with Wynnbuilder's numbers; a few the helper counts itself (for example Pas De Deux making Frog Dance deal no damage, Self-Sufficient's weapon special timing); movement, ally, situational ones and ones without an exact size aren't counted. Say so when the player asks about a Fabled or Mythic item, and don't claim an uncounted effect adds damage.
 - Mention a limitation only when it matters for their question (for example: items marked "not a mob drop" may be raid, quest, merchant or event rewards; poison numbers follow Wynnbuilder).
 - Plain words, no jargon the player didn't use. Never mention tools, JSON or code."""
 

@@ -558,6 +558,7 @@ label.deep input[type=checkbox] { width: auto; flex: 0 0 auto; margin-top: 3px; 
 .char-hero .edit input { padding: 7px 10px; border-radius: var(--r-sm); border: 1px solid var(--line); background: var(--night); }
 .char-hero .edit input.lvl { width: 80px; }
 .myitems { padding: 16px 20px; margin-bottom: 22px; }
+.mjst { font-size: 12px; color: var(--muted); margin-top: 3px; font-style: italic; }
 .myitems .sub { margin: 0 0 10px; color: var(--muted); }
 .myitems .edit { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 12px 0 4px; }
 .myitems .edit input { flex: 1 1 260px; min-width: 0; padding: 7px 10px; border-radius: var(--r-sm); border: 1px solid var(--line); background: var(--night); }
@@ -1485,7 +1486,8 @@ function itemTip(c) {
   if (bon) h += "<hr>" + bon;
   if (c.stats.length) h += "<hr>" + c.stats.map(([k, v]) => statLine(k, v)).join("");
   if (c.slots) h += `<hr><div class="tl">[${c.powders.length}/${c.slots}] Powder Slots${c.powders.length ? ": " + c.powders.map((p) => `<span style="color:${POWDER_COL[p.split(" ")[1]] || "#fff"}">${esc(p)}</span>`).join(", ") : ""}</div>`;
-  c.major_ids.forEach(([m, d]) => { h += `<hr><div class="aqua">+${esc(m.replace(/_/g, " "))}:</div><div class="desc">${esc(d)}</div>`; });
+  const MJ = { counted: "Counted in the numbers", helper: "Counted in the numbers (by this helper; Wynnbuilder doesn't)", "not counted": "Not counted (movement, help for allies, only some of the time, or no exact size given)" };
+  c.major_ids.forEach(([m, d, st]) => { h += `<hr><div class="aqua">+${esc(m.replace(/_/g, " "))}:</div><div class="desc">${esc(d)}</div>${st ? `<div class="mjst">${esc(MJ[st] || "")}</div>` : ""}`; });
   if (c.set) h += `<hr><div class="ok">${esc(c.set)} Set</div>`;
   if (c.craft) h += `<hr><div class="tl">${esc(c.craft.profession)} · ${esc(c.craft.recipe)} · materials T${c.craft.mats.join("/T")}</div>
     <div class="tipgrid">${c.craft.grid.map((g) => `<span class="${g ? "" : "gray"}">${esc(g || "empty")}</span>`).join("")}</div>
