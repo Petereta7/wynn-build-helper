@@ -4345,6 +4345,78 @@ def fmt_num(x: float) -> str:
     return f"{x:,.1f}" if x < 100 else f"{x:,.0f}"
 
 
+def prune_spare(build, owned, armor, weapon, extra, level):
+    """Leave spare ability points unspent (the owner's choice): take out every ability that doesn't change the goal's
+    number (and then anything that only led to it), as long as the tree stays legal. The goal's number stays exactly
+    the same and minimums stay met. Returns (tree, ideas): ideas are abilities taken out that would add a lot to
+    something else (e.g. an ultimate's combo damage), as [(name, [other abilities it needs back], AP, text)]."""
+    tree = build.tree
+    owned = frozenset(owned)
+    ref = build.evaluate(owned, armor, weapon, extra)
+    m0 = ref.get("main", 0.0)
+    if m0 <= 0 or not ref.get("floors_met", True):
+        return owned, []
+    removed = []
+    changed = True
+    while changed:
+        changed = False
+        for nid in reversed(tree.validate(owned, level)["order"]):
+            if nid in tree.roots:
+                continue
+            rest = owned - {nid}
+            if not tree.validate(rest, level)["ok"]:
+                continue
+            r = build.evaluate(rest, armor, weapon, extra)
+            if r.get("floors_met", True) and r.get("main", 0.0) >= m0 * (1 - 1e-12):
+                owned, changed = rest, True
+                removed.append(nid)
+    if not removed:
+        return owned, []
+    # what the taken-out abilities would still add to something else, with whatever they need to be reached
+    base = build.evaluate(owned, armor, weapon, extra)
+    ideas, gone = [], set(removed)
+    for nid in removed:
+        need, stack = set(), [nid]
+        while stack:
+            cur = tree.by_id[stack.pop()]
+            for p in cur.parents + cur.deps:
+                if p in gone and p not in need:
+                    need.add(p)
+                    stack.append(p)
+        add = owned | {nid} | need
+        if not tree.validate(add, level)["ok"]:
+            continue
+        r = build.evaluate(add, armor, weapon, extra)
+        best = None
+        for k, word in (("burst", "combo damage"), ("spell_dps", "spell damage"), ("melee_dps", "main attack damage"),
+                        ("heal_ps", "healing")):
+            a, b = r.get(k, 0) or 0, base.get(k, 0) or 0
+            if b > 0 and a / b - 1 >= 0.05 and (best is None or a / b - 1 > best[0]):
+                best = (a / b - 1, word)
+        da, db = (r.get("defense") or {}).get("ehp_agi", 0) or 0, (base.get("defense") or {}).get("ehp_agi", 0) or 0
+        if db > 0 and da / db - 1 >= 0.05 and (best is None or da / db - 1 > best[0]):
+            best = (da / db - 1, "effective HP")
+        if best:
+            g = best[0] * 100
+            ideas.append((tree.by_id[nid].name, [tree.by_id[i].name for i in sorted(need, key=removed.index)],
+                          sum(tree.by_id[i].cost for i in {nid} | need),
+                          f"+{g:.1f}% {best[1]}" if g < 10 else f"+{g:.0f}% {best[1]}"))
+    ideas.sort(key=lambda x: -float(x[3].split("%")[0].lstrip("+")))
+    return owned, ideas[:4]
+
+
+def unspent_lines(tree, owned, level, ideas) -> list:
+    left = ability_points(level) - tree.validate(owned, level)["ap"]
+    if left <= 0:
+        return []
+    lines = [f"  {left} ability point{'s' if left != 1 else ''} left unspent: nothing else in reach raises your goal, "
+             "so spend them on whatever you like (or keep them for later)."]
+    for name, need, ap, text in ideas:
+        lines.append(f"    Idea: {name}{' (with ' + ', '.join(need) + ')' if need else ''}, {ap} AP: {text}, but nothing for "
+                     "your goal.")
+    return lines
+
+
 def tree_roles(build, owned, armor, weapon, extra, level) -> dict:
     """Why each ability is in a tree, worked out with the calculator: {node id: {"role", "gain", "text"}}.
     role: "start" (the first ability), "goal" (taking it out lowers the goal's number by gain %), "path" (needed to
@@ -4391,8 +4463,9 @@ def tree_roles(build, owned, armor, weapon, extra, level) -> dict:
             later.append((nid, rest, gone, _arch))
             continue
         gain, r = gain_of(rest)
-        if gain >= 0.05:
-            out[nid] = {"role": "goal", "gain": gain, "text": f"{pct(gain)} for your goal"}
+        if gain > 1e-7:
+            out[nid] = {"role": "goal", "gain": gain, "text": f"{pct(gain)} for your goal" if gain >= 0.05 else
+                        "a tiny bit (under 0.1%) for your goal"}
             continue
         side = []
         for k, word in (("spell_dps", "spell damage"), ("melee_dps", "main attack damage"), ("burst", "combo damage"),
@@ -4415,7 +4488,7 @@ def tree_roles(build, owned, armor, weapon, extra, level) -> dict:
         gain, _r = gain_of(rest)
         goal_after = sorted((out[g]["gain"], tree.by_id[g].name) for g in gone if out.get(g, {}).get("role") == "goal")
         names = [nm for _g, nm in reversed(goal_after)] or [tree.by_id[g].name for g in sorted(gone, key=order.index)]
-        if gain < 0.05:
+        if gain <= 1e-7:
             out[nid] = {"role": "spare", "gain": 0.0,
                         "text": "doesn't change your goal's number; it only leads to " + ", ".join(names[:3]) +
                                 (", which don't either" if len(names) > 1 else ", which doesn't either")}
@@ -4762,6 +4835,15 @@ def run(args):
         final = build.evaluate(chosen, armor, weapon, extra)
         final = dict(final, floor_values=floor_values(final["stats"], final["defense"]), floors_met=False)
 
+    search_start = chosen            # the whole-build search starts from this tree, exactly as before
+    try:                             # spare points are left unspent (abilities that don't change the goal's number)
+        pruned, tree_ideas = prune_spare(build, chosen, armor, weapon, extra, level)
+    except Exception:
+        pruned, tree_ideas = chosen, []
+    if pruned != frozenset(chosen):
+        chosen = pruned
+        final = build.evaluate(chosen, armor, weapon, extra)
+    LAST_RESULT["current_ideas"] = tree_ideas
     LAST_RESULT.update(cls=cls, level=level, goal=goal, focus=focus, tree=tree, build=floor_build, no_gear=no_gear,
                        current={"armor": list(armor), "weapon": weapon, "owned": frozenset(chosen), "extra": list(extra),
                                 "eval": final})
@@ -4832,6 +4914,8 @@ def run(args):
 
     print_header(f"Ability tree for level {level} ({budget} ability points)")
     for line in describe_tree(tree, chosen, level):
+        print(line)
+    for line in unspent_lines(tree, chosen, level, tree_ideas):
         print(line)
     if link_tree:
         yours = build.evaluate(link_tree, armor, weapon, extra)
@@ -5023,7 +5107,7 @@ def run(args):
               + (f" (stops after {args.time_limit:.0f}s)" if getattr(args, "time_limit", None) else "") + "...")
         if ws.PROGRESS.get("cb") is None:
             ws.PROGRESS["cb"] = lambda f, m: None
-        wb = ws.search_best_build(floor_build, chosen, armor, weapon, base_weapon, keep=keep_ids, ap_budget=budget,
+        wb = ws.search_best_build(floor_build, search_start, armor, weapon, base_weapon, keep=keep_ids, ap_budget=budget,
                                   include_never=include_never, min_level=min_lvl,
                                   deep=getattr(args, "deep", False), time_limit=getattr(args, "time_limit", None),
                                   log=lambda m: print("  " + m), crafted=not getattr(args, "no_crafted", True))
@@ -5091,6 +5175,9 @@ def run(args):
                 roles_b = tree_roles(floor_build, wb["owned"], wb["armor"], w, wb["extra"], level)
                 LAST_RESULT["best_roles"] = roles_b
                 for line in roles_lines(tree, roles_b):
+                    print(line)
+                LAST_RESULT["best_ideas"] = wb.get("tree_ideas") or []
+                for line in unspent_lines(tree, wb["owned"], level, wb.get("tree_ideas") or []):
                     print(line)
             except Exception:
                 pass

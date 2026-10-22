@@ -956,7 +956,9 @@ def build_summary():
                 "order": tree.validate(x["owned"], level)["order"],
                 "sp": {"assigned": list(ass), "extra": extra, "gear": [totals[i] - ass[i] - extra[i] for i in range(5)]},
                 "mana": ({k: v for k, v in ev["mana"].items()} if ev.get("mana") else None),
-                "goal_parts": ev.get("goal_parts"), "roles": roles_of(x)}
+                "goal_parts": ev.get("goal_parts"), "roles": roles_of(x),
+                "unspent": {"ap": max(0, wh.ability_points(level) - tree.validate(x["owned"], level)["ap"]),
+                            "ideas": [list(i) for i in (R.get("best_ideas") if x is R.get("best") else R.get("current_ideas")) or []]}}
 
     def roles_of(x):                    # why each ability is in the tree (shown on the tree map)
         try:
@@ -998,7 +1000,8 @@ def build_summary():
                  "toggle_share": out["toggle_share"],
                  "numbers": out["best"]["numbers"], "items": out["best"]["items"], "sp": out["best"]["sp"],
                  "owned": out["best"]["owned"], "order": out["best"]["order"], "link": out["best_link"],
-                 "settings": out["settings"], "rolls": out["rolls"], "roles": out["best"].get("roles") or {}}
+                 "settings": out["settings"], "rolls": out["rolls"], "roles": out["best"].get("roles") or {},
+                 "unspent": out["best"].get("unspent")}
         hist.append(entry)
         save_history(hist)
         out["history_id"] = entry["id"]
@@ -1025,7 +1028,7 @@ How to work:
 - Characters: the player's saved characters come with each message, in a note from the app (the player didn't type it). When they mean one ("my shaman", "Sparky", "my main"), pass character with its name instead of asking for class and level: its class, level and current gear are filled in (pass gear only to change it, use_saved_gear false to start from nothing). If they say a character leveled up or was renamed, update it with manage_characters. After a build the app itself asks whether to save it to a character's library; save it with manage_characters only if they ask you to. Don't create characters unless they ask.
 - Sharing and comparing: every saved build has a Share button that makes a share code (starts with WBH1-) a friend pastes into their app (Home page, or in this chat, which opens it straight away), and a Compare button that puts two saved builds side by side (numbers, gear, skill points, abilities). Point the player to those when they ask; you can't make or read share codes yourself.
 - If they want a mix ("mostly damage but I want to survive too", "70/30 spells and tankiness"), pass the main goal plus second_goal and second_goal_weight (the share for the second goal, default 30). This is a weighted mix, softer than a minimum: use minimums when they name a number ("at least 20k health"), the mix when they describe a preference. balanced is the same idea at 50/50 for damage and effective HP.
-- The report's "Abilities that matter most" lines say which abilities in the best build's tree raise the goal and by how much, which are only there to reach those (a path or an archetype count), and which are spare points that don't change the goal's number. When the player asks why an ability is there or says the tree looks odd, explain with that, and say spare points can go anywhere they like.
+- The report's "Abilities that matter most" lines say which abilities in the best build's tree raise the goal and by how much, which are only there to reach those (a path or an archetype count), and which are spare points that don't change the goal's number. When the player asks why an ability is there or says the tree looks odd, explain with that, and say spare points can go anywhere they like. Points that wouldn't raise the goal are left unspent on purpose (the report says how many and lists ideas, e.g. an ultimate that adds combo damage); say so if they ask why the tree doesn't use every point.
 - If no build meets every minimum, the report says so and shows the closest one; tell them which minimum couldn't be met and suggest relaxing it.
 - The report shows health, effective HP and walk speed for the best build next to the current gear; mention any big drop in health or walk speed so they can set a minimum.
 - If they want the most damage from one specific ability ("maximum puppet damage", "biggest Meteor", "strongest Bash"), use goal ability with focus set to that ability.

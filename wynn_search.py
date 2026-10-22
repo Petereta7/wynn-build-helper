@@ -1675,6 +1675,22 @@ def search_best_build(build, owned, armor0, weapon0, base_weapon0, keep=(), ap_b
             fin2 = build.evaluate(own, a2, wp, e2)
             powdered.append((fin2["value"], a2, wp, wpn, own, e2, free2, fin2) if fin2["value"] > v else f)
         finals = sorted(powdered, key=lambda x: -x[0])
+    # ---- 7. spare ability points are left unspent (the owner's choice): abilities that don't change the goal's
+    # number come out of the best builds' trees. The goal's number stays exactly the same, so the order stays too.
+    tree_ideas = []
+    if not STOP["flag"]:
+        pr = []
+        for k, f in enumerate(finals):
+            v, a, wp, wpn, own, e, free, fin = f
+            if k < 5:
+                own2, ideas = wh.prune_spare(build, own, a, wp, e, build.level)
+                if k == 0:
+                    tree_ideas = ideas
+                if own2 != frozenset(own):
+                    fin2 = build.evaluate(own2, a, wp, e)
+                    f = (fin2["value"], a, wp, wpn, own2, e, free, fin2)
+            pr.append(f)
+        finals = pr
     _PHASE[:] = [0.0, 1.0]
     LIVE["phase"] = len(PHASES) + (1 if crafted else 0)       # done
     # Last check, worked out from scratch: never hand back gear the level can't wear, or a craft that can't
@@ -1698,7 +1714,7 @@ def search_best_build(build, owned, armor0, weapon0, base_weapon0, keep=(), ap_b
             "final": fin, "start": start, "start_val": start["value"], "filter": fstats,
             "stopped": STOP["flag"], "seconds": time.time() - t_start, "effort": effort,
             "effort_name": P["name"], "agree": agree, "attempts": n_attempts, "bonus_search": bonus,
-            "crafted": craft_info, "timings": timings}
+            "crafted": craft_info, "timings": timings, "tree_ideas": tree_ideas}
 
 
 # ============================================================================== time estimate

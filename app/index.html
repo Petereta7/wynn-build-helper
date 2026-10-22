@@ -1571,7 +1571,7 @@ function equipHTML(pack, baseItems, title, sub) {
 }
 
 /* ---- ability tree map ---- */
-function treeHTML(T, order, togglesOn, tabs, roles) {
+function treeHTML(T, order, togglesOn, tabs, roles, unspent) {
   roles = roles || {};
   const CELL = 38, COLS = 9;
   const nodes = T.nodes, maxRow = Math.max(...nodes.map((n) => n.row));
@@ -1600,11 +1600,11 @@ function treeHTML(T, order, togglesOn, tabs, roles) {
   const has = Object.keys(roles).length > 0;
   const legend2 = has ? '<span><i class="lg big"></i>big gain for your goal (the % it adds)</span><span><i class="lg spare"></i>spare point: doesn\'t change your goal\'s number</span>' : "";
   return `<section class="tip panel" id="treePanel"><h3>Ability tree <small>${order.length} abilities, in click order</small>${tabs || ""}</h3>
-    <div class="tlegend">${legend}${legend2}</div>${has ? whyTreeHTML(T, roles) : ""}
+    <div class="tlegend">${legend}${legend2}</div>${has ? whyTreeHTML(T, roles, unspent) : ""}
     <div class="tmap-wrap"><div class="tmap" style="width:${W}px;height:${H}px"><svg width="${W}" height="${H}" aria-hidden="true">${lines.join("")}</svg>${nodeHTML}</div></div></section>`;
 }
 let TOGGLE_SHARE = {};
-function whyTreeHTML(T, roles) {
+function whyTreeHTML(T, roles, unspent) {
   const name = (id) => (T.nodes.find((x) => String(x.id) === String(id)) || {}).name || "?";
   const cost = (id) => (T.nodes.find((x) => String(x.id) === String(id)) || {}).cost || 0;
   const ents = Object.entries(roles);
@@ -1616,6 +1616,7 @@ function whyTreeHTML(T, roles) {
   if (goal.length) h += `<div><b>What matters for your goal:</b> ${goal.slice(0, 6).map(([id, r]) => `<span class="wg">${esc(name(id))} <i>${pct(r.gain)}</i></span>`).join("")}</div>`;
   if (path.length) h += `<div class="wsub">${path.length} abilities are on the way to those (a path through the tree, or an archetype count one of them needs).</div>`;
   if (extra.length) h += `<div class="wsub">Not for your goal, but worth keeping: ${extra.map(([id, r]) => `${esc(name(id))} (${esc((r.text.split("adds ")[1] || "").split(":")[0])})`).join(", ")}.</div>`;
+  if (unspent && unspent.ap > 0) h += `<div class="wsub"><b>${unspent.ap} ability point${unspent.ap === 1 ? "" : "s"} left unspent</b>: nothing else in reach raises your goal, so spend them on whatever you like.${(unspent.ideas || []).length ? " Ideas: " + unspent.ideas.map(([n, need, ap, t]) => `${esc(n)}${need.length ? " (with " + esc(need.join(", ")) + ")" : ""}, ${ap} AP: ${esc(t)}`).join("; ") + "." : ""}</div>`;
   if (spare.length) h += `<div class="wsub"><b>${spare.length} spare points</b> (${spare.reduce((t, [id]) => t + cost(id), 0)} AP) don't change your goal's number: ${spare.map(([id]) => esc(name(id))).join(", ")}. They're picked for small extras (hover for which); swap them for anything you like.</div>`;
   return h + "</div>";
 }
@@ -1643,7 +1644,7 @@ function mountTree(S, which) {
   const tabs = both ? `<span class="ttabs"><button type="button" data-tree="best" aria-pressed="${which !== "current"}">Best build's tree</button><button type="button" data-tree="current" aria-pressed="${which === "current"}">For your current gear</button></span>` : "";
   const box = $("#treeSlot"); if (!box) return;
   TREE_ROLES = pack.roles || {};
-  box.innerHTML = treeHTML(S.tree, pack.order, S.toggles_on, tabs, pack.roles);
+  box.innerHTML = treeHTML(S.tree, pack.order, S.toggles_on, tabs, pack.roles, pack.unspent);
   bindTips(box, (id) => nodeTip(S.tree, pack.order, S.toggles_on, id));
   box.querySelectorAll("[data-tree]").forEach((b) => b.addEventListener("click", () => mountTree(S, b.dataset.tree)));
 }
@@ -2045,7 +2046,7 @@ function renderSaved(h, sub, backLabel, back, opts = {}) {
       ${opts.share ? '<button class="btn-quiet" id="shareBtn" type="button">Share with a friend</button>' : ""}${opts.actions || ""}
       <button class="btn-quiet" id="savedBack" type="button">${esc(backLabel)}</button></div><div id="shareSlot"></div>${opts.after || ""}</section>` +
     equipHTML({ items: h.items, sp: h.sp }, null, "Gear", "Hover any piece for its stats.") + craftsHTML({ items: h.items }) +
-    (h.tree ? (TOGGLE_SHARE = h.toggle_share || {}, (TREE_ROLES = h.roles || {}), treeHTML(h.tree, h.order || [], h.toggles_on || [], "", h.roles)) : "");
+    (h.tree ? (TOGGLE_SHARE = h.toggle_share || {}, (TREE_ROLES = h.roles || {}), treeHTML(h.tree, h.order || [], h.toggles_on || [], "", h.roles, h.unspent)) : "");
   $("#main").scrollTop = 0;
   bindTips($("#equipPanel"), (i) => itemTip(h.items[+i]));
   mountCrafts({ items: h.items });
