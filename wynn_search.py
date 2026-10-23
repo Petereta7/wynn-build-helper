@@ -1074,6 +1074,11 @@ def _wide_one(build, pools, ap_budget, keep, v, a, wp, wpn, own, e, width, P):
     return _polish_one(build, pools2, ap_budget, keep, cur[0], cur[1], cur[2], cur[3], cur[4], new_own)
 
 
+def _local_best(build, own, pools, wpn, wp, starts, e, P):
+    """_local_search for a worker process (stops with the app's Stop button)."""
+    return _local_search(build, own, pools, wpn, wp, starts, e, P, _stopped)
+
+
 def _par_job(job):
     name, args = job
     return globals()[name](_W["build"], *args)
@@ -1816,45 +1821,66 @@ def _search_best_build(build, owned, armor0, weapon0, base_weapon0, keep=(), ap_
             n_rounds = P.get("craft_rounds", 0)
             t_rounds = time.time()
             if n_rounds and not out_of_time():
-                rinfo = {"designed": 0}
+                kicks = P.get("craft_kicks", 24)
 
-                def craft_round(seed):
+                def in_pool(name, args):
+                    """Run a module function in the crafting worker processes (so two chains below really run
+                    side by side); same answer as running it here."""
+                    if runner.ex is not None:
+                        try:
+                            return runner.ex.submit(_par_job, (name, tuple(args))).result()
+                        except Exception:
+                            pass
+                    return globals()[name](build, *args)
+
+                def craft_round(seed, inf):
                     v, a, wpn, wp, e, own = seed
                     pools2 = _pools_with(pools, a)
-                    res = _local_search(build, own, pools2, wpn, wp, [list(a)], e, P, out_of_time)
+                    res = in_pool("_local_best", (own, pools2, wpn, wp, [list(a)], e, P))
                     if res:
                         r = max(res, key=lambda x: x[0])
                         if better(r[0], v, 1.000001):
                             v, a, wpn, wp, e = r[:5]
                     if out_of_time():
                         return (v, a, wpn, wp, e, own)
-                    g = _craft_stage(build, (v, a, wp, wpn, own, e), P.get("craft_kicks", 24), out_of_time, rinfo, runner)
+                    g = _craft_stage(build, (v, a, wp, wpn, own, e), kicks, out_of_time, inf, runner)
                     if g is not None and better(g[0], v, 1.000001):
                         return g
                     return (v, a, wpn, wp, e, own)
 
-                seeds = []
-                if gots:
-                    seeds.append(max(gots, key=lambda x: x[0]))
+                best_got = max(gots, key=lambda x: x[0]) if gots else None
                 f0 = tops[0] if tops else None
-                if f0 is not None and not out_of_time():
-                    _v0, _a0, wp0, wpn0, own0, e0 = f0[:6]
-                    g0 = _craft_stage(build, (_v0, [None] * 8, wp0, wpn0, own0, e0), P.get("craft_kicks", 24),
-                                      out_of_time, rinfo, runner)
-                    if g0 is not None:
-                        seeds.append(g0)
-                for k, s in enumerate(seeds):
+
+                def chain(k):
+                    """k 0: rounds around the best crafted build; k 1: crafts first (empty gear), then rounds.
+                    Returns (build to add or None, info)."""
+                    inf = {"designed": 0}
+                    if k == 0:
+                        s = best_got
+                    else:
+                        _v0, _a0, wp0, wpn0, own0, e0 = f0[:6]
+                        s = _craft_stage(build, (_v0, [None] * 8, wp0, wpn0, own0, e0), kicks, out_of_time, inf, runner)
+                        if s is None:
+                            return None, inf
                     first = s
                     for _r in range(n_rounds):
                         if out_of_time():
                             break
-                        s2 = craft_round(s)
+                        s2 = craft_round(s, inf)
                         if not better(s2[0], s[0], 1.000001):
                             break
                         s = s2
-                    if s is not first or not any(first is g for g in gots):
-                        gots.append(s)
-                craft_info["designed"] += rinfo["designed"]
+                    return (s if (s is not first or k == 1) else None), inf
+
+                ks = ([0] if best_got is not None else []) + ([1] if f0 is not None else [])
+                if ks:                             # the two chains side by side (each on its own: same answer)
+                    from concurrent.futures import ThreadPoolExecutor
+                    with ThreadPoolExecutor(max_workers=len(ks)) as tp:
+                        outs = list(tp.map(chain, ks))
+                    for add, inf in outs:          # (not "keep": that's the abilities you asked to keep)
+                        craft_info["designed"] += inf["designed"]
+                        if add is not None:
+                            gots.append(add)
             timings["of which craft rounds"] = round(time.time() - t_rounds, 2)
         finally:
             runner.close()

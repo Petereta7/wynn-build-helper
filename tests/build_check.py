@@ -86,6 +86,10 @@ def problems_with(case, res):
     best = wh.LAST_RESULT.get("best")
     if not best:
         return out + ["no whole build in the result"]
+    if not wh.LAST_RESULT.get("how_to_play"):
+        out.append("no 'how to play' section")
+    if wh.LAST_RESULT.get("best_link") and not wh.LAST_RESULT.get("wynnbuilder_view"):
+        out.append("no 'in Wynnbuilder' section")
     lvl, cls = case["level"], case["class"]
     armor, weapon, extra = [a for a in best["armor"] if a is not None], best["weapon"], best["extra"]
     for it in armor + [weapon]:

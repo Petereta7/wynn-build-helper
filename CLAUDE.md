@@ -199,12 +199,12 @@ Measured deep search on the owner's PC (1.6 -> 1.7): Warrior L106 7.0 -> 4.1 min
   Results on the PC before the mana fix (all cases >= before): assassin L50 balanced 15,564, mage L45 84,568, mage L40
   13,626, shaman L60 mixed 59,126, shaman L70 mix 77,851, assassin L55 62,372, shaman L60 spells 62,572.
   build_check prints how close each case is to its best known build; run_all --record also raises best_known.json.
-  KNOWN PROBLEM (owner said release anyway, he isn't doing high-level builds yet; fix next): deep searches at L80-106
-  got far slower. 1.10.5 deep on the PC: warrior L106 9.7 min, mage L106 22, archer L100 11.5, shaman L80 19,
-  assassin L106 balanced 16; the new warrior L106 hadn't finished after 80 min. Suspects: 5b craft rounds (sequential
-  craft stages with 150 kicks + deep local search in the main process), 5c and 4c at L106. `timings` now has "of which
-  craft rounds"; profile with tests/search_timing.py --only "warrior L106 melee" (PC job limit raised to 340 min in the
-  dev repo's pc-tests.yml).
+  High-level deep searches got slower (owner released anyway, Oct 2026; tests/search_timing.py on the PC, deep,
+  crafted): warrior L106 9.7 -> 16.0 min (same build), archer L100 11.5 -> 20.2 (+3.8%), mage L106 22.1 -> 37.5,
+  shaman L80 18.9 -> 30.9, assassin L106 balanced 16.1 -> 38.1 (10 min of it the style-tree searches). Biggest new cost:
+  5b craft rounds (243-687 s, `timings["of which craft rounds"]`). 1.11.1 runs the two chains (rounds around the best
+  crafted build; crafts first) side by side, their local searches in the crafting worker pool (`_local_best`), same
+  builds. (An earlier "80+ min" reading was wrong: a cut-off PC step loses its output.) Laptop timings are noisy (heat).
 - Mana steal / life steal accuracy (1.11.0, owner caught it): both work only on main attack hits (wiki). Mana: see
   "Mana check". Life steal: `ls_share` in score_build (melee 1, spells/burst/healing 0, mixed = main-attack share,
   ability = focus is the main attack, balanced/survival = whichever style deals the build's damage; a goal mix uses
@@ -219,10 +219,20 @@ Measured deep search on the owner's PC (1.6 -> 1.7): Warrior L106 7.0 -> 4.1 min
   balanced 10,165 -> 15,430, assassin L55 60,531 -> 65,520. Open: assassin L50 balanced, a 16,564 build exists under
   the mana fix (before the life steal fix), the search gets 15,430. best_known.json reset to today's numbers for the
   cases the fixes changed.
+- How to play / In Wynnbuilder (owner asked, Oct 2026): `how_to_play()` (report section "How to play this build",
+  `LAST_RESULT["how_to_play"]`): attacks and order, casting pace from the mana check, buffs counted (TOGGLE_RULES
+  reasons), mask, powder special, life/mana steal for the style; only facts the calculator used. `wynnbuilder_view()`
+  ("In Wynnbuilder", `LAST_RESULT["wynnbuilder_view"]`; for a pasted link also "Your link in Wynnbuilder" with the
+  link's own skill points): numbers Wynnbuilder shows with every toggle off (evaluated as goal melee so no powder
+  special boost) plus each reason the app differs. The bot prompt: end new builds with a short How to play from those
+  lines only; use the Wynnbuilder section for "why is it different there"; it can't see Wynnbuilder, so ask which box
+  / a screenshot when a quoted number matches nothing. build_check fails a case without them.
 - CI build check runs in 4 parallel parts (`build_check.py --shard k/4`, matrix in checks.yml, 150 min each).
 
 ## History (newest first)
 
+- 1.11.1: "How to play this build" and "In Wynnbuilder" report sections (the bot uses both); crafted-item rounds run
+  side by side (same builds, faster); report text fix for mana income.
 - 1.11.0: search also from spell / main-attack trees (most damage, balanced), weapons re-ranked on the best gear,
   craft rounds and crafts-first, wider tree plan for the best builds; mana steal and life steal only from main attacks;
   Paradox refund; best-known benchmark; CI build check in 4 parallel parts. High-level deep searches much slower (fix

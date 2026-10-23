@@ -4027,6 +4027,157 @@ def mixed_lines(ev, goal) -> list:
     return out
 
 
+def how_to_play(build: "Build", owned, armor, weapon, fin: dict) -> list:
+    """A short "how to play this build" from what the calculator counted: which attacks to use and in what order, how
+    fast the mana lets you cast, which buffs the numbers assume and how to keep them up, the weapon special, and
+    what life/mana steal do for this style. Only facts the helper used; nothing guessed."""
+    goal = build.goal
+    res = fin.get("results") or {}
+    gv = fin.get("goal_values") or {}
+    mi = fin.get("mixed") or {}
+    out = []
+    name = lambda b: res[b]["name"] if b in res else f"spell {b}"
+    # 1. the attacks
+    rot, rate, share = None, 0.0, 1.0
+    if goal == "mixed":
+        if mi.get("rotation"):
+            rot, rate, share = mi["rotation"], mi["rate"], mi["melee_share"]
+    elif goal in ("spells", "burst", "healing"):
+        rot = fin.get("rotation") or (fin.get("heal_rotation") if goal == "healing" else None)
+        share = 0.0
+    elif goal in ("balanced", "survival", "ability") and gv.get("spells", 0) > gv.get("melee", 0) and fin.get("rotation"):
+        rot, share = fin.get("rotation"), 0.0
+    if goal == "burst":
+        spells = [b for b in sorted(res) if b in (1, 2, 3, 4) and res[b].get("damage", 0) > 0]
+        out.append("Burst: open with every damage spell once (" + ", ".join(name(b) for b in spells) + "), then keep "
+                   "main-attacking while your mana comes back.")
+    elif rot:
+        names = ", ".join(name(b) for b in rot)
+        m = fin.get("mana") or {}
+        if goal != "mixed":
+            rate = m.get("sustained_rate") or 0.0
+        if share > 1e-9:
+            out.append(f"Mix spells and main attacks: cast {names} in turn (about {rate:.1f} casts a second) and "
+                       f"main-attack in between, about {share * 100:.0f}% of the time.")
+        else:
+            out.append(f"Spell build: cast {names} in turn" + (f", about {rate:.1f} a second" if rate else "") +
+                       ". Alternate them: casting the same spell back-to-back costs more mana in Wynncraft.")
+        if m:
+            if m.get("seconds") is None:
+                out.append("Mana: you can keep that up forever at full speed (3 casts a second).")
+            elif goal != "mixed":
+                out.append(f"Mana: at full speed (3 casts a second) a full bar lasts about {m['seconds']:.0f}s; after that "
+                           f"slow down to about {m['sustained_rate']:.1f} casts a second (the damage shown assumes that pace).")
+        lasting = [name(b) for b in rot if b in res and res[b].get("is_dps")]
+        if lasting:
+            out.append(f"{', '.join(lasting)} keep{'s' if len(lasting) == 1 else ''} dealing damage while up: recast just "
+                       "before it runs out. Recasting refreshes it; it doesn't add a second copy.")
+    else:
+        spd = (getattr(weapon, "atk_spd", "") or "").replace("_", " ").lower()
+        out.append("Main attacks: keep hitting" + (f" ({spd} attack speed)" if spd else "") + ". Spells aren't "
+                   "part of the damage shown; use them for movement or utility.")
+    # 2. buffs the numbers assume
+    tm = build.toggle_map(owned)
+    have = inter_names(build.tree, owned)
+    rules = auto_toggles_for(build.tree)
+    for t, sh in tm.items():
+        if t not in have or t in MASKS:
+            continue
+        why = rules.get(t, (None, ""))[1]
+        if t in build.auto_toggles and why:
+            out.append(f"{t}: counted {'all the time' if sh >= 0.999 else f'{sh * 100:.0f}% of the time'} - {why}.")
+        else:
+            out.append(f"{t}: counted {'all the time' if sh >= 0.999 else f'{sh * 100:.0f}% of the time'} (you turned it on)"
+                       " - keep it up that much in game, or the numbers will be lower.")
+    if fin.get("mask"):
+        out.append(f"Wear {fin['mask']} (cast Uproot to switch masks); the numbers assume that mask.")
+    # 3. weapon special
+    sp = fin.get("special")
+    if sp and (sp.get("damage", 0) > 0 or sp.get("boost", 0) > 0):
+        if any("SELFSUFFICIENT" in (x.major_ids or ()) for x in list(armor) + [weapon] if x is not None):
+            how = "it fills by itself (Self-Sufficient: 8% a second); use it whenever it's full"
+        else:
+            how = f"main-attack about {SPECIAL_CHARGE_SECONDS:.0f}s to charge it, then use it"
+        if goal == "melee":
+            how += " (extra damage on top: the main attack DPS shown leaves it out, like Wynnbuilder)"
+        elif sp.get("cycle"):
+            how += f" (counted about every {sp['cycle']:.0f}s)"
+        out.append(f"Weapon powder special ({sp['name']}): {how}.")
+    # 4. life / mana steal for this style
+    st = fin.get("stats") or {}
+    if st.get("ls", 0) or st.get("ms", 0):
+        ls_share = fin.get("ls_share", 1.0)
+        if ls_share <= 0:
+            out.append("Life steal and mana steal only work on main attack hits, so they do nothing while you only cast "
+                       "(the numbers don't count them).")
+        elif ls_share < 1:
+            out.append("Life steal and mana steal only work on main attack hits: they help in the time you main-attack "
+                       "between casts (counted that way).")
+    return out
+
+
+def wynnbuilder_view(build: "Build", owned, armor, weapon, extra, fin: dict) -> list:
+    """What Wynnbuilder shows when the build's link is opened (it starts with every ability toggle off), worked out
+    with the same maths, and each reason the app's numbers differ. Lets the bot answer "why is it different on
+    Wynnbuilder" without seeing Wynnbuilder."""
+    data, tree = build.data, build.tree
+    # goal melee: no powder special boost blended in (Wynnbuilder leaves the special off); every spell is still worked out
+    wbb = build.copy_with(goal="melee", goal2=None, toggles=[], toggle_share={}, auto_masks=False, auto_toggles=(),
+                          floors=None)
+    ev = wbb.evaluate(owned, armor, weapon, extra)
+    df, res = ev.get("defense") or {}, ev.get("results") or {}
+    out = ["Opening the link, Wynnbuilder starts with every ability toggle off. With them off it shows (same maths): "
+           f"Average DPS (main attack) {fmt_num(ev['melee_goal'])}, health {fmt_num(df.get('hp', 0))}, effective HP "
+           f"{fmt_num(df.get('ehp_agi', 0))} ({fmt_num(df.get('ehp', 0))} without agility), health regen "
+           f"{fmt_num(df.get('hpr', 0))}."]
+    sp = [f"{r['name']} {fmt_num(r['damage'])}{'/s' if r.get('is_dps') else ''}" for b, r in sorted(res.items())
+          if b != 0 and r.get("damage", 0) > 0]
+    if sp:
+        out.append("Spells there (average per cast; '/s' = damage per second while it lasts): " + ", ".join(sp) + ".")
+    fres = fin.get("results") or {}
+    diff = []
+    tm = build.toggle_map(owned)
+    have = inter_names(tree, owned)
+    full = [t for t, v in tm.items() if t in have and v >= 0.999 and t not in MASKS]
+    part = [f"{t} {v * 100:.0f}%" for t, v in tm.items() if t in have and v < 0.999]
+    if fin.get("mask"):
+        full.append(fin["mask"])
+    if full:
+        diff.append("The app counts these buffs as on: " + ", ".join(full) + ". Tick them in Wynnbuilder to see the same numbers.")
+    if part:
+        diff.append("The app counts these for part of the time: " + ", ".join(part) + ". Wynnbuilder can only show them fully "
+                    "on or off, so its numbers will be higher (on) or lower (off).")
+    if full or part:
+        sp2 = [f"{r['name']} {fmt_num(r['damage'])}{'/s' if r.get('is_dps') else ''}" for b, r in sorted(fres.items())
+               if b != 0 and r.get("damage", 0) > 0]
+        out.append(f"With the app's buffs: Average DPS {fmt_num(fin.get('melee_goal', 0))}" +
+                   (", spells " + ", ".join(sp2) if sp2 else "") + ".")
+    spc = fin.get("special")
+    if spc and (spc.get("damage", 0) > 0 or spc.get("boost", 0) > 0):
+        diff.append(f"The weapon's powder special ({spc['name']}) isn't in Wynnbuilder's numbers until you turn it on there"
+                    + ("; the app's main attack DPS leaves it out too." if build.goal == "melee"
+                       else "; the app counts it for the share of time it's charged and up."))
+    if build.buffs or build.raid_buffs:
+        diff.append("Party / raid buffs you entered (" + ", ".join(list(build.buffs) + list(build.raid_buffs)) +
+                    ") are counted: tick the same boosts in Wynnbuilder.")
+    if build.enemy:
+        diff.append("Effective HP against the enemy hit you entered is the helper's own; Wynnbuilder's effective HP has "
+                    "no enemy hit.")
+    helper_ids = sorted({m for x in list(armor) + [weapon] if x is not None for m in (x.major_ids or ())
+                         if majid_status(data, m) == "helper"})
+    if helper_ids:
+        diff.append("Special effects the helper counts but Wynnbuilder doesn't: " + ", ".join(
+            (data.majids.get(m) or {}).get("displayName") or m.title() for m in helper_ids) + ".")
+    if ROLL_MODE != "max":
+        diff.append(f"Item rolls: the app uses {ROLL_MODE} rolls; Wynnbuilder shows perfect (max) rolls.")
+    diff.append("Wynnbuilder has no spell-rotation, \"most damage (any style)\", survival or balanced score: those are "
+                "the helper's own. In rotations a lasting spell (summons, totems, storms) counts at most one copy, "
+                "and mana steal / life steal only for time spent main-attacking (in Wynnbuilder's mana calculator, "
+                "leave \"mana steal\" unticked for a spell-only build).")
+    diff.append("Items, powders, tomes, skill points and the ability tree are all in the link, so those match.")
+    return out + ["Why the app's numbers can differ:"] + ["  " + d for d in diff]
+
+
 def print_worth_getting(build: Build, wb: dict, only: dict, extra_fn, include_never: bool, per_slot: int = 3):
     """'Build from my items': single items the player doesn't have that would raise the best build from their
     items the most (each on its own, with the rest of that build kept)."""
@@ -5438,7 +5589,7 @@ def run(args):
     if final["poison_spell"] or final["poison_melee"]:
         print(f"  Poison: +{fmt_num(final['poison_spell'])}/s while hitting with spells, "
               f"+{fmt_num(final['poison_melee'])}/s with main attacks (included above in your goal score)")
-    print("  (Mana income counts mana steal from main attacks, as Wynnbuilder does.)")
+    print("  (Mana income: base regen + mana regen; mana steal only counts for time spent main-attacking.)")
     for line in mixed_lines(final, goal):
         print(line)
     dfn = final["defense"]
@@ -5752,6 +5903,49 @@ def run(args):
                          + [("Weapon", w)], wb.get("crafted") or {})
         if only is not None:
             print_worth_getting(floor_build, wb, only, extra_fn, include_never, args.per_slot)
+
+    # ---- how to play: from the best whole build when there is one, else the current gear
+    try:
+        hb = LAST_RESULT.get("best")
+        if hb:
+            hp_lines = how_to_play(floor_build, frozenset(hb["owned"]), hb["armor"], hb["weapon"], hb["eval"])
+        else:
+            hp_lines = how_to_play(floor_build, chosen, armor, weapon, final)
+    except Exception:
+        hp_lines = []
+    LAST_RESULT["how_to_play"] = hp_lines
+    if hp_lines:
+        print_header("How to play this build")
+        for line in hp_lines:
+            print("  - " + line)
+    # ---- what Wynnbuilder shows for the link, and why the app can differ
+    try:
+        if hb and LAST_RESULT.get("best_link"):
+            wv = wynnbuilder_view(floor_build, frozenset(hb["owned"]), hb["armor"], hb["weapon"], hb["extra"], hb["eval"])
+        else:
+            wv = []
+    except Exception:
+        wv = []
+    LAST_RESULT["wynnbuilder_view"] = wv
+    if wv:
+        print_header("In Wynnbuilder (the best build's link above)")
+        for line in wv:
+            print("  " + line)
+    if link_tree:                      # the player's own link: what Wynnbuilder shows for it (their tree)
+        try:
+            # the link's own skill points where it set them (Wynnbuilder fills the rest with what the gear needs)
+            need = solve_skill_points(armor, weapon)[0]
+            sp_l = list(link.get("sp") or [None] * 5)
+            ex_l = [max(0, sp_l[i] - need[i]) if sp_l[i] is not None else 0 for i in range(5)]
+            ev_l = build.evaluate(link_tree, armor, weapon, ex_l)
+            wl = wynnbuilder_view(build, link_tree, armor, weapon, ex_l, ev_l)
+        except Exception:
+            wl = []
+        LAST_RESULT["wynnbuilder_view_link"] = wl
+        if wl:
+            print_header("Your link in Wynnbuilder (your gear and your tree)")
+            for line in wl:
+                print("  " + line)
 
     # ---- tomes and aspects
     if data.tomes:
