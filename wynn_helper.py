@@ -73,7 +73,8 @@ SLOT_LABELS = ["Helmet", "Chestplate", "Leggings", "Boots", "Ring 1", "Ring 2", 
 SLOT_TYPES = ARMOR_SLOTS + ACCESSORY_SLOTS
 MAX_ASSIGNED_PER_SKILL = 100
 CLICKS_PER_SECOND = 9          # Wynnbuilder's default for its mana model
-BASE_MANA_PER_SECOND = 5       # Wynnbuilder: mana/s = 5 + mr/5 + ms/3
+BASE_MANA_PER_SECOND = 5       # mana/s = 5 + mr/5, plus ms/3 only while main-attacking (mana steal works on main
+                               # attack hits, not spells: wiki, Identifications)
 ULTIMATE_LEVEL = 90
 
 # Total ability points by combat level (from Wynnbuilder; matches the official wiki table).
@@ -2425,12 +2426,21 @@ def spell_part_damage(stats, weapon, conversions, use_spell, ignore_speed, ignor
     return norm, crit
 
 
+def mana_refund_mult(stats) -> float:
+    """Spell costs are divided by this in mana checks (Mage's Paradox refund: manaMult +34%, as Wynnbuilder)."""
+    m = 1.0
+    for k, v in stats.items():
+        if k.startswith("manaMult.") and v:
+            m *= 1 + v / 100
+    return m
+
+
 def spell_cost(stats, spell) -> float:
     bs = spell.get("base_spell")
     cost = spell.get("cost", 0) * (1 - skill_pct(stats.get("int", 0)) * INT_COST_MULT)
     cost += stats.get(f"spRaw{bs}", 0)
     cost *= 1 + stats.get(f"spPct{bs}", 0) / 100
-    return max(1.0, cost)
+    return max(1.0, cost) * (1 + stats.get(f"spPct{bs}Final", 0) / 100)     # Wynnbuilder's getSpellCost
 
 
 def raw_to_pct(raw: float, pct: float) -> float:
@@ -2628,6 +2638,13 @@ GOAL_WORDS = {"spells": "spell damage", "burst": "burst combo", "melee": "main a
               "mixed": "most damage (any style)"}
 
 
+def style_open(goal, goal2=None) -> bool:
+    """True when the goal's damage can come from spells or main attacks (so the best build may use either style's
+    ability tree): most damage in any style, damage and survival, or a mix that has both kinds."""
+    gs = {goal, goal2} - {None}
+    return bool(gs & {"mixed", "balanced"}) or (bool(gs & {"spells", "burst"}) and "melee" in gs)
+
+
 def clean_goal2(goal, goal2, weight):
     """(second goal, weight 0-0.9) or (None, 0) when there's no usable second goal."""
     goal2 = (goal2 or "").strip().lower() or None
@@ -2706,6 +2723,9 @@ def mana_lines(m) -> list:
     head = (f"Mana: at full speed ({m['full_rate']:.0f} casts/s) the rotation uses {m['used']:.1f}/s; you get "
             f"{m['regen']:.1f}/s back from regen" + (f" and {m['from_spells']:.1f}/s from spells" if m["from_spells"] > 0 else "")
             + f". Mana bar {m['bar']:.0f}.")
+    if m.get("steal", 0) > 0:
+        head += (f" (Mana steal {m['steal']:.0f}/3s isn't counted here: it only works on main attack hits, "
+                 "so it refills mana only while you main-attack.)")
     if m["seconds"] is None:
         return [head, "  You never run out: full casting speed can be kept up forever."]
     return [head, f"  From a full bar you run dry after about {m['seconds']:.0f}s at full speed "
@@ -2746,7 +2766,14 @@ def score_build(results: dict, stats: dict, weapon, goal: str, ult_spells=frozen
         special_dps = special["damage"] / special["cycle"]
         burst += special["damage"]
     extra_dps = sustained_extra + special_dps
-    income = BASE_MANA_PER_SECOND + stats.get("mr", 0) / 5 + max(0, stats.get("ms", 0)) / 3
+    # Mana income while casting: base regen + mana regen. Mana steal only works on main attack hits (the full
+    # amount every 3 s while attacking non-stop; a negative one drains), so it counts only in the share of time
+    # spent main-attacking (the mixed goal below), never in a spells-only rotation.
+    income = BASE_MANA_PER_SECOND + stats.get("mr", 0) / 5
+    ms_ps = stats.get("ms", 0) / 3
+    # Mana refunds like Mage's Paradox ("refunding 25% of your spent mana"): Wynnbuilder's mana calculator divides
+    # spell costs by these (manaMult, +34% for Paradox) when checking a rotation; the same here.
+    mana_mult = mana_refund_mult(stats)
     # Best rotation of 2-4 different spells: casts/s limited by clicks and by mana.
     best_rot, best_rot_dps = None, 0.0
     usable = [bs for bs, r in results.items() if bs in (1, 2, 3, 4)]
@@ -2755,25 +2782,26 @@ def score_build(results: dict, stats: dict, weapon, goal: str, ult_spells=frozen
             rs = [results[b] for b in combo]
             if sum(r["cast"] for r in rs) <= 0:
                 continue
-            net_cost = sum(r["cost"] - r["mana_gained"] for r in rs) / size
+            net_cost = sum(r["cost"] / mana_mult - r["mana_gained"] for r in rs) / size
             cast_rate = CLICKS_PER_SECOND / 3
             if net_cost > 0:
                 cast_rate = min(cast_rate, income / net_cost)
             dps = rotation_dps(rs, cast_rate)
             if dps > best_rot_dps:
                 best_rot_dps, best_rot = dps, combo
-    # Mana check for that rotation (Wynnbuilder's mana model: 3 casts/s at 9 clicks/s, mana income
-    # 5 + mr/5 + ms/3, mana bar 100 + max mana bonus + Intelligence %): how long full speed lasts.
+    # Mana check for that rotation (3 casts/s at 9 clicks/s, mana income 5 + mr/5 (mana steal needs main attacks),
+    # mana bar 100 + max mana bonus + Intelligence %): how long full speed lasts.
     mana = None
     if best_rot:
         rs = [results[b] for b in best_rot]
         full_rate = CLICKS_PER_SECOND / 3
-        used = full_rate * sum(r["cost"] for r in rs) / len(rs)
+        used = full_rate * sum(r["cost"] / mana_mult for r in rs) / len(rs)
         back = full_rate * sum(r["mana_gained"] for r in rs) / len(rs)
         net = income + back - used
         bar = 100 + stats.get("maxMana", 0) + math.floor(skill_pct(stats.get("int", 0)) * 100)
         full_dps = rotation_dps(rs, full_rate)
         mana = {"used": used, "regen": income, "from_spells": back, "net": net, "bar": max(1, bar),
+                "steal": stats.get("ms", 0),
                 "full_rate": full_rate, "full_dps": full_dps,
                 "seconds": None if net >= -1e-9 else max(1, bar) / -net,
                 "sustained_rate": full_rate if net >= -1e-9 else full_rate * max(0.0, income) / max(1e-9, used - back)}
@@ -2786,7 +2814,7 @@ def score_build(results: dict, stats: dict, weapon, goal: str, ult_spells=frozen
                 continue
             rs = [results[b] for b in combo]
             heal = sum(r.get("heal", 0) for r in rs) / size
-            net_cost = sum(r["cost"] - r["mana_gained"] for r in rs) / size
+            net_cost = sum(r["cost"] / mana_mult - r["mana_gained"] for r in rs) / size
             rate = CLICKS_PER_SECOND / 3
             if net_cost > 0:
                 rate = min(rate, income / net_cost)
@@ -2811,10 +2839,14 @@ def score_build(results: dict, stats: dict, weapon, goal: str, ult_spells=frozen
             rs = [results[b] for b in combo]
             if sum(r["cast"] for r in rs) <= 0:
                 continue
-            net_cost = sum(r["cost"] - r["mana_gained"] for r in rs) / size
+            net_cost = sum(r["cost"] / mana_mult - r["mana_gained"] for r in rs) / size
             rmax = CLICKS_PER_SECOND / 3
-            if net_cost > 0:
-                rmax = min(rmax, income / net_cost)
+            # mana: r casts/s cost r x net; income + mana steal x the main-attack share (1 - 3r/clicks)
+            denom = net_cost + 3 * ms_ps / CLICKS_PER_SECOND
+            if denom > 0:
+                rmax = min(rmax, max(0.0, (income + ms_ps) / denom))
+            elif rmax * denom > income + ms_ps:     # (spells that give mana back can outpace a draining steal)
+                rmax = 0.0
             # spell damage only grows straight with the cast rate until a lasting spell is up all the time, so the
             # best mix is at the fastest rate or at one of those points
             for rate in [rmax] + rotation_breaks(rs, rmax):
@@ -2826,7 +2858,20 @@ def score_build(results: dict, stats: dict, weapon, goal: str, ult_spells=frozen
                     mixed_goal, mixed_info = tot, {"rotation": combo, "rate": rate, "melee_share": share,
                                                    "spell_part": sp_part, "melee_part": melee_dps * share}
     best_damage = max(spell_goal, melee_total + special_dps)
-    self_heal = SURVIVAL_HEAL_SECONDS * (heal_ps + life_steal_ps) + 2 * max(defense.get("hpr", 0), 0)
+    # Life steal only heals on main attack hits (wiki), like mana steal, so it counts for the share of time the build
+    # spends main-attacking: all of it for main attacks, none for spells, the main-attack share between casts for most
+    # damage in any style; for the other goals by whichever style deals the build's damage (owner agreed, Oct 2026).
+    if goal == "melee":
+        ls_share = 1.0
+    elif goal in ("spells", "burst", "healing"):
+        ls_share = 0.0
+    elif goal == "mixed":
+        ls_share = mixed_info["melee_share"] if mixed_info.get("rotation") else 1.0
+    elif goal == "ability":
+        ls_share = 1.0 if focus_bs == 0 else 0.0
+    else:
+        ls_share = 1.0 if melee_total + special_dps >= spell_goal else 0.0
+    self_heal = SURVIVAL_HEAL_SECONDS * (heal_ps + life_steal_ps * ls_share) + 2 * max(defense.get("hpr", 0), 0)
     focus_val = results.get(focus_bs, {}).get("damage", 0.0) if focus_bs is not None else 0.0
     goals = {"ability": focus_val, "spells": spell_goal, "burst": burst, "melee": melee_goal, "mixed": mixed_goal,
              "survival": ehp + (ehp / max(defense.get("hp", 1), 1)) * self_heal,
@@ -2843,7 +2888,7 @@ def score_build(results: dict, stats: dict, weapon, goal: str, ult_spells=frozen
     return {"value": value, "main": main, "spell_dps": best_rot_dps, "rotation": best_rot, "burst": burst,
             "melee_hit": melee, "melee_dps": melee_dps, "extra_dps": extra_dps, "mana_income": income,
             "special": special, "defense": defense, "heal_ps": heal_ps, "heal_rotation": heal_rot,
-            "poison_spell": poison_spell, "poison_melee": poison_melee, "life_steal_ps": life_steal_ps,
+            "poison_spell": poison_spell, "poison_melee": poison_melee, "life_steal_ps": life_steal_ps, "ls_share": ls_share,
             "triggered_dps": triggered_extra, "triggered_names": triggered_names, "spell_goal": spell_goal,
             "melee_goal": melee_goal, "dps_style": "spells" if spell_goal >= melee_goal else "main attack",
             "focus_value": focus_val, "goal_parts": parts, "goal_values": goals, "mana": mana, "mixed": mixed_info}
@@ -3002,7 +3047,8 @@ FLOOR_STATS = {
     "ls": ("Life steal", "/3s", lambda st, df: st.get("ls", 0.0)),
     "ms": ("Mana steal", "/3s", lambda st, df: st.get("ms", 0.0)),
     # Never losing health: health gained per second from health regen (ticks every 4 s, wiki) plus life steal (per
-    # 3 s while you keep main-attacking, wiki). Either can be negative as long as the total isn't.
+    # 3 s while you keep main-attacking, wiki). Either can be negative as long as the total isn't. Life steal only
+    # counts for the share of time the build main-attacks (floor_values; none for spell-only builds).
     "net": ("Health gained per second (regen + life steal)", "/s",
             lambda st, df: df.get("hpr", 0.0) / 4 + st.get("ls", 0.0) / 3),
     "eDef": ("Earth defense", "", lambda st, df: df.get("elem_def_eff", [0] * 5)[0]),
@@ -3056,8 +3102,11 @@ def parse_floors(text: str) -> dict:
     return out
 
 
-def floor_values(stats, defense) -> dict:
-    return {k: fn(stats, defense) for k, (_l, _u, fn) in FLOOR_STATS.items()}
+def floor_values(stats, defense, ls_share: float = 1.0) -> dict:
+    """Each minimum's value. ls_share: share of time spent main-attacking (life steal works only then)."""
+    out = {k: fn(stats, defense) for k, (_l, _u, fn) in FLOOR_STATS.items()}
+    out["net"] = defense.get("hpr", 0.0) / 4 + stats.get("ls", 0.0) / 3 * ls_share
+    return out
 
 
 def floor_shortfall(floors: dict, vals: dict) -> float:
@@ -3330,7 +3379,7 @@ class Build:
         sc = score_build(res, stats, weapon, self.goal, self.tree.ult_spells, special, defense,
                          focus_bs=self.focus[0] if self.focus else None, goal2=self.goal2, goal2_weight=self.goal2_weight)
         if self.floors:
-            vals = floor_values(stats, defense)
+            vals = floor_values(stats, defense, sc["ls_share"])
             short = floor_shortfall(self.floors, vals)
             sc["floor_values"], sc["floors_met"] = vals, short <= 0
             if short > 0:
@@ -5201,7 +5250,8 @@ def run(args):
             chosen = chosen2
         extra, free = extra_fn(chosen, armor, weapon)
         final = build.evaluate(chosen, armor, weapon, extra)
-        final = dict(final, floor_values=floor_values(final["stats"], final["defense"]), floors_met=False)
+        final = dict(final, floor_values=floor_values(final["stats"], final["defense"], final.get("ls_share", 1.0)),
+                     floors_met=False)
 
     search_start = chosen            # the whole-build search starts from this tree, exactly as before
     try:                             # spare points are left unspent (abilities that don't change the goal's number)
@@ -5410,8 +5460,11 @@ def run(args):
               if abs(dfn['elem_def'][i] - dfn['elem_def_eff'][i]) > 0.5)
               + ": it lets negative raw defense turn positive with a big % bonus; here it stops at 0.)")
     if final["life_steal_ps"] > 0:
-        print(f"  Life steal: {fmt_num(final['life_steal_ps'] * 3)} per 3s while you keep hitting "
-              f"(≈ {fmt_num(final['life_steal_ps'])} HP/s)")
+        sh = final.get("ls_share", 1.0)
+        print(f"  Life steal: {fmt_num(final['life_steal_ps'] * 3)} per 3s while you keep main-attacking "
+              f"(≈ {fmt_num(final['life_steal_ps'])} HP/s)"
+              + ("" if sh >= 1 else " - it only works on main attack hits, so it isn't counted for this spell build"
+                 if sh <= 0 else f" - counted for the {sh * 100:.0f}% of the time spent main-attacking between casts"))
     if build.enemy:
         hit = " + ".join(f"{fmt_num(v)} {ELEM_NAMES[e].lower()}" for e, v in build.enemy.items())
         print(f"  Against a hit of {hit}: you take {fmt_num(dfn['enemy_taken'])} per hit, "
@@ -5484,15 +5537,31 @@ def run(args):
         tome_base, tome_picks = floor_build, []
         auto_on = (not build.tomes and getattr(args, "auto_tomes", True) and level >= AUTO_TOMES_LEVEL
                    and only is None)        # building from your items: only tomes you list (--tomes)
+        # Other ability trees: the search picks gear for one tree at a time, and the tree above is planned around
+        # your starting gear, which can lock it into one style (a main-attack tree never seriously tries spell
+        # gear: assassin L50 balanced found 10,165 that way, 15,740 from a spell tree). When the goal's damage can
+        # come from either style, the search also runs from a tree planned for spells and one planned for main
+        # attacks (where those differ from the tree above), and their builds are added to the ones to choose from.
+        seeds, finals_in, style_runs, orig_cb, stopped = [], [], [], ws.PROGRESS.get("cb"), False
+        if style_open(floor_build.goal, getattr(floor_build, "goal2", None)):
+            for g in ("spells", "melee"):
+                t_g, _ = best_tree(build.copy_with(goal=g, goal2=None), armor, weapon, budget, keep=keep_ids,
+                                   extra_points=extra, beam_width=args.beam)
+                if frozenset(t_g) != frozenset(search_start) and all(frozenset(t_g) != frozenset(t) for _g, t in style_runs):
+                    style_runs.append((g, t_g))
+        n_runs = (2 if goal == "mixed" else 0) + len(style_runs) + 1
+        tl = getattr(args, "time_limit", None)
+
+        def keep_final(wg):
+            finals_in.append((wg["armor"], wg.get("base_weapon") or wg["weapon"], wg["weapon"], frozenset(wg["owned"]),
+                              list(wg["extra"])))
         # Most damage in any style: first the best spell-only and main-attack-only builds, each searched as deeply as
         # the main search (owner: nothing sacrificed), and the main search starts from those too, so it can only end
         # at or above them (in any-style damage).
-        seeds, orig_cb, stopped = [], ws.PROGRESS.get("cb"), False
         if goal == "mixed":
             by_name = {it.name: it for it in data.items.values()}
-            tl = getattr(args, "time_limit", None)
             for k, g in enumerate(("spells", "melee")):
-                ws.PROGRESS["cb"] = (lambda lo, g: lambda f, m: orig_cb(lo + f / 3, f"First, the best {GOAL_WORDS[g]} build: {m}"))(k / 3, g)
+                ws.PROGRESS["cb"] = (lambda lo, g: lambda f, m: orig_cb(lo + f / n_runs, f"First, the best {GOAL_WORDS[g]} build: {m}"))(k / n_runs, g)
                 wg = ws.search_best_build(floor_build.copy_with(goal=g, goal2=None), search_start, armor, weapon, base_weapon,
                                           keep=keep_ids, ap_budget=budget, include_never=include_never, min_level=min_lvl,
                                           deep=getattr(args, "deep", False), time_limit=(tl / 3 if tl else None), log=None,
@@ -5501,18 +5570,34 @@ def run(args):
                 bw = wg.get("base_weapon") or wg["weapon"]
                 if not (bw.crafted or bw.custom):
                     seeds.append((arm, by_name.get(bw.name, bw)))
+                keep_final(wg)
                 if wg.get("stopped"):
                     stopped = True
                     break
-            ws.PROGRESS["cb"] = lambda f, m: orig_cb(2 / 3 + f / 3, m)
             print("  Most damage in any style: the search also starts from the best spell-only and main-attack-only builds.")
+        done_runs = 2 if goal == "mixed" else 0
+        for g, t_g in style_runs:
+            if stopped:
+                break
+            ws.PROGRESS["cb"] = (lambda lo, g: lambda f, m: orig_cb(lo + f / n_runs, f"Searching with a tree planned for {GOAL_WORDS[g]}: {m}"))(done_runs / n_runs, g)
+            wg = ws.search_best_build(floor_build, t_g, armor, weapon, base_weapon, keep=keep_ids, ap_budget=budget,
+                                      include_never=include_never, min_level=min_lvl, deep=getattr(args, "deep", False),
+                                      time_limit=(tl / n_runs if tl else None), log=None, crafted=False, only=only)
+            keep_final(wg)
+            done_runs += 1
+            if wg.get("stopped"):
+                stopped = True
+        if style_runs:
+            print(f"  The search also ran from {len(style_runs)} other ability tree(s), planned for "
+                  + " and ".join(GOAL_WORDS[g] for g, _t in style_runs) + ".")
+        ws.PROGRESS["cb"] = (lambda lo: lambda f, m: orig_cb(lo + f / n_runs, m))(done_runs / n_runs)
         try:
             wb = ws.search_best_build(floor_build, search_start, armor, weapon, base_weapon, keep=keep_ids, ap_budget=budget,
                                       include_never=include_never, min_level=min_lvl,
                                       deep=getattr(args, "deep", False),
                                       time_limit=(1 if stopped else getattr(args, "time_limit", None)),
                                       log=lambda m: print("  " + m), crafted=not getattr(args, "no_crafted", True),
-                                      only=only, extra_starts=seeds)
+                                      only=only, extra_starts=seeds, extra_finals=finals_in)
         finally:
             ws.PROGRESS["cb"] = orig_cb
         if auto_on:

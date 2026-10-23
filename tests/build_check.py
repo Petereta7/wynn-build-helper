@@ -36,6 +36,9 @@ import wynn_helper as wh        # noqa: E402
 import wynn_search as ws        # noqa: E402
 
 BASELINE = os.path.join(HERE, "golden", "build_baseline.json")
+# The best build anyone has found for each case under today's rules (any search, any starting point). Not a check:
+# shows how close the search gets, so search changes can be judged against a known target.
+BEST_KNOWN = os.path.join(HERE, "golden", "best_known.json")
 
 # One case per class (each with a different goal), plus one with minimums and one that uses an ability buff.
 # Crafted items are off by default (the player asks for them), so the cases that test them ask for them.
@@ -137,8 +140,16 @@ def main():
         i = argv.index("--case")
         one = argv[i + 1]
         argv = argv[:i] + argv[i + 2:]
+    shard = None
+    if "--shard" in argv:                     # "--shard 2/4": every 4th case starting at the 2nd (CI runs them side by side)
+        i = argv.index("--shard")
+        k, n = (int(x) for x in argv[i + 1].split("/"))
+        shard = (k - 1, n)
+        argv = argv[:i] + argv[i + 2:]
     only = {a.lower() for a in argv if not a.startswith("--")}
     cases = [c for c in CASES if (one is None or c["name"] == one) and (not only or c["class"] in only)]
+    if shard is not None:
+        cases = cases[shard[0]::shard[1]]
     if one is not None and not cases:
         sys.exit(f"No case named {one!r}.")
     base = {}
@@ -152,6 +163,10 @@ def main():
     app.save_history = lambda *a, **k: None
     app.STATE["data_checked"] = True          # use the game data in the repository
 
+    known = {}
+    if os.path.exists(BEST_KNOWN):
+        with open(BEST_KNOWN, encoding="utf-8") as fh:
+            known = json.load(fh)
     t_all = time.time()
     for case in cases:
         params = {k: v for k, v in case.items() if k != "name"}
@@ -193,6 +208,8 @@ def main():
                   f"({sum(1 for r in roles.values() if r['role'] == 'spare')} spare of {len(roles)})" + (f" wrong: {bad_r[:3]}" if bad_r else ""))
         score = best["eval"]["main"]
         print(f"SCORE\t{case['name']}\t{score!r}", flush=True)
+        print(f"LINK\t{case['name']}\t{wh.LAST_RESULT.get('best_link')}", flush=True)
+        print(f"ITEMS\t{case['name']}\t" + ", ".join(x.name if x else "-" for x in best["armor"] + [best["weapon"]]), flush=True)
         was = base.get(case["name"])
         if was is None:
             check(f"{case['name']}: not worse than before", True, f"({score:,.1f}; no score recorded yet)")
@@ -202,11 +219,20 @@ def main():
                                                               else ")"))
         if record and (was is None or score > was):
             base[case["name"]] = score
+        k = known.get(case["name"])
+        if k and k.get("score"):
+            print(f"      best known build: {k['score']:,.1f} (this search reaches {score / k['score'] * 100:.1f}%)", flush=True)
+        if record and (not k or score > k.get("score", 0)):
+            known[case["name"]] = {"score": score, "link": wh.LAST_RESULT.get("best_link"), "found_by": "current search"}
 
     if record:
         with open(BASELINE, "w", encoding="utf-8") as fh:
             json.dump(base, fh, indent=2, sort_keys=True)
             fh.write("\n")
+        if one is None and not only and shard is None:
+            with open(BEST_KNOWN, "w", encoding="utf-8") as fh:
+                json.dump(known, fh, indent=1, sort_keys=True)
+                fh.write("\n")
         print(f"\nRecorded scores saved to {os.path.relpath(BASELINE, ROOT)}.")
     print(f"\n{sum(RESULTS)}/{len(RESULTS)} checks passed in {time.time() - t_all:.0f}s.")
     sys.exit(0 if all(RESULTS) else 1)

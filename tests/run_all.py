@@ -87,12 +87,22 @@ def main():
                 print(f"{'PASS' if ok else 'FAIL'}  {name:<52} ({secs:.0f}s)", flush=True)
         time.sleep(0.5)
 
-    scores = {}
+    scores, links, items = {}, {}, {}
     for name, ok, secs, out in results:
         for line in out.splitlines():
             if line.startswith("SCORE\t"):
                 _t, cname, val = line.split("\t", 2)
                 scores[cname] = float(val)
+            elif line.startswith("ITEMS\t"):
+                _t, cname, val = line.split("\t", 2)
+                items[cname] = val
+            elif line.startswith("LINK\t"):
+                _t, cname, val = line.split("\t", 2)
+                links[cname] = None if val == "None" else val
+    known = {}
+    if os.path.exists(build_check.BEST_KNOWN):
+        with open(build_check.BEST_KNOWN, encoding="utf-8") as fh:
+            known = json.load(fh)
     if record and scores:
         path = build_check.BASELINE
         base = {}
@@ -106,6 +116,14 @@ def main():
             json.dump(base, fh, indent=2, sort_keys=True)
             fh.write("\n")
         print("Recorded higher build scores in tests/golden/build_baseline.json.")
+        new_best = {k: v for k, v in scores.items() if v > (known.get(k) or {}).get("score", 0)}
+        if new_best:
+            for k, v in new_best.items():
+                known[k] = {"score": v, "link": links.get(k), "found_by": "current search"}
+            with open(build_check.BEST_KNOWN, "w", encoding="utf-8") as fh:
+                json.dump(known, fh, indent=1, sort_keys=True)
+                fh.write("\n")
+            print("New best known builds saved in tests/golden/best_known.json.")
 
     failed = [r for r in results if not r[1]]
     lines = [f"Ran {len(results)} checks on {total} cores in {time.time() - t0:.0f}s: "
@@ -116,7 +134,14 @@ def main():
             tail = [l for l in out.splitlines() if l.strip() and "Warning" not in l][-15:]
             lines += ["    " + l for l in tail]
     if scores:
-        lines += ["", "Build scores:"] + [f"  {k}: {v:,.1f}" for k, v in sorted(scores.items())]
+        lines += ["", "Build scores (and how close each is to the best build known for it):"]
+        for k, v in sorted(scores.items()):
+            kb = (known.get(k) or {}).get("score")
+            lines.append(f"  {k}: {v:,.1f}" + (f"   ({v / kb * 100:.1f}% of {kb:,.1f})" if kb else ""))
+            if items.get(k):
+                lines.append(f"      {items[k]}")
+            if links.get(k):
+                lines.append(f"      {links[k]}")
         lines += ["BUILD_SCORES_JSON " + json.dumps(scores, sort_keys=True)]     # exact values (for reviewing a change)
     text = "\n".join(lines)
     print("\n" + text)

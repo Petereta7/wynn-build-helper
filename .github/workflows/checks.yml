@@ -63,7 +63,11 @@ jobs:
     name: Builds for every class on Windows (legal, never worse)
     if: github.event_name != 'schedule'
     runs-on: windows-latest
-    timeout-minutes: 90
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ["1/4", "2/4", "3/4", "4/4"]     # the cases split four ways, side by side
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
@@ -73,7 +77,8 @@ jobs:
         shell: bash
         run: |
           echo '```' >> "$GITHUB_STEP_SUMMARY"
-          python tests/build_check.py 2>&1 | grep -v Warning | tee -a "$GITHUB_STEP_SUMMARY"
+          set -o pipefail
+          python tests/build_check.py --shard ${{ matrix.shard }} 2>&1 | grep -v Warning | tee -a "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
 
   publish:

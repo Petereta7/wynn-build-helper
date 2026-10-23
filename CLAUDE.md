@@ -112,7 +112,10 @@ Measured deep search on the owner's PC (1.6 -> 1.7): Warrior L106 7.0 -> 4.1 min
   2-3% worse there in deep mode. Open: close that gap.
 - Goal mix: main^(1-w) x second^w (like balanced at 50/50). Search filter and fast scoring keep what the second
   goal needs.
-- Mana check: Wynnbuilder's model (3 casts/s at 9 clicks/s, income 5 + mr/5 + ms/3, bar 100 + maxMana + Int%).
+- Mana check: Wynnbuilder's model (3 casts/s at 9 clicks/s, income 5 + mr/5, bar 100 + maxMana + Int%, costs / manaMult
+  for Paradox). Mana steal works only on main attack hits (wiki; Wynnbuilder has it as an optional tick box): never in
+  a spells-only rotation; in the mixed goal ms/3 x the main-attack share (owner caught this, Oct 2026). Warrior's
+  Generalist (every 4th cast costs 1) isn't counted yet (conservative).
 - Armor powders add health (any element) and elemental defense; chosen for finished builds at the very end, so
   the search path is unchanged and builds only gain. (Putting them mid-search once made a build worse.)
 - Crafted items: designed per slot for the finished best builds, all slots designed against the same build so
@@ -174,8 +177,56 @@ Measured deep search on the owner's PC (1.6 -> 1.7): Warrior L106 7.0 -> 4.1 min
   weapons the top 6 are mostly the new weapons' builds, so a craft-only run still beat the combined run there
   (154,867 vs 150,317 Shaman; 224,705 vs 221,436 Assassin): next idea is picking craft candidates for diversity.
 
+- Search additions in 1.11.0 (owner: "release 10.5 and do that as well if it means finding better builds"; every one
+  only adds candidates). Diagnosis (tests/collect_best.py, dev repo; tests/golden/best_known.json is the benchmark):
+  the search picks gear for ONE ability tree (`search_start`, planned around the starting gear), so a main-attack tree
+  never seriously tried spell gear: assassin L50 balanced 10,165 vs 15,692 for a spell build (cross-check: their gear
+  with our tree 6,789; best_tree from our gear stays at 10,490).
+  * Style trees (`style_open(goal, goal2)`: mixed, balanced, or a mix with both kinds): run() also searches from trees
+    planned for spells and for main attacks (best_tree with goal spells / melee; skipped when equal to search_start
+    or each other), crafted=False, and passes their builds as `extra_finals`; step 4d polishes them for the real goal
+    and adds them. Mixed keeps its spell/melee seed searches exactly as before (their builds now also go in as
+    extra_finals).
+  * 4c: weapons re-ranked on the best 3 gears found (rb = no floors), the top `regear` not yet fully searched get the
+    full search starting from those gears too; own polish slots (`regear_polish`).
+  * 5b craft rounds (`craft_rounds`): around the best crafted build, local search again with its crafts in the pools,
+    then design crafts again; plus a "crafts first" start (best build's weapon/tree, empty gear -> craft stage ->
+    rounds), which reaches builds made mostly of crafted items (mage L45 survival 72,976 -> 84,568 before the mana fix).
+  * Builds added by 4c/4d get crafts on top of the usual top `craft` builds, never in place of them (`regear_ids`).
+  * 5c wider trees (`tree_wide` 120, Maximum 160; `_wide_one`): best_tree at that width for the best `polish` finished
+    builds (fine-tuning uses 30, which missed assassin L55's better tree: 58,406 -> 65,520 on the same gear); when
+    better, local search for that tree (crafts kept via `_pools_with`) and polish. About +7% time at L55.
+  Results on the PC before the mana fix (all cases >= before): assassin L50 balanced 15,564, mage L45 84,568, mage L40
+  13,626, shaman L60 mixed 59,126, shaman L70 mix 77,851, assassin L55 62,372, shaman L60 spells 62,572.
+  build_check prints how close each case is to its best known build; run_all --record also raises best_known.json.
+  KNOWN PROBLEM (owner said release anyway, he isn't doing high-level builds yet; fix next): deep searches at L80-106
+  got far slower. 1.10.5 deep on the PC: warrior L106 9.7 min, mage L106 22, archer L100 11.5, shaman L80 19,
+  assassin L106 balanced 16; the new warrior L106 hadn't finished after 80 min. Suspects: 5b craft rounds (sequential
+  craft stages with 150 kicks + deep local search in the main process), 5c and 4c at L106. `timings` now has "of which
+  craft rounds"; profile with tests/search_timing.py --only "warrior L106 melee" (PC job limit raised to 340 min in the
+  dev repo's pc-tests.yml).
+- Mana steal / life steal accuracy (1.11.0, owner caught it): both work only on main attack hits (wiki). Mana: see
+  "Mana check". Life steal: `ls_share` in score_build (melee 1, spells/burst/healing 0, mixed = main-attack share,
+  ability = focus is the main attack, balanced/survival = whichever style deals the build's damage; a goal mix uses
+  the main goal's) scales life steal in survival's self-heal and in the "net" minimum (`floor_values(..., ls_share)`;
+  negative life steal too). Owner agreed to this reading. Same-numbers changes verified by reverting only these
+  pieces (golden reproduced exactly): mana 1955 builds, life steal 251, same sets on Linux and Windows.
+  Baselines in 1.11.0 (accuracy fix and search changes together; evidence tests/collect_best.py --old old_mana_code,
+  dev repo, = best builds of the new search under the old rules, re-searched under the mana fix): mage L40 12,800 ->
+  9,985 (old build re-searched 8,941), shaman L60 spells 61,823 -> 52,097 (45,981), shaman L70 mix 75,093 -> 72,389
+  (71,667), shaman L60 mixed 55,549 -> 55,528 (53,421), mage L45 survival 72,976 -> 65,388 (mana fix stage: 72,496 vs
+  new 74,984; life steal fix lowered it further: a spell mage's life steal no longer heals). Rose: assassin L50
+  balanced 10,165 -> 15,430, assassin L55 60,531 -> 65,520. Open: assassin L50 balanced, a 16,564 build exists under
+  the mana fix (before the life steal fix), the search gets 15,430. best_known.json reset to today's numbers for the
+  cases the fixes changed.
+- CI build check runs in 4 parallel parts (`build_check.py --shard k/4`, matrix in checks.yml, 150 min each).
+
 ## History (newest first)
 
+- 1.11.0: search also from spell / main-attack trees (most damage, balanced), weapons re-ranked on the best gear,
+  craft rounds and crafts-first, wider tree plan for the best builds; mana steal and life steal only from main attacks;
+  Paradox refund; best-known benchmark; CI build check in 4 parallel parts. High-level deep searches much slower (fix
+  next).
 - 1.10.5: spell rotations count summons/totems/storms at most one copy (accuracy fix; spell and any-style numbers drop
   where they relied on stacking recasts).
 - 1.10.4: life steal / mana steal / never-lose-health minimums (final totals); the bot may not estimate or hand-edit
@@ -214,8 +265,10 @@ Measured deep search on the owner's PC (1.6 -> 1.7): Warrior L106 7.0 -> 4.1 min
 - New item alerts: after a game data update, re-check saved builds.
 - Report-a-problem button (pack build, settings and report into a file).
 - Faster search / faster CI build check (currently ~20 min on GitHub).
-- Close the 1.10.5 gap: assassin L50 balanced (main search, weapon shortlist?) and shaman L70 mix (craft stage) end
-  2-3% below builds the pre-fix search found (see Design decisions, spell rotations).
+- Search gap left (see best_known.json): shaman spells cases still below builds found from other starting points;
+  archetype-guided starting trees for spell goals (like style trees, one per archetype) are the next idea.
+- Speed up high-level deep searches again (see KNOWN PROBLEM above) without losing the better builds.
+- Warrior's Generalist (every 4th spell costs 1 mana) isn't counted in mana checks yet (conservative).
 - Tree planner robustness: beyond the per-archetype states (1.10.5), guided runs toward archetype payoff nodes (like
   the ultimate runs in best_tree) could find more; costs tree-planning time.
 - Later, when the owner has them: aspects (from raids) and guild tomes (tomes from level 55 are done, guild ones not).

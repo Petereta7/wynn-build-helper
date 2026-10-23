@@ -51,7 +51,12 @@ def main():
             e = [0] * 5
             mix = wh.Build(d, tree, 80, g1, goal2=g2, goal2_weight=w).evaluate(owned, [None] * 8, wpn, e)
             a = wh.Build(d, tree, 80, g1).evaluate(owned, [None] * 8, wpn, e)["main"]
-            b = wh.Build(d, tree, 80, g2).evaluate(owned, [None] * 8, wpn, e)["main"]
+            rb = wh.Build(d, tree, 80, g2).evaluate(owned, [None] * 8, wpn, e)
+            b = rb["main"]
+            if rb["ls_share"] != mix["ls_share"]:
+                # life steal counts by the main goal's way of fighting (spells: none), so the survival part of a
+                # spells mix can differ from survival alone; the mix of the parts must still be exact
+                b = mix["goal_parts"][g2]
             want = max(a, 1e-9) ** (1 - w) * max(b, 1e-9) ** w
             if abs(mix["main"] - want) > 1e-9 * max(1, want) or mix["goal_parts"] != {g1: a, g2: b}:
                 bad.append(f"{cls} {g1}+{g2}: {mix['main']} vs {want}")
@@ -100,7 +105,7 @@ def main():
             dmg = sum(x["cast"] for x in rs) / len(rs)
             bar = 100 + r["stats"].get("maxMana", 0) + math.floor(wh.skill_pct(r["stats"].get("int", 0)) * 100)
             probs = []
-            if abs(m["used"] - 3 * sum(x["cost"] for x in rs) / len(rs)) > 1e-9:
+            if abs(m["used"] - 3 * sum(x["cost"] for x in rs) / len(rs) / wh.mana_refund_mult(r["stats"])) > 1e-9:
                 probs.append("used")
             sus = wh.rotation_dps(rs, m["sustained_rate"])
             if abs(sus - r["spell_dps"]) > 1e-6 * max(1, r["spell_dps"]):
@@ -136,6 +141,73 @@ def main():
                     bad.append(f"{cls} L{lvl}: parts don't add up")
     check("spells + main attacks together: never below either alone", not bad and seen >= 5,
           f"({seen} with spells)" + (" " + "; ".join(bad[:2]) if bad else ""))
+
+    # 4c. mana steal only works on main attack hits (wiki): never counted for a spells-only rotation; in the mixed
+    # goal only for the share of time spent main-attacking. Mage's Paradox refund lowers spell costs as in
+    # Wynnbuilder's mana calculator (cost / 1.34).
+    bad, seen = [], 0
+    for cls in wh.CLASSES:
+        tree = wh.Tree(d, cls)
+        lvl = 80
+        wpn = wh.default_weapon(d, cls, lvl)
+        steal = [it for it in d.items.values() if it.type == "helmet" and it.level <= lvl
+                 and (it.raw.get("ms") or 0) >= 5 and wh._wearable([it] + [None] * 7, wpn, lvl)][:1]
+        if not steal:
+            continue
+        arm = steal + [None] * 7
+        for goal in ("spells", "mixed"):
+            build = wh.Build(d, tree, lvl, goal)
+            owned, _ = wh.optimize_tree(build, arm, wpn, wh.ability_points(lvl), beam_width=6)
+            r = build.evaluate(owned, arm, wpn, [0] * 5)
+            st = r["stats"]
+            if st.get("ms", 0) <= 0:
+                continue
+            seen += 1
+            if abs(r["mana_income"] - (wh.BASE_MANA_PER_SECOND + st.get("mr", 0) / 5)) > 1e-9:
+                bad.append(f"{cls} {goal}: income {r['mana_income']:.2f} counts mana steal")
+            mi = r.get("mixed") or {}
+            if goal == "mixed" and mi.get("rotation"):
+                rs = [r["results"][b] for b in mi["rotation"]]
+                mult = wh.mana_refund_mult(st)
+                spend = mi["rate"] * sum(x["cost"] / mult - x["mana_gained"] for x in rs) / len(rs)
+                gain = r["mana_income"] + st["ms"] / 3 * mi["melee_share"]
+                if spend > gain + 1e-6:
+                    bad.append(f"{cls} mixed: spends {spend:.2f}/s, gets {gain:.2f}/s")
+    if abs(wh.mana_refund_mult({"manaMult.Paradox": 34, "mr": 5}) - 1.34) > 1e-12 or wh.mana_refund_mult({}) != 1.0:
+        bad.append("Paradox refund isn't cost / 1.34")
+    check("mana steal only from main attacks; Paradox refund", not bad and seen >= 3,
+          f"({seen} builds with mana steal)" + (" " + "; ".join(bad[:2]) if bad else ""))
+
+    # 4c2. life steal also only works on main attack hits: none for spell-only builds (survival heal and the
+    # never-lose-health minimum), all for main attacks, the main-attack share for most damage in any style
+    bad, seen = [], 0
+    for cls in wh.CLASSES:
+        tree = wh.Tree(d, cls)
+        lvl = 80
+        wpn = wh.default_weapon(d, cls, lvl)
+        steal = [it for it in d.items.values() if it.type == "helmet" and it.level <= lvl
+                 and (it.raw.get("ls") or 0) >= 50 and wh._wearable([it] + [None] * 7, wpn, lvl)][:1]
+        if not steal:
+            continue
+        arm = steal + [None] * 7
+        for goal, want in (("spells", 0.0), ("melee", 1.0), ("mixed", None)):
+            build = wh.Build(d, tree, lvl, goal, floors={"net": -1e9})
+            owned, _ = wh.optimize_tree(build, arm, wpn, wh.ability_points(lvl), beam_width=6)
+            r = build.evaluate(owned, arm, wpn, [0] * 5)
+            share = r["ls_share"]
+            if want is not None and share != want:
+                bad.append(f"{cls} {goal}: life steal share {share}")
+            if goal == "mixed":
+                mi = r["mixed"]
+                exp = mi["melee_share"] if mi.get("rotation") else 1.0
+                if abs(share - exp) > 1e-12:
+                    bad.append(f"{cls} mixed: share {share} vs {exp}")
+            net = r["defense"].get("hpr", 0) / 4 + r["stats"].get("ls", 0) / 3 * share
+            if abs(r["floor_values"]["net"] - net) > 1e-9:
+                bad.append(f"{cls} {goal}: net health {r['floor_values']['net']:.2f} vs {net:.2f}")
+            seen += 1
+    check("life steal only from main attacks", not bad and seen >= 9,
+          f"({seen} builds)" + (" " + "; ".join(bad[:2]) if bad else ""))
 
     # 4d. a lasting spell (summons, totems, storms: shown as damage per second) never counts above one copy up all the
     # time, however often it's recast (recasting refreshes it)

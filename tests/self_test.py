@@ -143,6 +143,13 @@ def main():
         wh.ALLOW_MYTHIC = old_m
     report("mythics only when allowed", ok, 3)
 
+    # ---- which goals also search from spell and main-attack trees (damage from either style)
+    want = {("mixed", None): True, ("balanced", None): True, ("spells", None): False, ("melee", None): False,
+            ("survival", None): False, ("spells", "survival"): False, ("survival", "mixed"): True,
+            ("melee", "spells"): True, ("burst", "melee"): True, ("healing", None): False, ("ability", None): False}
+    ok = sum(1 for (g, g2), v in want.items() if wh.style_open(g, g2) == v)
+    report("goals that try other ability trees", ok, len(want))
+
     # ---- weapon powders
     cases = golden("powder_cases.json")
     if cases:
