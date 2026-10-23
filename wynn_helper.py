@@ -2749,7 +2749,6 @@ def score_build(results: dict, stats: dict, weapon, goal: str, ult_spells=frozen
     income = BASE_MANA_PER_SECOND + stats.get("mr", 0) / 5 + max(0, stats.get("ms", 0)) / 3
     # Best rotation of 2-4 different spells: casts/s limited by clicks and by mana.
     best_rot, best_rot_dps = None, 0.0
-    tie_rot_dps = 0.0      # the same without the one-copy rule: only for the small tie-breakers (see below)
     usable = [bs for bs, r in results.items() if bs in (1, 2, 3, 4)]
     for size in (2, 3, 4):
         for combo in itertools.combinations(usable, size):
@@ -2763,7 +2762,6 @@ def score_build(results: dict, stats: dict, weapon, goal: str, ult_spells=frozen
             dps = rotation_dps(rs, cast_rate)
             if dps > best_rot_dps:
                 best_rot_dps, best_rot = dps, combo
-            tie_rot_dps = max(tie_rot_dps, cast_rate * sum(r["cast"] for r in rs) / size)
     # Mana check for that rotation (Wynnbuilder's mana model: 3 casts/s at 9 clicks/s, mana income
     # 5 + mr/5 + ms/3, mana bar 100 + max mana bonus + Intelligence %): how long full speed lasts.
     mana = None
@@ -2841,10 +2839,7 @@ def score_build(results: dict, stats: dict, weapon, goal: str, ult_spells=frozen
         main = mix_goals(main, goals[goal2], goal2_weight)
     # Small tie-breakers so spare points still go somewhere useful (other damage, then mana bank size).
     bank = sum(r["mana_gained"] for r in results.values())
-    # (The tie-breaker keeps the rotation number from before the one-copy rule, 1.10.5: tie-breakers only steer
-    # between builds equal on the goal, and changing them sent the tree search for a mage survival build down a
-    # worse path, 72,976 -> 33,538. Kept as before, goals that don't use spell rotations search exactly as before.)
-    value = main * 1.0 + 0.002 * (tie_rot_dps + burst / 5 + melee_dps) + 0.0005 * triggered_extra + 0.0001 * bank
+    value = main * 1.0 + 0.002 * (best_rot_dps + burst / 5 + melee_dps) + 0.0005 * triggered_extra + 0.0001 * bank
     return {"value": value, "main": main, "spell_dps": best_rot_dps, "rotation": best_rot, "burst": burst,
             "melee_hit": melee, "melee_dps": melee_dps, "extra_dps": extra_dps, "mana_income": income,
             "special": special, "defense": defense, "heal_ps": heal_ps, "heal_rotation": heal_rot,
@@ -3459,7 +3454,14 @@ def optimize_tree(build: Build, armor, weapon, ap_budget: int, keep=(), start=()
             mix = tuple(sorted(s[2].items()))
             if mix not in by_mix:
                 by_mix[mix] = s
-        pool = list(by_mix.values())[: beam_width // 3] + scored
+        # ... and the states furthest along each archetype: abilities that need an archetype count (like Orphion's
+        # Pulse, 5 Light Bender) often only pay off after several abilities that change nothing on their own, which a
+        # beam ranked by score alone drops on the way (a mage survival tree once lost it: 1,352 instead of 2,163).
+        far = []
+        archs = {a for _sc, _o, ar in scored for a in ar}
+        for a in sorted(archs):
+            far += sorted(scored, key=lambda x: (x[2].get(a, 0), x[0]), reverse=True)[: max(1, beam_width // 12)]
+        pool = list(by_mix.values())[: beam_width // 3] + far + scored
         uniq = []
         ids = set()
         for s in pool:
