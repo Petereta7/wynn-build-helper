@@ -1,4 +1,4 @@
 {
-  "version": "1.10.4",
-  "notes": "New minimums: life steal, mana steal, and \"never lose health\" (health gained per second: health regen plus life steal together, so one can be negative as long as the other makes up for it). Tell the bot \"no negative health\", or use the new boxes in the form. Every minimum is checked on the build's final total. The bot no longer patches a build by hand or guesses numbers: if a build breaks something you asked for, it runs the calculator again with that as a minimum."
+  "version": "1.10.5",
+  "notes": "Accuracy fix for spell damage: a spell that lasts (summons like Guardian Angels, totems, storms) now counts at most its damage per second while it's up, however often you recast it, because recasting refreshes it instead of adding another copy. Before, some spell builds were rated far too high (one archer build showed 1.7 million instead of about 690 thousand). Spell and \"most damage\" numbers drop where they relied on that; main attack numbers don't change."
 }

@@ -96,6 +96,10 @@ Measured deep search on the owner's PC (1.6 -> 1.7): Warrior L106 7.0 -> 4.1 min
   (ls/ms added Oct 2026 after the bot hand-patched a build with negative life steal), net, elemental defenses.
   "net" (owner: "no negative health" / never lose more HP than I gain) = hpr/4 + ls/3 per second (wiki: regen every
   4 s, life steal per 3 s while main-attacking); either can be negative if the other makes up for it.
+- Spell rotations (spells and mixed goals): a lasting spell (display is a damage-per-second figure: summons, totems,
+  storms) counts at most its DPS while up, however often it's recast (`rotation_dps`): recasting refreshes it, doesn't
+  stack. Before 1.10.5 a Guardian Angels cast counted its whole duration at 1.5 casts/s (an archer L121 spell build
+  showed 1.74M instead of 692k). Conservative: a few such spells might overlap in game.
 - Goal mix: main^(1-w) x second^w (like balanced at 50/50). Search filter and fast scoring keep what the second
   goal needs.
 - Mana check: Wynnbuilder's model (3 casts/s at 9 clicks/s, income 5 + mr/5 + ms/3, bar 100 + maxMana + Int%).
@@ -162,6 +166,8 @@ Measured deep search on the owner's PC (1.6 -> 1.7): Warrior L106 7.0 -> 4.1 min
 
 ## History (newest first)
 
+- 1.10.5: spell rotations count summons/totems/storms at most one copy (accuracy fix; spell and any-style numbers drop
+  where they relied on stacking recasts).
 - 1.10.4: life steal / mana steal / never-lose-health minimums (final totals); the bot may not estimate or hand-edit
   builds.
 - 1.10.3: "max DPS" means the most damage in any style (mixed goal, first in the form); seeded by spell-only and
