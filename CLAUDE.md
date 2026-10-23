@@ -104,6 +104,12 @@ Measured deep search on the owner's PC (1.6 -> 1.7): Warrior L106 7.0 -> 4.1 min
   distorted spell searches). The tree beam also keeps the states furthest along each archetype (`far`), because the
   changed tie-breakers exposed a fragile path: mage L45 survival's Orphion's Pulse (needs 5 Light Bender) pays only
   after flat steps, and the beam dropped it (72,976 -> 33,538) until this was added.
+  Baselines lowered in 1.10.5 (owner chose accuracy first, Oct 2026): assassin L50 balanced 21,190 -> 10,165, assassin
+  L55 spells 107,581 -> 60,531, mage L40 spells 23,682 -> 12,800, shaman L70 mix 77,059 -> 75,093 (shaman L60 spells
+  rose 55,350 -> 61,823). Evidence (tests/rescore.py, dev repo): the old best builds re-scored and re-searched under
+  the fix: mage L40 9,825 and assassin L55 59,564 (both below the new search), but assassin L50 balanced 10,497 (no
+  crafts; new quick 8,272, deep 10,295) and shaman L70 89,613 (craft stage; new deep 87,032) are above: the search does
+  2-3% worse there in deep mode. Open: close that gap.
 - Goal mix: main^(1-w) x second^w (like balanced at 50/50). Search filter and fast scoring keep what the second
   goal needs.
 - Mana check: Wynnbuilder's model (3 casts/s at 9 clicks/s, income 5 + mr/5 + ms/3, bar 100 + maxMana + Int%).
@@ -208,6 +214,8 @@ Measured deep search on the owner's PC (1.6 -> 1.7): Warrior L106 7.0 -> 4.1 min
 - New item alerts: after a game data update, re-check saved builds.
 - Report-a-problem button (pack build, settings and report into a file).
 - Faster search / faster CI build check (currently ~20 min on GitHub).
+- Close the 1.10.5 gap: assassin L50 balanced (main search, weapon shortlist?) and shaman L70 mix (craft stage) end
+  2-3% below builds the pre-fix search found (see Design decisions, spell rotations).
 - Tree planner robustness: beyond the per-archetype states (1.10.5), guided runs toward archetype payoff nodes (like
   the ultimate runs in best_tree) could find more; costs tree-planning time.
 - Later, when the owner has them: aspects (from raids) and guild tomes (tomes from level 55 are done, guild ones not).
