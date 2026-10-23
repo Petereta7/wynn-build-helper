@@ -14,6 +14,7 @@ You get:
 - **Crafted and custom items** from Wynnbuilder links or `CR-...` / `CI-...` codes.
 - **Tomes in the build**: from level 55 the best weapon and armor tomes are picked as part of the build (tomes themselves need level 60), and the gear is chosen with them on. Armor tome slots your goal doesn't use get the tomes with the most health. Guild tomes need a guild, so they're only used if you list them. If you list the tomes you have, only those are used; untick "Add the best tomes" (or tell the bot you don't use tomes) to leave them out.
 - **Mythic items are left out** of every search and suggestion unless you say so: tick "Allow mythic items" in the form, tell the bot "you can use mythics", or use `--mythics`. Mythics you're wearing or list in My items count as yours. (Mythic tomes too.)
+- **Archetypes**: pick a main archetype (the tree keeps more of its abilities than any other archetype's, borrowing from other paths where they help) and/or one to leave out completely ("anything but Battle Monk"): form boxes, tell the bot, or `--archetype Trapper` / `--avoid-archetype "Battle Monk"`.
 - **Aspects** that help your goal most.
 - **Damage and survival**: spells, main attack, poison, summons, ultimates, effective HP, regen, life steal and healing, and how many hits of a given enemy attack you can take.
 - **Level plan**: for each upcoming level, the abilities to click, where your 2 new skill points go, and gear that unlocks then.

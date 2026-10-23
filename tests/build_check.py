@@ -66,6 +66,9 @@ CASES = [
                     "Brass Knuckle", "Fingertrap", "Return", "Insulation", "Adventurous", "Bamboo Cuff", "Devotion",
                     "Shiny Coin", "Luminis", "Ballista", "Dorian", "Flawless Light Jungle Bow", "Scarlet Veil",
                     "Heartbreak", "Binding Brace", "Electric Torc", "Soundwave"]},
+    # a main archetype the planner wouldn't pick by itself (the tree must keep most of its abilities)
+    {"name": "archer L60 spells, Trapper, no Boltslinger", "class": "archer", "level": 60, "goal": "spells",
+     "archetype": "Trapper", "avoid_archetypes": ["Boltslinger"]},
 ]
 
 RESULTS = []
@@ -129,6 +132,14 @@ def problems_with(case, res):
         r1, r2 = best["armor"][4], best["armor"][5]
         if r1 is not None and r2 is not None and wh.item_key(r1) == wh.item_key(r2) and counts.get(wh.item_key(r1), 0) < 2:
             out.append(f"wears two {r1.name} but the player has one")
+    if case.get("archetype"):                    # the main archetype has the most abilities in the tree
+        mine, other = wh.archetype_lead(wh.LAST_RESULT["build"].tree, best["owned"], case["archetype"])
+        if mine <= other:
+            out.append(f"{case['archetype']} has {mine} abilities, another archetype {other}")
+    for a in case.get("avoid_archetypes") or []:  # and none from an archetype the player left out
+        n = wh.archetype_counts(wh.LAST_RESULT["build"].tree, best["owned"]).get(a, 0)
+        if n:
+            out.append(f"{n} {a} abilities though the player left {a} out")
     fin = best["eval"]
     if case.get("minimums") and not fin.get("floors_met", True):
         out.append("misses the minimums: " + "; ".join(wh.floor_misses(wh.parse_floors(

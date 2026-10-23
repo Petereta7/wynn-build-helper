@@ -713,6 +713,12 @@ label.deep input[type=checkbox] { width: auto; flex: 0 0 auto; margin-top: 3px; 
         </div>
         <div class="field"><label for="f-goal">What matters most</label><select id="f-goal"></select></div>
         <div class="row">
+          <div class="field"><label for="f-arch">Main archetype (optional)</label>
+            <select id="f-arch"><option value="">Any (whatever is strongest)</option></select></div>
+          <div class="field"><label for="f-avoid">Don't use this archetype</label>
+            <select id="f-avoid"><option value="">No preference</option></select></div>
+        </div>
+        <div class="row">
           <div class="field"><label for="f-goal2">Also care about (optional)</label>
             <select id="f-goal2"><option value="">Nothing else</option><option value="survival">Survival</option><option value="spells">Spell damage</option><option value="mixed">Most damage (any style)</option><option value="melee">Main attack DPS</option><option value="burst">Biggest combo</option><option value="healing">Healing others</option></select></div>
           <div class="field" id="goal2wField" hidden><label for="f-goal2w">How much: <b id="goal2wVal">30%</b></label>
@@ -1378,7 +1384,8 @@ function formParams() {
     powders: $("#f-powders").value, enemy: $("#f-enemy").value, tomes: $("#f-tomes").value, aspects: $("#f-aspects").value,
     sliders: $("#f-sliders").value, raid_buffs: $("#f-raid").value, rolls: $("#f-rolls").value, poison: $("#f-poison").value,
     drops_only: $("#f-drops").checked, crafted: $("#f-crafted").checked, deep_search: $("#f-deep").checked,
-    auto_tomes: $("#f-autotomes").checked, mythics: $("#f-mythics").checked,
+    auto_tomes: $("#f-autotomes").checked, mythics: $("#f-mythics").checked, archetype: $("#f-arch").value || undefined,
+    avoid_archetypes: $("#f-avoid").value ? [$("#f-avoid").value] : undefined,
     only_items: $("#f-only").value.trim() ? $("#f-only").value.split(/[,;\n]/).map((s) => s.trim()).filter(Boolean) : undefined,
     second_goal: $("#f-goal2").value || undefined, second_goal_weight: $("#f-goal2").value ? +$("#f-goal2w").value : undefined,
     item_levels: $("#f-levels").value ? +$("#f-levels").value : undefined,
@@ -2560,7 +2567,16 @@ function syncGoal2() {
   $("#goal2wField").hidden = !$("#f-goal2").value;
   $("#goal2wVal").textContent = `${$("#f-goal2w").value}%`;
 }
+function syncArch() {                      // the chosen class's archetypes
+  const list = ((META.archetypes || {})[$("#f-class").value] || []);
+  for (const [id, none] of [["#f-arch", "Any (whatever is strongest)"], ["#f-avoid", "No preference"]]) {
+    const keep = $(id).value;
+    $(id).innerHTML = `<option value="">${none}</option>` +
+      list.map((a) => `<option value="${esc(a)}"${a === keep ? " selected" : ""}>${esc(a)}</option>`).join("");
+  }
+}
 async function loadAbilities() {
+  syncArch();
   try {
     const names = await fetch("/api/abilities?class=" + encodeURIComponent($("#f-class").value)).then((r) => r.json());
     $("#abilityList").innerHTML = names.map((n) => `<option value="${esc(n)}"></option>`).join("");

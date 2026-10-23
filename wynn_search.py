@@ -654,6 +654,8 @@ def _settings(build, include_never, min_level):
             **({"toggle_share": sorted(build.toggle_share.items())} if getattr(build, "toggle_share", None) else {}),
             **({"auto_masks": True} if getattr(build, "auto_masks", False) else {}),
             **({"goal2": [build.goal2, build.goal2_weight]} if getattr(build, "goal2", None) else {}),
+            **({"archetype": build.archetype} if getattr(build, "archetype", None) else {}),
+            **({"avoid_archetypes": list(build.avoid_archetypes)} if getattr(build, "avoid_archetypes", ()) else {}),
             **({"only": [sorted(_ONLY["names"]), sorted(_ONLY.get("one", ())), bool(_ONLY.get("any_weapon"))]}
                if _ONLY.get("names") is not None else {})}
 
@@ -1299,6 +1301,8 @@ def _build_spec(build):
             "toggles_off": sorted(getattr(build, "toggles_off", ()) or ()),
             "auto_toggles": sorted(getattr(build, "auto_toggles", ()) or ()),
             "goal2": getattr(build, "goal2", None), "goal2_weight": getattr(build, "goal2_weight", 0.0),
+            "archetype": getattr(build, "archetype", None),
+            "avoid_archetypes": list(getattr(build, "avoid_archetypes", ()) or ()),
             "only_one": sorted(wh.ONLY_ONE)}
 
 
@@ -1316,7 +1320,8 @@ def _worker_init(spec, stop_event, q=None):
                            focus=tuple(spec["focus"]) if spec.get("focus") else None, floors=spec.get("floors"),
                            toggle_share=spec.get("toggle_share"), auto_masks=spec.get("auto_masks", False),
                            toggles_off=spec.get("toggles_off", ()), auto_toggles=spec.get("auto_toggles", ()),
-                           goal2=spec.get("goal2"), goal2_weight=spec.get("goal2_weight", 0.0))
+                           goal2=spec.get("goal2"), goal2_weight=spec.get("goal2_weight", 0.0),
+                           archetype=spec.get("archetype"), avoid_archetypes=spec.get("avoid_archetypes") or ())
     _W["stop"] = stop_event
     if q is not None:
         last = {"t": 0.0, "v": -1e300, "n": wh.EVAL_STATS["n"]}

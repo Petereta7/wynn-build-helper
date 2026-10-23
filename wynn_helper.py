@@ -2610,6 +2610,9 @@ def _is_dps_label(label) -> bool:
 # Assumptions for damage that isn't a normal cast (printed in the report).
 EXTRA_DPS_UPTIME = 0.5        # summons, sigils, totems: active about half the time
 EXTRA_TRIGGER_EVERY = 3.0     # one-off triggered hits (traps, shatters): about every 3 s
+# Spells that only damage enemies that come close to you (owner, Oct 2026: "I'd have to run at the enemy"): left out of
+# damage-per-second rotations, still in the burst combo. Arrow Shield's arrows hit "enemies that get too close".
+CONTACT_SPELLS = frozenset({"Arrow Shield"})
 ULT_DPS_UPTIME = 0.25         # damage-over-time ultimates: active about a quarter of the time
 ULT_HIT_EVERY = 60.0          # one-shot ultimates: about once a minute
 SURVIVAL_HEAL_SECONDS = 10.0  # survival goal: effective HP plus 10 s of healing and two regen ticks
@@ -2777,9 +2780,12 @@ def score_build(results: dict, stats: dict, weapon, goal: str, ult_spells=frozen
     # Best rotation of 2-4 different spells: casts/s limited by clicks and by mana.
     best_rot, best_rot_dps = None, 0.0
     usable = [bs for bs, r in results.items() if bs in (1, 2, 3, 4)]
+    # Spells whose damage only hits enemies that come up to you (Arrow Shield: "enemies that get too close") aren't
+    # damage you can keep up from range: spell rotations count them as 0 (they can still be cast); burst counts them.
+    rot_res = {b: (dict(r, cast=0.0) if r.get("name") in CONTACT_SPELLS else r) for b, r in results.items()}
     for size in (2, 3, 4):
         for combo in itertools.combinations(usable, size):
-            rs = [results[b] for b in combo]
+            rs = [rot_res[b] for b in combo]
             if sum(r["cast"] for r in rs) <= 0:
                 continue
             net_cost = sum(r["cost"] / mana_mult - r["mana_gained"] for r in rs) / size
@@ -2793,7 +2799,7 @@ def score_build(results: dict, stats: dict, weapon, goal: str, ult_spells=frozen
     # mana bar 100 + max mana bonus + Intelligence %): how long full speed lasts.
     mana = None
     if best_rot:
-        rs = [results[b] for b in best_rot]
+        rs = [rot_res[b] for b in best_rot]
         full_rate = CLICKS_PER_SECOND / 3
         used = full_rate * sum(r["cost"] / mana_mult for r in rs) / len(rs)
         back = full_rate * sum(r["mana_gained"] for r in rs) / len(rs)
@@ -2836,7 +2842,7 @@ def score_build(results: dict, stats: dict, weapon, goal: str, ult_spells=frozen
     mixed_goal, mixed_info = melee_dps + poison_melee + special_dps, {"rotation": None, "rate": 0.0, "melee_share": 1.0}
     for size in (2, 3, 4):
         for combo in itertools.combinations(usable, size):
-            rs = [results[b] for b in combo]
+            rs = [rot_res[b] for b in combo]
             if sum(r["cast"] for r in rs) <= 0:
                 continue
             net_cost = sum(r["cost"] / mana_mult - r["mana_gained"] for r in rs) / size
@@ -2974,6 +2980,58 @@ TOGGLE_NEEDS = {
     "Activate Bullwhip": (lambda tree, owned: not _owns(tree, owned, "Mystic Masks") or _owns(tree, owned, "Haunting Memory"),
                           "with Mystic Masks, Uproot switches masks instead of hitting, so Bullwhip needs Haunting Memory"),
 }
+
+
+def tree_archetypes(tree) -> list:
+    """This class's archetypes (e.g. Archer: Boltslinger, Sharpshooter, Trapper)."""
+    return sorted({n.archetype for n in tree.nodes if getattr(n, "archetype", None)})
+
+
+def archetype_counts(tree, owned) -> dict:
+    """{archetype: abilities of it in the tree} (one per ability, like the game's archetype requirements)."""
+    of = tree.__dict__.get("_arch_of")
+    if of is None:
+        of = tree.__dict__["_arch_of"] = {n.id: n.archetype for n in tree.nodes if getattr(n, "archetype", None)}
+    cnt = {}
+    for i in owned:
+        a = of.get(i)
+        if a:
+            cnt[a] = cnt.get(a, 0) + 1
+    return cnt
+
+
+def archetype_lead(tree, owned, name) -> tuple:
+    """(abilities of archetype `name` in the tree, most abilities of any other archetype)."""
+    cnt = archetype_counts(tree, owned)
+    return cnt.get(name, 0), max((v for k, v in cnt.items() if k != name), default=0)
+
+
+def archetype_line(tree, owned, main=None, avoid=()) -> str:
+    """'Archetypes in this tree: Trapper 9, Boltslinger 4, Sharpshooter 0 (main: Trapper)'."""
+    cnt = {a: 0 for a in tree_archetypes(tree)}
+    cnt.update(archetype_counts(tree, owned))
+    txt = "Archetypes in this tree: " + ", ".join(f"{a} {n}" for a, n in sorted(cnt.items(), key=lambda x: -x[1]))
+    if main:
+        mine = cnt.get(main, 0)
+        ok = mine > max((v for k, v in cnt.items() if k != main), default=0)
+        txt += f" (your main archetype {main}: " + ("the most, as asked)" if ok else "couldn't be made the most here)")
+    for a in avoid:
+        txt += (f"; none from {a}, as asked" if not cnt.get(a) else
+                f"; {cnt[a]} from {a} (couldn't be avoided at this level)")
+    return txt
+
+
+def match_archetype(tree, text):
+    """The archetype a player means ("sharp", "trapper", "battle monk"), or None; raises ValueError if unclear."""
+    t = (text or "").strip().lower().replace("-", " ")
+    if not t or t in ("any", "none", "no"):
+        return None
+    names = tree_archetypes(tree)
+    hit = [a for a in names if a.lower() == t] or [a for a in names if a.lower().startswith(t)] or \
+          [a for a in names if t in a.lower()]
+    if len(hit) != 1:
+        raise ValueError(f"Unknown archetype {text!r}; {CLASS_TITLE[tree.cls]} archetypes: {', '.join(names)}.")
+    return hit[0]
 
 
 def auto_toggles_for(tree) -> dict:
@@ -3152,8 +3210,13 @@ class Build:
     def __init__(self, data: GameData, tree: Tree, level: int, goal: str, tomes=(), aspects=(),
                  toggles=frozenset(), sliders=None, slider_mode="none", buffs=(), raid_buffs=(), enemy=None,
                  focus=None, floors=None, toggle_share=None, auto_masks=False, toggles_off=(), auto_toggles=(),
-                 goal2=None, goal2_weight=0.0):
+                 goal2=None, goal2_weight=0.0, archetype=None, avoid_archetypes=()):
         self.data, self.tree, self.level, self.goal = data, tree, level, goal
+        # the archetype you want to play mainly: the tree must have more of its abilities than of any other archetype
+        # (abilities from other paths are fine when they help); None = any
+        self.archetype = archetype or None
+        # archetypes you don't want to play: no abilities from them in the tree
+        self.avoid_archetypes = tuple(sorted(set(avoid_archetypes or ())))
         self.goal2, self.goal2_weight = clean_goal2(goal, goal2, goal2_weight)   # optional second goal and its weight
         self.toggle_share = {k: float(v) for k, v in (toggle_share or {}).items() if 0 < float(v) < 1}
         self.auto_masks = bool(auto_masks)  # wear whichever Mystic Mask helps the goal most
@@ -3176,7 +3239,8 @@ class Build:
                       buffs=self.buffs, raid_buffs=self.raid_buffs, enemy=self.enemy, focus=self.focus,
                       floors=self.floors, toggle_share=self.toggle_share, auto_masks=self.auto_masks,
                       toggles_off=self.toggles_off, auto_toggles=self.auto_toggles, goal2=self.goal2,
-                      goal2_weight=self.goal2_weight)
+                      goal2_weight=self.goal2_weight, archetype=self.archetype,
+                      avoid_archetypes=self.avoid_archetypes)
         fields.update(kw)
         return Build(self.data, self.tree, **fields)
 
@@ -3378,10 +3442,26 @@ class Build:
         defense = defense_stats(stats, weapon, def_mults, self.enemy)
         sc = score_build(res, stats, weapon, self.goal, self.tree.ult_spells, special, defense,
                          focus_bs=self.focus[0] if self.focus else None, goal2=self.goal2, goal2_weight=self.goal2_weight)
-        if self.floors:
-            vals = floor_values(stats, defense, sc["ls_share"])
-            short = floor_shortfall(self.floors, vals)
-            sc["floor_values"], sc["floors_met"] = vals, short <= 0
+        if self.floors or self.archetype or self.avoid_archetypes:
+            short = 0.0
+            if self.floors:
+                vals = floor_values(stats, defense, sc["ls_share"])
+                short = floor_shortfall(self.floors, vals)
+                sc["floor_values"] = vals
+            if self.archetype:
+                # your main archetype must have more abilities in the tree than any other (counted like the game's
+                # archetype requirements: one per ability); each one short counts like a missed minimum
+                mine, other = archetype_lead(self.tree, owned, self.archetype)
+                sc["archetype_counts"] = (mine, other)
+                if mine <= other:
+                    short += (other - mine + 1) / 5.0
+            if self.avoid_archetypes:
+                # archetypes you don't want: each of their abilities in the tree counts like a missed minimum
+                cnt = archetype_counts(self.tree, owned)
+                n_bad = sum(cnt.get(a, 0) for a in self.avoid_archetypes)
+                if n_bad:
+                    short += n_bad / 5.0
+            sc["floors_met"] = short <= 0
             if short > 0:
                 # Below a minimum: worse than any build that meets them all, and the closer it gets, the higher
                 # it scores, so the search can climb toward builds that qualify.
@@ -4076,6 +4156,11 @@ def how_to_play(build: "Build", owned, armor, weapon, fin: dict) -> list:
         spd = (getattr(weapon, "atk_spd", "") or "").replace("_", " ").lower()
         out.append("Main attacks: keep hitting" + (f" ({spd} attack speed)" if spd else "") + ". Spells aren't "
                    "part of the damage shown; use them for movement or utility.")
+    near = [r["name"] for b, r in sorted(res.items()) if b in (1, 2, 3, 4) and r.get("name") in CONTACT_SPELLS
+            and r.get("damage", 0) > 0]
+    if near and goal != "burst":
+        out.append(f"{', '.join(near)} only hits enemies that come close to you, so its damage isn't counted in your "
+                   "damage per second; use it for defense, or as extra damage when enemies are on you.")
     # 2. buffs the numbers assume
     tm = build.toggle_map(owned)
     have = inter_names(build.tree, owned)
@@ -5306,12 +5391,26 @@ def run(args):
             floors[key] = float(getattr(args, attr))
     if floors:
         print(f"  Minimums every suggested build must keep: {describe_floors(floors)}.")
+    try:
+        main_arch = match_archetype(tree, getattr(args, "archetype", "") or "")
+        avoid_arch = [a for a in (match_archetype(tree, t) for t in
+                                  re.split(r"[,;/]| and ", getattr(args, "avoid_archetype", "") or "") if t.strip()) if a]
+    except ValueError as exc:
+        sys.exit(str(exc))
+    if main_arch and main_arch in avoid_arch:
+        sys.exit(f"{main_arch} can't be both your main archetype and one to avoid.")
+    if avoid_arch:
+        print(f"  Archetypes left out: {', '.join(avoid_arch)} (no abilities from them in the tree).")
+    if main_arch:
+        print(f"  Main archetype: {main_arch}. The ability tree keeps more {main_arch} abilities than any other "
+              "archetype's (others only where they help).")
     build = Build(data, tree, level, goal, tomes=owned_tomes, aspects=owned_aspects, toggles=toggles,
                   sliders=sliders, slider_mode=args.slider_mode, buffs=buffs, raid_buffs=raid_buffs, enemy=enemy,
                   focus=focus, floors=floors, toggle_share=toggle_share,
                   auto_masks=not no_auto and not (set(MASKS) & set(toggles_off)), toggles_off=toggles_off,
                   auto_toggles=set(auto_on), goal2=getattr(args, "goal2", None),
-                  goal2_weight=getattr(args, "goal2_weight", 0) or 0)
+                  goal2_weight=getattr(args, "goal2_weight", 0) or 0, archetype=main_arch,
+                  avoid_archetypes=avoid_arch)
     if getattr(args, "goal2", None) and not build.goal2:
         print(f"  (A second goal of \"{args.goal2}\" can't be mixed with {goal}; using {goal} alone.)")
     if build.goal2:
@@ -5486,6 +5585,7 @@ def run(args):
         print(line)
     for line in unspent_lines(tree, chosen, level, tree_ideas):
         print(line)
+    print("  " + archetype_line(tree, chosen, build.archetype, build.avoid_archetypes))
     if link_tree:
         yours = build.evaluate(link_tree, armor, weapon, extra)
         v = tree.validate(link_tree, level)
@@ -5562,7 +5662,9 @@ def run(args):
                   f"   (up to {fmt_num(r['damage'])}/s while its buff or ultimate is active)")
         else:
             unit = "damage/s while active" if r["is_dps"] else "avg damage"
-            print(f"  {label:<26} {fmt_num(r['damage']):>8} {unit}{cost}{gain}")
+            near = ("   (only hits enemies that come close: not in damage per second, only in the combo)"
+                    if r.get("name") in CONTACT_SPELLS else "")
+            print(f"  {label:<26} {fmt_num(r['damage']):>8} {unit}{cost}{gain}{near}")
     rot = final["rotation"]
     if rot:
         names = " + ".join(final["results"][b]["name"] for b in rot)
@@ -5828,6 +5930,7 @@ def run(args):
             removed = [tree.by_id[i].name for i in chosen if i not in wb["owned"]]
             if added or removed:
                 print(f"  Tree changes for this gear: add {', '.join(added) or '-'}; remove {', '.join(removed) or '-'}")
+            print("  " + archetype_line(tree, wb["owned"], build.archetype, build.avoid_archetypes))
             try:                      # why each ability is there (the panel's tree map shows the same)
                 roles_b = tree_roles(floor_build, wb["owned"], wb["armor"], w, wb["extra"], level)
                 LAST_RESULT["best_roles"] = roles_b
@@ -6113,6 +6216,11 @@ def make_parser():
                    help='powders you have, e.g. "weapon=t6 t6; chestplate=w4 w4". Weapon left out = recommend best')
     p.add_argument("--max-powder-tier", type=int, default=7, help="highest powder tier you can get (default 7)")
     p.add_argument("--tomes", default="", help='tomes you have, comma-separated (by name)')
+    p.add_argument("--archetype", default="",
+                   help='the archetype you want to play mainly, e.g. "Sharpshooter": the tree keeps more of its abilities '
+                        'than of any other archetype (other abilities only where they help)')
+    p.add_argument("--avoid-archetype", default="",
+                   help='archetypes you don\'t want to play, e.g. "Battle Monk" (comma-separated): none of their abilities')
     p.add_argument("--mythics", action="store_true", default=False,
                    help="allow mythic items (and mythic tomes) in the search and suggestions (off by default)")
     p.add_argument("--no-auto-tomes", dest="auto_tomes", action="store_false", default=True,

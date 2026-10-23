@@ -1,6 +1,12 @@
 {
   "versions": [
     {
+      "version": "1.11.2",
+      "date": "2026-10-23",
+      "notes": "Choose your main archetype (for example Trapper or Riftwalker): the ability tree keeps more of its abilities than any other archetype's, borrowing from other paths only where they help. Or leave an archetype out completely (\"anything but Battle Monk\"). Both are in the form and the bot understands them. Arrow Shield is no longer counted as damage per second, because its arrows only hit enemies that come close to you (it still counts in the one-time combo).",
+      "warning": ""
+    },
+    {
       "version": "1.11.1",
       "date": "2026-10-23",
       "notes": "New: after every build there's a \"How to play this build\" section (which attacks to use and in what order, how fast your mana lets you cast, which buffs the numbers count and how to keep them up, your powder special), and the bot sums it up in chat. New: an \"In Wynnbuilder\" section that says what Wynnbuilder will show when you open the link (it starts with every toggle off) and why the app's numbers can differ, so the bot can answer those questions; paste your own link and it does the same for your build. Crafted-item searches are a bit faster (same builds).",

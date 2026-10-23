@@ -227,10 +227,23 @@ Measured deep search on the owner's PC (1.6 -> 1.7): Warrior L106 7.0 -> 4.1 min
   special boost) plus each reason the app differs. The bot prompt: end new builds with a short How to play from those
   lines only; use the Wynnbuilder section for "why is it different there"; it can't see Wynnbuilder, so ask which box
   / a screenshot when a quoted number matches nothing. build_check fails a case without them.
+- Contact spells (owner, Oct 2026: Arrow Shield "is a shield... I'd have to run at the enemy"): `CONTACT_SPELLS`
+  (Arrow Shield: its arrows hit "enemies that get too close") count 0 in spell rotations / mixed / mana check
+  (`rot_res` in score_build), still in burst; report and How to play say so. Same numbers: 102 archer builds changed,
+  reverting CONTACT_SPELLS to empty reproduces the old reference exactly.
+- Archetype choice (owner, Oct 2026): `Build(archetype=..., avoid_archetypes=...)`. Main archetype: more of its
+  abilities than any other archetype's (`archetype_lead`; abilities from other paths allowed); avoided: none of their
+  abilities (`archetype_counts`). Both enforced like minimums (shortfall -> floors_met False, graded penalty), so the
+  tree planner, every search stage, prune_spare and workers (spec) respect them; part of the remembered-builds key and
+  saved build settings. CLI --archetype / --avoid-archetype, app params archetype / avoid_archetypes, form selects (per
+  class from /api/meta "archetypes"), bot prompt. Report line "Archetypes in this tree". goal_check: every class and
+  archetype at L60; build_check case "archer L60 spells, Trapper, no Boltslinger".
 - CI build check runs in 4 parallel parts (`build_check.py --shard k/4`, matrix in checks.yml, 150 min each).
 
 ## History (newest first)
 
+- 1.11.2: main archetype / archetype to leave out (form, bot, CLI); Arrow Shield no longer counted as damage per second
+  (it only hits enemies that come close).
 - 1.11.1: "How to play this build" and "In Wynnbuilder" report sections (the bot uses both); crafted-item rounds run
   side by side (same builds, faster); report text fix for mana income.
 - 1.11.0: search also from spell / main-attack trees (most damage, balanced), weapons re-ranked on the best gear,

@@ -209,6 +209,75 @@ def main():
     check("life steal only from main attacks", not bad and seen >= 9,
           f"({seen} builds)" + (" " + "; ".join(bad[:2]) if bad else ""))
 
+    # 4c3. Arrow Shield only hits enemies that come close: never part of a damage-per-second rotation (burst keeps it)
+    bad, seen = [], 0
+    tree = wh.Tree(d, "archer")
+    kids = {}
+    for n in tree.nodes:
+        for p in n.parents:
+            kids.setdefault(p, []).append(n.id)
+
+    def path_to(name):                     # the shortest legal path from the start to an ability
+        t = next(n.id for n in tree.nodes if n.name == name)
+        prev, todo = {r: None for r in tree.roots}, list(tree.roots)
+        while todo:
+            c = todo.pop(0)
+            for k in kids.get(c, []):
+                if k not in prev:
+                    prev[k] = c
+                    todo.append(k)
+        out, c = set(), t
+        while c is not None:
+            out.add(c)
+            c = prev.get(c)
+        return out
+    owned = frozenset(path_to("Arrow Shield"))   # no Guardian Angels (it replaces the shield)
+    for lvl in (30, 60, 90):
+        wpn = wh.default_weapon(d, "archer", lvl)
+        if not tree.validate(owned, lvl)["ok"]:
+            continue
+        for goal in ("spells", "mixed"):
+            build = wh.Build(d, tree, lvl, goal)
+            r = build.evaluate(owned, [None] * 8, wpn, [0] * 5)
+            res = r["results"]
+            if not any(x.get("name") == "Arrow Shield" and x.get("damage", 0) > 0 for x in res.values()):
+                continue
+            seen += 1
+            rot = r["rotation"] if goal == "spells" else (r["mixed"] or {}).get("rotation")
+            if rot:
+                rs = [dict(res[b], cast=0.0) if res[b].get("name") == "Arrow Shield" else res[b] for b in rot]
+                rate = r["mana"]["sustained_rate"] if goal == "spells" else r["mixed"]["rate"]
+                want = wh.rotation_dps(rs, rate)
+                got = r["spell_dps"] if goal == "spells" else r["mixed"]["spell_part"]
+                if abs(got - want) > 1e-6 * max(1, want):
+                    bad.append(f"L{lvl} {goal}: rotation {got:.1f} counts Arrow Shield ({want:.1f} without)")
+            if r["burst"] < sum(x["damage"] for b, x in res.items() if b in (1, 2, 3, 4) and not x.get("is_dps")) - 1e-6:
+                bad.append(f"L{lvl}: burst leaves a spell out")
+    check("Arrow Shield (hits only enemies up close) not in damage per second", not bad and seen >= 2,
+          f"({seen} builds)" + (" " + "; ".join(bad[:2]) if bad else ""))
+
+    # 4c4. main archetype: the planned tree has more of that archetype's abilities than any other's, every class and
+    # every archetype
+    bad, seen = [], 0
+    for cls in wh.CLASSES:
+        tree = wh.Tree(d, cls)
+        wpn = wh.default_weapon(d, cls, 60)
+        for arch in wh.tree_archetypes(tree):
+            b = wh.Build(d, tree, 60, "mixed", archetype=arch)
+            own, _ = wh.optimize_tree(b, [None] * 8, wpn, wh.ability_points(60), beam_width=8)
+            mine, other = wh.archetype_lead(tree, own, arch)
+            seen += 1
+            if mine <= other:
+                bad.append(f"{cls} {arch}: {mine} vs {other}")
+            if wh.match_archetype(tree, arch.lower()[:5]) != arch:
+                bad.append(f"{cls} {arch}: name not understood")
+            b2 = wh.Build(d, tree, 60, "mixed", avoid_archetypes=[arch])     # and leaving it out completely
+            own2, _ = wh.optimize_tree(b2, [None] * 8, wpn, wh.ability_points(60), beam_width=8)
+            if wh.archetype_counts(tree, own2).get(arch, 0):
+                bad.append(f"{cls} without {arch}: {wh.archetype_counts(tree, own2)[arch]} of its abilities")
+    check("main archetype kept most / left-out archetype has none", not bad and seen == 15,
+          f"({seen} class/archetype pairs)" + (" " + "; ".join(bad[:3]) if bad else ""))
+
     # 4d. a lasting spell (summons, totems, storms: shown as damage per second) never counts above one copy up all the
     # time, however often it's recast (recasting refreshes it)
     rs = [{"cast": 757864.0, "damage": 93563.0, "is_dps": True}, {"cast": 398820.0, "damage": 398820.0, "is_dps": False}]
