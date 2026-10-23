@@ -2565,6 +2565,33 @@ def evaluate_spells(spells, stats, weapon, dmg_mult, heal_items=None) -> dict:
     return out
 
 
+def rotation_dps(rs, rate: float) -> float:
+    """Damage per second of casting the spells `rs` in turn, `rate` casts a second in all (each spell rate/len times).
+    A spell that lasts (summons, totems, storms: shown as damage per second) can't add more than its damage per
+    second while it's up, however often it's recast: recasting refreshes it rather than stacking another copy.
+    (Conservative: a few such spells might overlap in game; they're never counted above one copy.)"""
+    each = rate / len(rs)
+    tot = 0.0
+    for r in rs:
+        v = r["cast"] * each
+        if r.get("is_dps") and r.get("damage", 0) > 0:
+            v = min(v, r["damage"])
+        tot += v
+    return tot
+
+
+def rotation_breaks(rs, rate_max: float) -> list:
+    """Cast rates (up to rate_max) where a lasting spell in `rs` reaches one copy up all the time: the only places
+    besides 0 and rate_max where spells + main attacks together can peak."""
+    out = []
+    for r in rs:
+        if r.get("is_dps") and r.get("damage", 0) > 0 and r["cast"] > 0:
+            b = r["damage"] * len(rs) / r["cast"]
+            if 0 < b < rate_max:
+                out.append(b)
+    return out
+
+
 def _is_dps_label(label) -> bool:
     s = str(label or "").lower()
     return "dps" in s or "per second" in s
@@ -2726,14 +2753,13 @@ def score_build(results: dict, stats: dict, weapon, goal: str, ult_spells=frozen
     for size in (2, 3, 4):
         for combo in itertools.combinations(usable, size):
             rs = [results[b] for b in combo]
-            dmg = sum(r["cast"] for r in rs) / size
-            if dmg <= 0:
+            if sum(r["cast"] for r in rs) <= 0:
                 continue
             net_cost = sum(r["cost"] - r["mana_gained"] for r in rs) / size
             cast_rate = CLICKS_PER_SECOND / 3
             if net_cost > 0:
                 cast_rate = min(cast_rate, income / net_cost)
-            dps = cast_rate * dmg
+            dps = rotation_dps(rs, cast_rate)
             if dps > best_rot_dps:
                 best_rot_dps, best_rot = dps, combo
     # Mana check for that rotation (Wynnbuilder's mana model: 3 casts/s at 9 clicks/s, mana income
@@ -2746,7 +2772,7 @@ def score_build(results: dict, stats: dict, weapon, goal: str, ult_spells=frozen
         back = full_rate * sum(r["mana_gained"] for r in rs) / len(rs)
         net = income + back - used
         bar = 100 + stats.get("maxMana", 0) + math.floor(skill_pct(stats.get("int", 0)) * 100)
-        full_dps = full_rate * sum(r["cast"] for r in rs) / len(rs)
+        full_dps = rotation_dps(rs, full_rate)
         mana = {"used": used, "regen": income, "from_spells": back, "net": net, "bar": max(1, bar),
                 "full_rate": full_rate, "full_dps": full_dps,
                 "seconds": None if net >= -1e-9 else max(1, bar) / -net,
@@ -2783,19 +2809,22 @@ def score_build(results: dict, stats: dict, weapon, goal: str, ult_spells=frozen
     for size in (2, 3, 4):
         for combo in itertools.combinations(usable, size):
             rs = [results[b] for b in combo]
-            dmg = sum(r["cast"] for r in rs) / size
-            if dmg <= 0:
+            if sum(r["cast"] for r in rs) <= 0:
                 continue
             net_cost = sum(r["cost"] - r["mana_gained"] for r in rs) / size
-            rate = CLICKS_PER_SECOND / 3
+            rmax = CLICKS_PER_SECOND / 3
             if net_cost > 0:
-                rate = min(rate, income / net_cost)
-            share = max(0.0, 1 - rate * 3 / CLICKS_PER_SECOND)
-            tot = (rate * dmg + melee_dps * share + max(poison_spell, poison_melee if share > 0 else 0.0)
-                   + sustained_extra + special_dps)
-            if tot > mixed_goal:
-                mixed_goal, mixed_info = tot, {"rotation": combo, "rate": rate, "melee_share": share,
-                                               "spell_part": rate * dmg, "melee_part": melee_dps * share}
+                rmax = min(rmax, income / net_cost)
+            # spell damage only grows straight with the cast rate until a lasting spell is up all the time, so the
+            # best mix is at the fastest rate or at one of those points
+            for rate in [rmax] + rotation_breaks(rs, rmax):
+                share = max(0.0, 1 - rate * 3 / CLICKS_PER_SECOND)
+                sp_part = rotation_dps(rs, rate)
+                tot = (sp_part + melee_dps * share + max(poison_spell, poison_melee if share > 0 else 0.0)
+                       + sustained_extra + special_dps)
+                if tot > mixed_goal:
+                    mixed_goal, mixed_info = tot, {"rotation": combo, "rate": rate, "melee_share": share,
+                                                   "spell_part": sp_part, "melee_part": melee_dps * share}
     best_damage = max(spell_goal, melee_total + special_dps)
     self_heal = SURVIVAL_HEAL_SECONDS * (heal_ps + life_steal_ps) + 2 * max(defense.get("hpr", 0), 0)
     focus_val = results.get(focus_bs, {}).get("damage", 0.0) if focus_bs is not None else 0.0

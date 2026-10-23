@@ -102,8 +102,9 @@ def main():
             probs = []
             if abs(m["used"] - 3 * sum(x["cost"] for x in rs) / len(rs)) > 1e-9:
                 probs.append("used")
-            if abs(m["sustained_rate"] * dmg - r["spell_dps"]) > 1e-6 * max(1, r["spell_dps"]):
-                probs.append(f"sustained {m['sustained_rate'] * dmg:.1f} vs {r['spell_dps']:.1f}")
+            sus = wh.rotation_dps(rs, m["sustained_rate"])
+            if abs(sus - r["spell_dps"]) > 1e-6 * max(1, r["spell_dps"]):
+                probs.append(f"sustained {sus:.1f} vs {r['spell_dps']:.1f}")
             if m["bar"] != max(1, bar):
                 probs.append(f"bar {m['bar']} vs {bar}")
             if m["seconds"] is not None and abs(m["seconds"] - m["bar"] / -m["net"]) > 1e-9:
@@ -135,6 +136,13 @@ def main():
                     bad.append(f"{cls} L{lvl}: parts don't add up")
     check("spells + main attacks together: never below either alone", not bad and seen >= 5,
           f"({seen} with spells)" + (" " + "; ".join(bad[:2]) if bad else ""))
+
+    # 4d. a lasting spell (summons, totems, storms: shown as damage per second) never counts above one copy up all the
+    # time, however often it's recast (recasting refreshes it)
+    rs = [{"cast": 757864.0, "damage": 93563.0, "is_dps": True}, {"cast": 398820.0, "damage": 398820.0, "is_dps": False}]
+    v = wh.rotation_dps(rs, 3.0)
+    ok = abs(v - (93563.0 + 398820.0 * 1.5)) < 1e-6 and wh.rotation_breaks(rs, 3.0) == [93563.0 * 2 / 757864.0]
+    check("lasting spells count at most one copy in a rotation", ok)
 
     # 4c. life steal / mana steal minimums: a bracelet with negative life steal misses "no negative life steal"
     kb = d.find_item("Knucklebones")[0]

@@ -117,6 +117,7 @@ def main():
             lines += ["    " + l for l in tail]
     if scores:
         lines += ["", "Build scores:"] + [f"  {k}: {v:,.1f}" for k, v in sorted(scores.items())]
+        lines += ["BUILD_SCORES_JSON " + json.dumps(scores, sort_keys=True)]     # exact values (for reviewing a change)
     text = "\n".join(lines)
     print("\n" + text)
     try:
