@@ -273,9 +273,9 @@ def main():
                 bad.append(f"{cls} {arch}: name not understood")
             b2 = wh.Build(d, tree, 60, "mixed", avoid_archetypes=[arch])     # and leaving it out completely
             own2, _ = wh.optimize_tree(b2, [None] * 8, wpn, wh.ability_points(60), beam_width=8)
-            if wh.archetype_counts(tree, own2).get(arch, 0):
-                bad.append(f"{cls} without {arch}: {wh.archetype_counts(tree, own2)[arch]} of its abilities")
-    check("main archetype kept most / left-out archetype has none", not bad and seen == 15,
+            if wh.avoided_core(tree, own2, (arch,)):
+                bad.append(f"{cls} without {arch}: {len(wh.avoided_core(tree, own2, (arch,)))} of its play-style abilities")
+    check("main archetype kept most / left-out archetype's play style kept out", not bad and seen == 15,
           f"({seen} class/archetype pairs)" + (" " + "; ".join(bad[:3]) if bad else ""))
 
     # 4d. a lasting spell (summons, totems, storms: shown as damage per second) never counts above one copy up all the

@@ -136,10 +136,10 @@ def problems_with(case, res):
         mine, other = wh.archetype_lead(wh.LAST_RESULT["build"].tree, best["owned"], case["archetype"])
         if mine <= other:
             out.append(f"{case['archetype']} has {mine} abilities, another archetype {other}")
-    for a in case.get("avoid_archetypes") or []:  # and none from an archetype the player left out
-        n = wh.archetype_counts(wh.LAST_RESULT["build"].tree, best["owned"]).get(a, 0)
+    for a in case.get("avoid_archetypes") or []:  # and none of the play style of an archetype the player left out
+        n = len(wh.avoided_core(wh.LAST_RESULT["build"].tree, best["owned"], (a,)))
         if n:
-            out.append(f"{n} {a} abilities though the player left {a} out")
+            out.append(f"{n} {a} play-style abilities though the player left {a} out")
     fin = best["eval"]
     if case.get("minimums") and not fin.get("floors_met", True):
         out.append("misses the minimums: " + "; ".join(wh.floor_misses(wh.parse_floors(

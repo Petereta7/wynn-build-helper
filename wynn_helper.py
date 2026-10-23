@@ -3000,6 +3000,34 @@ def archetype_counts(tree, owned) -> dict:
     return cnt
 
 
+def archetype_core(tree) -> dict:
+    """{ability id: archetype} for abilities that make an archetype's play style: anything that changes a spell or how
+    you move or fight, adds a spell, brings a state or stacks to manage (toggle, slider), or needs points in that
+    archetype first. What's left are plain stat boosts (element masteries and the like) that a build of another style
+    can borrow (owner, Oct 2026: "if a Battle Monk node improves Paladin, that's fine ... as long as the general play
+    style isn't affected")."""
+    core = tree.__dict__.get("_arch_core")
+    if core is None:
+        core = {}
+        for n in tree.nodes:
+            if not getattr(n, "archetype", None):
+                continue
+            effs = n.raw.get("effects", [])
+            plain = n.arch_req == 0 and effs and all(
+                e.get("type") in ("raw_stat", "stat_scaling") and not e.get("toggle") and not e.get("slider")
+                for e in effs)
+            if not plain:
+                core[n.id] = n.archetype
+        tree.__dict__["_arch_core"] = core
+    return core
+
+
+def avoided_core(tree, owned, avoid) -> list:
+    """Play-style abilities in the tree from archetypes you said to leave out."""
+    core = archetype_core(tree)
+    return [i for i in owned if core.get(i) in avoid]
+
+
 def archetype_lead(tree, owned, name) -> tuple:
     """(abilities of archetype `name` in the tree, most abilities of any other archetype)."""
     cnt = archetype_counts(tree, owned)
@@ -3016,8 +3044,14 @@ def archetype_line(tree, owned, main=None, avoid=()) -> str:
         ok = mine > max((v for k, v in cnt.items() if k != main), default=0)
         txt += f" (your main archetype {main}: " + ("the most, as asked)" if ok else "couldn't be made the most here)")
     for a in avoid:
-        txt += (f"; none from {a}, as asked" if not cnt.get(a) else
-                f"; {cnt[a]} from {a} (couldn't be avoided at this level)")
+        bad = avoided_core(tree, owned, (a,))
+        borrowed = [tree.by_id[i].name for i in owned if getattr(tree.by_id[i], "archetype", None) == a and i not in bad]
+        if bad:
+            txt += f"; {len(bad)} {a} play-style abilities couldn't be avoided at this level"
+        else:
+            txt += f"; no {a} play style, as asked"
+        if borrowed:
+            txt += f" (borrowed only plain boosts: {', '.join(borrowed)})"
     return txt
 
 
@@ -3215,7 +3249,8 @@ class Build:
         # the archetype you want to play mainly: the tree must have more of its abilities than of any other archetype
         # (abilities from other paths are fine when they help); None = any
         self.archetype = archetype or None
-        # archetypes you don't want to play: no abilities from them in the tree
+        # archetypes you don't want to play: none of their abilities that change how you play (only plain boosts that
+        # help your build, like an element mastery; see archetype_core)
         self.avoid_archetypes = tuple(sorted(set(avoid_archetypes or ())))
         self.goal2, self.goal2_weight = clean_goal2(goal, goal2, goal2_weight)   # optional second goal and its weight
         self.toggle_share = {k: float(v) for k, v in (toggle_share or {}).items() if 0 < float(v) < 1}
@@ -3456,9 +3491,8 @@ class Build:
                 if mine <= other:
                     short += (other - mine + 1) / 5.0
             if self.avoid_archetypes:
-                # archetypes you don't want: each of their abilities in the tree counts like a missed minimum
-                cnt = archetype_counts(self.tree, owned)
-                n_bad = sum(cnt.get(a, 0) for a in self.avoid_archetypes)
+                # archetypes you don't want: each of their play-style abilities counts like a missed minimum
+                n_bad = len(avoided_core(self.tree, owned, self.avoid_archetypes))
                 if n_bad:
                     short += n_bad / 5.0
             sc["floors_met"] = short <= 0
@@ -5400,7 +5434,8 @@ def run(args):
     if main_arch and main_arch in avoid_arch:
         sys.exit(f"{main_arch} can't be both your main archetype and one to avoid.")
     if avoid_arch:
-        print(f"  Archetypes left out: {', '.join(avoid_arch)} (no abilities from them in the tree).")
+        print(f"  Archetypes left out: {', '.join(avoid_arch)} (none of their play-style abilities; plain boosts like an "
+              "element mastery can still be borrowed if they help).")
     if main_arch:
         print(f"  Main archetype: {main_arch}. The ability tree keeps more {main_arch} abilities than any other "
               "archetype's (others only where they help).")
