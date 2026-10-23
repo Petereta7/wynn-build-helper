@@ -100,6 +100,8 @@ Measured deep search on the owner's PC (1.6 -> 1.7): Warrior L106 7.0 -> 4.1 min
   storms) counts at most its DPS while up, however often it's recast (`rotation_dps`): recasting refreshes it, doesn't
   stack. Before 1.10.5 a Guardian Angels cast counted its whole duration at 1.5 casts/s (an archer L121 spell build
   showed 1.74M instead of 692k). Conservative: a few such spells might overlap in game.
+  The value tie-breaker still uses the uncapped rotation number (`tie_rot_dps`): changing tie-breakers sent the tree
+  beam search for "mage L45 survival" down a worse path (72,976 -> 33,538), so non-spell goals search exactly as before.
 - Goal mix: main^(1-w) x second^w (like balanced at 50/50). Search filter and fast scoring keep what the second
   goal needs.
 - Mana check: Wynnbuilder's model (3 casts/s at 9 clicks/s, income 5 + mr/5 + ms/3, bar 100 + maxMana + Int%).
@@ -204,6 +206,9 @@ Measured deep search on the owner's PC (1.6 -> 1.7): Warrior L106 7.0 -> 4.1 min
 - New item alerts: after a game data update, re-check saved builds.
 - Report-a-problem button (pack build, settings and report into a file).
 - Faster search / faster CI build check (currently ~20 min on GitHub).
+- Tree planner robustness: the beam search can miss a payoff that needs several flat steps (mage L45 survival:
+  Orphion's Pulse only pays after Larger Heal, Purification...; found or not depending on tie order). Guided runs
+  toward archetype payoff nodes (like the ultimate runs in best_tree) would fix it; costs tree-planning time.
 - Later, when the owner has them: aspects (from raids) and guild tomes (tomes from level 55 are done, guild ones not).
 - Skipped by the owner (don't propose again unless asked): bank auto-organizer (against Wynncraft rules; a
   planner version was also declined), instant small edits without re-searching.
