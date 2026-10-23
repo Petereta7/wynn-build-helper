@@ -233,11 +233,14 @@ Measured deep search on the owner's PC (1.6 -> 1.7): Warrior L106 7.0 -> 4.1 min
   reverting CONTACT_SPELLS to empty reproduces the old reference exactly.
 - Archetype choice (owner, Oct 2026): `Build(archetype=..., avoid_archetypes=...)`. Main archetype: more of its
   abilities than any other archetype's (`archetype_lead`; abilities from other paths allowed); avoided: none of their
-  abilities (`archetype_counts`). Both enforced like minimums (shortfall -> floors_met False, graded penalty), so the
+  play-style abilities (`archetype_core`/`avoided_core`: anything but plain raw_stat/stat_scaling boosts with no archetype
+  requirement, no toggle/slider; owner: "if a Battle Monk node improves Paladin that's fine, as long as the general play
+  style isn't affected"), e.g. element masteries can be borrowed. Both enforced like minimums (shortfall -> floors_met False, graded penalty), so the
   tree planner, every search stage, prune_spare and workers (spec) respect them; part of the remembered-builds key and
   saved build settings. CLI --archetype / --avoid-archetype, app params archetype / avoid_archetypes, form selects (per
   class from /api/meta "archetypes"), bot prompt. Report line "Archetypes in this tree". goal_check: every class and
-  archetype at L60; build_check case "archer L60 spells, Trapper, no Boltslinger".
+  archetype at L60; build_check case "archer L60 spells, Trapper, no Boltslinger" (35,776; the stricter first rule found
+  35,927, a build still valid now: the looser rule led the search elsewhere. Open gap, see best_known.json).
 - CI build check runs in 4 parallel parts (`build_check.py --shard k/4`, matrix in checks.yml, 150 min each).
 
 ## History (newest first)
