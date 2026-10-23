@@ -241,10 +241,19 @@ Measured deep search on the owner's PC (1.6 -> 1.7): Warrior L106 7.0 -> 4.1 min
   class from /api/meta "archetypes"), bot prompt. Report line "Archetypes in this tree". goal_check: every class and
   archetype at L60; build_check case "archer L60 spells, Trapper, no Boltslinger" (35,776; the stricter first rule found
   35,927, a build still valid now: the looser rule led the search elsewhere. Open gap, see best_known.json).
+- Pause (owner, Oct 2026: "I might have to leave ... my WiFi will get cut"): `ws.set_pause(on)` / `reset_pause()` (each
+  report), `_pause_wait()` hooked into Build.evaluate every 256 builds scored (`wh.EVAL_STATS["pause"]`); each worker
+  pool gets a pause Event through the spec (`_build_spec(build, ctx)`, `_PAUSE_EVENTS`). Only waits, so same build (time
+  limits still count the pause). App: /api/pause {on}, Pause/Resume button by Stop; Stop also ends a pause. app_check
+  "pause / resume" (same build, it waited). The search never needs internet; if Claude can't be reached after a chat
+  search, chat_turn keeps the report (shown + in History) and records it in the chat as an assistant note.
+- Crafts-first chain (5b) starts alongside the top builds' craft stages (needs only tops[0]); same builds.
 - CI build check runs in 4 parallel parts (`build_check.py --shard k/4`, matrix in checks.yml, 150 min each).
 
 ## History (newest first)
 
+- 1.11.3: Pause / Resume for a running search (same build); a chat build is kept if the connection drops; crafted-item
+  step overlaps more (same builds, faster).
 - 1.11.2: main archetype / archetype to leave out (form, bot, CLI); Arrow Shield no longer counted as damage per second
   (it only hits enemies that come close).
 - 1.11.1: "How to play this build" and "In Wynnbuilder" report sections (the bot uses both); crafted-item rounds run

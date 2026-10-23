@@ -1013,9 +1013,16 @@ function showBusy(note) {
     <div class="fbench" id="fBench" hidden></div>
     <div class="pbar"><div id="busyBar"></div></div>
     <div class="forge-foot"><div id="busyProgress" class="busy-sub"></div>
+      <button class="btn-quiet" id="pauseBtn" type="button" aria-pressed="false">Pause</button>
       <button class="btn-quiet" id="stopBtn" type="button">Stop and keep the best so far</button></div>
   </section>`;
-  $("#stopBtn").addEventListener("click", async () => { await api("/api/stop", {}); $("#stopBtn").textContent = "Stopping…"; $("#stopBtn").disabled = true; });
+  $("#stopBtn").addEventListener("click", async () => { await api("/api/stop", {}); $("#stopBtn").textContent = "Stopping…"; $("#stopBtn").disabled = true; $("#pauseBtn").disabled = true; });
+  $("#pauseBtn").addEventListener("click", async () => {      // pausing only waits: the build found is the same
+    const on = $("#pauseBtn").getAttribute("aria-pressed") !== "true";
+    await api("/api/pause", { on });
+    $("#pauseBtn").setAttribute("aria-pressed", on); $("#pauseBtn").textContent = on ? "Resume" : "Pause";
+    toast(on ? "Paused. Press Resume to carry on (the build will be the same)." : "Searching again");
+  });
   F = { id: null, needFull: true, pools: {}, phase: -2, best: null, scoreShown: null, checked: 0, checkedShown: 0,
         reels: SLOTS.map(() => ({ locked: null, busyUntil: 0, spinning: false })), cards: {}, leadKey: null,
         sparks: [], embers: [], emberAcc: 0, bps: 0, lastEvals: 0, lastT: performance.now(), timers: [], finishing: false };

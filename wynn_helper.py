@@ -3234,7 +3234,7 @@ def describe_floors(floors: dict) -> str:
 
 # ============================================================================== build evaluation
 
-EVAL_STATS = {"n": 0, "tick": None}
+EVAL_STATS = {"n": 0, "tick": None, "pause": None}
 LAST_RESULT: dict = {}      # the last report's builds as objects (the app turns them into its visuals)     # how many builds were scored; tick() is called every 256
 
 
@@ -3324,8 +3324,11 @@ class Build:
             return dict(hit)
         res = self._evaluate(owned, armor, weapon, extra_points, fast)
         EVAL_STATS["n"] += 1                       # builds actually scored (for the live view in the app)
-        if EVAL_STATS["tick"] is not None and not EVAL_STATS["n"] & 255:
-            EVAL_STATS["tick"]()
+        if not EVAL_STATS["n"] & 255:
+            if EVAL_STATS["tick"] is not None:
+                EVAL_STATS["tick"]()
+            if EVAL_STATS.get("pause") is not None:    # the app's Pause button: wait here until Resume (or Stop)
+                EVAL_STATS["pause"]()
         if len(cache) > (300000 if fast else 20000):
             cache.clear()
         cache[key] = {"value": res["value"], "main": res["main"]} if fast else res

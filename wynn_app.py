@@ -229,6 +229,7 @@ def run_report(params: dict) -> dict:
     buf = io.StringIO()
     STATE["progress"] = {"fraction": 0.0, "message": "Starting", "time": time.time(), "started": time.time()}
     ws.live_reset()
+    ws.reset_pause()
     with RUN_LOCK:
         try:
             with contextlib.redirect_stdout(buf):
@@ -1465,7 +1466,14 @@ def chat_turn(user_text: str) -> dict:
     except (ClaudeError, ThinkingMismatch) as exc:
         del history[start:]             # forget the unanswered turn so the conversation stays valid
         msg = str(exc) if isinstance(exc, ClaudeError) else "Claude couldn't continue this chat. Press New chat to start fresh."
-        return {"reply": msg, "error": True, "reports": reports}
+        if reports:                     # the build finished: keep it (the search runs on this computer, not online)
+            history.append({"role": "user", "content": [{"type": "text", "text": user_text}]})
+            history.append({"role": "assistant", "content": [{"type": "text", "text":
+                            "(I ran the calculator, but the connection dropped before I could answer. Its report:)\n"
+                            + reports[-1][:20000]}]})
+            msg += (" Your build finished anyway: it's shown here and saved in History. Ask me about it once "
+                    "you're back online.")
+        return {"reply": msg, "error": True, "reports": reports, "summaries": summaries}
     except Exception as exc:            # anything else: same, and say what happened
         traceback.print_exc()
         del history[start:]
@@ -1585,7 +1593,12 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, chat_turn(text))
         if self.path == "/api/stop":
             ws.STOP["flag"] = True
+            ws.set_pause(False)                     # a paused search stops right away
             return self._send(200, {"ok": True})
+        if self.path == "/api/pause":             # pause / resume the running search (same build either way)
+            on = bool(body.get("on", True)) if isinstance(body, dict) else True
+            ws.set_pause(on)
+            return self._send(200, {"ok": True, "paused": on})
         if self.path == "/api/chat/reset":
             STATE["chat"] = []
             return self._send(200, {"ok": True})

@@ -475,6 +475,38 @@ EFFORT = {
 }
 
 STOP = {"flag": False}          # set STOP["flag"] = True to stop a running search (keeps the best so far)
+# Pause: set_pause(True) makes the search wait (here and in every worker process) until set_pause(False). It only
+# waits, so the build found is exactly the same as without pausing (time limits, when set, still count the pause).
+PAUSE = {"flag": False}
+_PAUSE_EVENTS = []              # one per pool of worker processes, so a pause reaches them too
+
+
+def set_pause(on: bool):
+    PAUSE["flag"] = bool(on)
+    for ev in list(_PAUSE_EVENTS):
+        try:
+            ev.set() if on else ev.clear()
+        except Exception:
+            pass
+
+
+def reset_pause():
+    """A new report: not paused, and forget the old worker pools' pause switches."""
+    PAUSE["flag"] = False
+    _PAUSE_EVENTS.clear()
+
+
+def _pause_wait():
+    """Wait while the search is paused (checked every 256 builds scored), unless it's stopped meanwhile."""
+    ev = _W.get("pause")
+    while PAUSE["flag"] or (ev is not None and ev.is_set()):
+        st = _W.get("stop")
+        if STOP["flag"] or (st is not None and st.is_set()):
+            return
+        time.sleep(0.25)
+
+
+wh.EVAL_STATS["pause"] = _pause_wait
 PROGRESS = {"cb": None}         # PROGRESS["cb"] = function(fraction, message) to receive progress
 
 
@@ -1000,7 +1032,7 @@ def _side_pool(build, workers, pools):
                     stop_event.set()
                     return
         ex = ProcessPoolExecutor(max_workers=workers, mp_context=ctx, initializer=_worker_init_pools,
-                                 initargs=(_build_spec(build), stop_event, pools))
+                                 initargs=(_build_spec(build, ctx), stop_event, pools))
         ex.wbh_done = done
         threading.Thread(target=watch, daemon=True).start()
         return ex
@@ -1108,7 +1140,7 @@ def _run_side_by_side(build, name, jobs):
                         return
             threading.Thread(target=watch, daemon=True).start()
             with ProcessPoolExecutor(max_workers=workers, mp_context=ctx, initializer=_worker_init,
-                                     initargs=(_build_spec(build), stop_event, None)) as ex:
+                                     initargs=(_build_spec(build, ctx), stop_event, None)) as ex:
                 return list(ex.map(_par_job, [(name, tuple(j)) for j in jobs]))
         except Exception:
             pass
@@ -1203,7 +1235,7 @@ class _CraftRunner:
                 from concurrent.futures import ProcessPoolExecutor
                 ctx = mp.get_context("spawn")
                 self.ex = ProcessPoolExecutor(max_workers=workers, mp_context=ctx, initializer=_worker_init,
-                                              initargs=(_build_spec(build), ctx.Event(), None))
+                                              initargs=(_build_spec(build, ctx), ctx.Event(), None))
             except Exception:
                 self.ex = None
 
@@ -1290,8 +1322,18 @@ def _craft_stage(build, f, kicks, out_of_time, info, runner=None, live=False):
 _W = {}
 
 
-def _build_spec(build):
-    return {"cls": build.tree.cls, "level": build.level, "goal": build.goal,
+def _build_spec(build, ctx=None):
+    """What a worker process needs to rebuild `build` (and, given the process context, the pool's pause switch)."""
+    pause_ev = None
+    if ctx is not None:
+        try:
+            pause_ev = ctx.Event()
+            if PAUSE["flag"]:
+                pause_ev.set()
+            _PAUSE_EVENTS.append(pause_ev)
+        except Exception:
+            pause_ev = None
+    return {"pause_event": pause_ev, "cls": build.tree.cls, "level": build.level, "goal": build.goal,
             "tomes": [t.name for t in build.tomes], "aspects": [(a["displayName"], t) for a, t in build.aspects],
             "toggles": list(build.toggles), "sliders": dict(build.sliders), "slider_mode": build.slider_mode,
             "buffs": list(build.buffs), "raid_buffs": list(build.raid_buffs), "enemy": dict(build.enemy),
@@ -1323,6 +1365,7 @@ def _worker_init(spec, stop_event, q=None):
                            goal2=spec.get("goal2"), goal2_weight=spec.get("goal2_weight", 0.0),
                            archetype=spec.get("archetype"), avoid_archetypes=spec.get("avoid_archetypes") or ())
     _W["stop"] = stop_event
+    _W["pause"] = spec.get("pause_event")
     if q is not None:
         last = {"t": 0.0, "v": -1e300, "n": wh.EVAL_STATS["n"]}
 
@@ -1372,7 +1415,7 @@ def _run_weapon_jobs(build, cur_own, pools, jobs, armor0, base_extra, P, deadlin
             stop_event = ctx.Event()
             live_q = ctx.Queue()
             with ProcessPoolExecutor(max_workers=workers, mp_context=ctx, initializer=_worker_init,
-                                     initargs=(_build_spec(build), stop_event, live_q)) as ex:
+                                     initargs=(_build_spec(build, ctx), stop_event, live_q)) as ex:
                 futs = {ex.submit(_worker_job, (cur_own, pools, wpn, wp, armor0, base_extra, mem, P, deadline)): wpn
                         for wpn, wp, mem in jobs}
                 done = 0

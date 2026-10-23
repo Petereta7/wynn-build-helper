@@ -689,6 +689,55 @@ def check_chat():
          wynn_app.ssl_context, wynn_app.characters_context) = saved
 
 
+def check_pause():
+    """Pause and resume a running search: it waits (in every worker process too) and finds exactly the same build."""
+    import time as _t
+    import wynn_app
+    import wynn_helper as wh
+    import wynn_search as ws
+    from http.server import ThreadingHTTPServer
+    saved = (ws.remembered_starts, ws.remember, wynn_app.save_history)
+    ws.remembered_starts = lambda *a, **k: []
+    ws.remember = lambda *a, **k: None
+    wynn_app.save_history = lambda *a, **k: None
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), wynn_app.Handler)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    base = f"http://127.0.0.1:{srv.server_address[1]}"
+
+    def call(path, body):
+        req = urllib.request.Request(base + path, data=json.dumps(body).encode(), headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=30) as r:
+            return json.loads(r.read())
+    params = {"class": "warrior", "level": 30, "goal": "melee", "deep_search": False, "include_level_plan": False}
+    try:
+        wynn_app.STATE["data_checked"] = True
+        t0 = _t.time()
+        a = wynn_app.run_report(dict(params))
+        plain_t, best_a = _t.time() - t0, wh.LAST_RESULT.get("best")
+
+        def pauser():
+            _t.sleep(1.5)
+            call("/api/pause", {"on": True})
+            _t.sleep(6)
+            call("/api/pause", {"on": False})
+        th = threading.Thread(target=pauser, daemon=True)
+        t0 = _t.time()
+        th.start()
+        b = wynn_app.run_report(dict(params))
+        paused_t, best_b = _t.time() - t0, wh.LAST_RESULT.get("best")
+        th.join(10)
+        same = (a["ok"] and b["ok"] and best_a and best_b and best_a["eval"]["main"] == best_b["eval"]["main"]
+                and [x.name if x else None for x in best_a["armor"]] == [x.name if x else None for x in best_b["armor"]]
+                and best_a["weapon"].name == best_b["weapon"].name and best_a["owned"] == best_b["owned"])
+        waited = paused_t > plain_t + 3 or plain_t < 1.5      # (a search shorter than the wait can't show it)
+        check("pause / resume: same build, and it waited", same and waited and not ws.PAUSE["flag"],
+              f"({plain_t:.0f}s plain, {paused_t:.0f}s with a 6s pause)")
+    finally:
+        ws.remembered_starts, ws.remember, wynn_app.save_history = saved
+        ws.set_pause(False)
+        srv.shutdown()
+
+
 def main():
     check_code()
     check_release_files()
@@ -699,6 +748,7 @@ def main():
     check_my_items()
     check_craft_table()
     check_chat()
+    check_pause()
     print(f"\n{sum(RESULTS)}/{len(RESULTS)} checks passed.")
     sys.exit(0 if all(RESULTS) else 1)
 
