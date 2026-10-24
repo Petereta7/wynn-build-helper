@@ -1,4 +1,4 @@
 {
-  "version": "1.12.1",
-  "notes": "New goal: most mana regen. Mix it with another goal, for example \"70% survival, 30% as much mana regen as possible\" (tell the bot, or pick Mana regen under \"Also care about\" in the form). It counts mana back per second from regen; mana steal isn't part of it because it only works on main attack hits."
+  "version": "1.13.0",
+  "notes": "Spell rotations can now cast a spell twice in a row before switching (for example Arrow Bomb, Arrow Bomb, Escape), using the repeat rule tested in game: the second cast in a row costs the same, a third would cost 5 more mana, and the spell right after a double costs 5 more. Spell builds and \"most damage\" builds get higher, honest numbers when that order pays off (in our tests usually a few percent, up to about 40% for some builds), and \"How to play\" tells you the exact order. Nothing gets worse: the old alternating rotations are still tried and the best wins."
 }

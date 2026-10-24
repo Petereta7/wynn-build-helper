@@ -113,7 +113,7 @@ Measured deep search on the owner's PC (1.6 -> 1.7): Warrior L106 7.0 -> 4.1 min
 - Goal mix: main^(1-w) x second^w (like balanced at 50/50). Search filter and fast scoring keep what the second
   goal needs.
 - Mana check: Wynnbuilder's model (3 casts/s at 9 clicks/s, income 5 + mr/5, bar 100 + maxMana + Int%, costs / manaMult
-  for Paradox). Mana steal works only on main attack hits (wiki; Wynnbuilder has it as an optional tick box): never in
+  for Paradox), plus the repeated-spell extra (see Repeated spells). Mana steal works only on main attack hits (wiki; Wynnbuilder has it as an optional tick box): never in
   a spells-only rotation; in the mixed goal ms/3 x the main-attack share (owner caught this, Oct 2026). Warrior's
   Generalist (every 4th cast costs 1) isn't counted yet (conservative).
 - Armor powders add health (any element) and elemental defense; chosen for finished builds at the very end, so
@@ -259,10 +259,26 @@ Measured deep search on the owner's PC (1.6 -> 1.7): Warrior L106 7.0 -> 4.1 min
 - Mana goal (owner, Oct 2026: "70 percent survival and 30 percent as much mana regen as possible"): goal "mana" =
   `income` (5 + mr/5, the mana check's figure; no mana steal, it needs main attacks), also a second goal; search
   filter rel {"mr"}. same_numbers unaffected (its goal lists are fixed).
+- Repeated spells (1.13.0; owner's idea "1 damage spell, 1 damage spell, 1 reset spell", rule tested by the owner in
+  game, Oct 2026): the 2nd cast of a spell in a row costs the same, each later one +5, and the spell right after a run
+  carries the last increase (Escape 15, Escape 15, Arrow Shield 30 (25+5), Arrow Shield 25, Arrow Shield 30; Escape,
+  Shield, Escape, Shield all normal). `repeated_cast_costs` / `repeat_extra_mana` (a run of m adds 5 x m(m-1)/2 per
+  cycle, flat, refunds like Paradox apply). Rotations (spells, mixed, healing) try 2-4 different spells each cast once
+  (exactly the old loop first, so ties keep the old rotation) and then each cast once or twice (`double_entries` /
+  `double_list`: flat bit-mask entries, spells and mixed in one pass, lasting spells capped inline). Rotation tuples are
+  now the cast order with repeats (e.g. (3, 3, 2)); `rotation_dps` / `rotation_breaks` take one entry per cast.
+  `MAX_SPELL_RUN = 1` + `HEAL_ONE_SPELL = True` reproduce the 1.12.1 numbers exactly (same_numbers verified).
+  goal_check compares spells and any-style numbers with a brute force over every cast order. Scoring cost about +10-25%
+  for spell/mixed goals after optimising (first version was +60%). Healing still also allows one heal spell on repeat
+  (`HEAL_ONE_SPELL`, max 1 cast/s, normal cost) until we know whether waiting resets the count (owner to test).
+  toggle_check: a damage-only buff at a share is scaled, so each spell's damage is exactly half way, but the score may
+  pick another rotation, so the score only has to lie between off and on.
 - CI build check runs in 4 parallel parts (`build_check.py --shard k/4`, matrix in checks.yml, 150 min each).
 
 ## History (newest first)
 
+- 1.13.0: spell rotations may cast a spell twice before switching (repeat rule tested in game); How to play gives the
+  exact order; the bot knows the rule.
 - 1.12.1: "mana regen" goal (mix it in, e.g. 70% survival + 30% mana).
 - 1.12.0: archetype starts (the search also starts from a tree built around each archetype for spell-type goals):
   shaman L60 spells +22%, mage L40 spells +13%, assassin L55 +1.3%; never worse; about 2x time for spell builds.
@@ -318,9 +334,9 @@ Measured deep search on the owner's PC (1.6 -> 1.7): Warrior L106 7.0 -> 4.1 min
   build existed before the life steal fix).
 - Speed up high-level deep searches again (see KNOWN PROBLEM above) without losing the better builds.
 - Warrior's Generalist (every 4th spell costs 1 mana) isn't counted in mana checks yet (conservative).
-- Healing goal: a single heal spell on repeat (size-1 rotation, max 1 cast/s) uses its base cost, but in game the same
-  spell costs +5 per cast after the 2nd until a different spell is cast (forum, 2022/2024; no timer reset documented).
-  Waiting for the owner's in-game test (does waiting reset it?) before changing. Mechanics notes: Project doc
+- Healing goal: a single heal spell on repeat (HEAL_ONE_SPELL, max 1 cast/s) still uses its normal cost, but in game the
+  3rd cast in a row costs +5 and so on (owner confirmed) unless waiting resets it. Waiting for the owner's test (cast
+  Heal ~4 times about 3 s apart) before turning HEAL_ONE_SPELL off. Mechanics notes: Project doc
   claude/wynncraft_mechanics.md (dev repo docs/).
 - Tree planner robustness: beyond the per-archetype states (1.10.5), guided runs toward archetype payoff nodes (like
   the ultimate runs in best_tree) could find more; costs tree-planning time.

@@ -131,8 +131,18 @@ def main():
                 bad.append(f"{name}: {type(exc).__name__}")
                 continue
             tested += 1
+            linear = t.toggle_bonus_kinds().get(name, "linear") == "linear"
             for k in vals[0.0]:
                 lo, hi, mid = vals[0.0][k], vals[1.0][k], vals[0.5].get(k, 0)
+                if linear and k in ("_value", "_goal"):
+                    # a buff that only scales damage is scaled by its share (each spell's damage exactly half way, checked
+                    # above); the score picks the best rotation for those numbers, which needn't be the same rotation as
+                    # with the buff fully on or off (e.g. casting a spell twice pays off only above some damage), so it
+                    # only has to lie between the two
+                    if not min(lo, hi) - 1e-6 * max(1, abs(hi)) <= mid <= max(lo, hi) + 1e-6 * max(1, abs(hi)):
+                        bad.append(f"{name} ({k}: half {mid:.1f}, not between {lo:.1f} and {hi:.1f})")
+                        break
+                    continue
                 if abs(hi - lo) > 1e-9 and abs(mid - (lo + hi) / 2) > 1e-6 * max(1, abs(hi)):
                     bad.append(f"{name} ({k}: half {mid:.1f}, expected {(lo + hi) / 2:.1f})")
                     break

@@ -106,7 +106,8 @@ def main():
             dmg = sum(x["cast"] for x in rs) / len(rs)
             bar = 100 + r["stats"].get("maxMana", 0) + math.floor(wh.skill_pct(r["stats"].get("int", 0)) * 100)
             probs = []
-            if abs(m["used"] - 3 * sum(x["cost"] for x in rs) / len(rs) / wh.mana_refund_mult(r["stats"])) > 1e-9:
+            extra = wh.repeat_extra_mana(r["rotation"])
+            if abs(m["used"] - 3 * (sum(x["cost"] for x in rs) + extra) / len(rs) / wh.mana_refund_mult(r["stats"])) > 1e-9:
                 probs.append("used")
             sus = wh.rotation_dps(rs, m["sustained_rate"])
             if abs(sus - r["spell_dps"]) > 1e-6 * max(1, r["spell_dps"]):
@@ -170,7 +171,8 @@ def main():
             if goal == "mixed" and mi.get("rotation"):
                 rs = [r["results"][b] for b in mi["rotation"]]
                 mult = wh.mana_refund_mult(st)
-                spend = mi["rate"] * sum(x["cost"] / mult - x["mana_gained"] for x in rs) / len(rs)
+                spend = mi["rate"] * (sum(x["cost"] / mult - x["mana_gained"] for x in rs)
+                                      + wh.repeat_extra_mana(mi["rotation"]) / mult) / len(rs)
                 gain = r["mana_income"] + st["ms"] / 3 * mi["melee_share"]
                 if spend > gain + 1e-6:
                     bad.append(f"{cls} mixed: spends {spend:.2f}/s, gets {gain:.2f}/s")
@@ -285,6 +287,67 @@ def main():
     v = wh.rotation_dps(rs, 3.0)
     ok = abs(v - (93563.0 + 398820.0 * 1.5)) < 1e-6 and wh.rotation_breaks(rs, 3.0) == [93563.0 * 2 / 757864.0]
     check("lasting spells count at most one copy in a rotation", ok)
+
+    # 4e. casting the same spell again (owner's in-game test, Oct 2026): 2nd in a row the same, 3rd +5, the spell
+    # right after a double +5, alternating free; and the rotations found are the best of every order of 2-4 different
+    # spells each cast once or twice (an independent brute force with rotation_dps / repeat_extra_mana)
+    costs = {"Escape": 15, "Arrow Shield": 25}
+    ok = (wh.repeated_cast_costs(["Escape", "Escape", "Arrow Shield", "Arrow Shield", "Arrow Shield"], costs)
+          == [15, 15, 30, 25, 30]
+          and wh.repeated_cast_costs(["Escape", "Arrow Shield"] * 2, costs) == [15, 25, 15, 25]
+          and wh.repeat_extra_mana([1, 1, 2]) == 5 and wh.repeat_extra_mana([1, 2, 1, 2]) == 0
+          and wh.repeat_extra_mana([1, 1, 2, 2, 3]) == 10 and wh.repeat_extra_mana([2, 1, 1]) == 5)
+    bad, seen, doubled = [], 0, 0
+    import itertools
+    import random
+    rng = random.Random(5)
+    for cls in wh.CLASSES:
+        tree = wh.Tree(d, cls)
+        for _ in range(12):
+            lvl = rng.choice([45, 80, 106])
+            own = set(tree.roots)
+            for _ in range(rng.randrange(15, 50)):
+                cand = [nd for nd in tree.nodes if nd.id not in own and (not nd.parents or any(p in own for p in nd.parents))]
+                if not cand:
+                    break
+                own.add(rng.choice(cand).id)
+            arm = [rng.choice([it for it in d.items.values() if it.type == wh.SLOT_TYPES[sl] and it.level <= lvl])
+                   for sl in range(8)]
+            wpn = rng.choice([it for it in d.items.values() if it.type == wh.CLASS_WEAPON[cls] and it.level <= lvl])
+            r = wh.Build(d, tree, lvl, "mixed").evaluate(frozenset(own), arm, wpn, [rng.randrange(30) for _ in range(5)])
+            res, mm, inc = r["results"], wh.mana_refund_mult(r["stats"]), r["mana_income"]
+            ms = r["stats"].get("ms", 0) / 3
+            sp = r["special"]["damage"] / r["special"]["cycle"] if r["special"] and r["special"]["damage"] > 0 else 0.0
+            rest = r["extra_dps"]                       # summons etc. + weapon special, added to every mixed option
+            rot = {b: (dict(x, cast=0.0) if x.get("name") in wh.CONTACT_SPELLS else x) for b, x in res.items()}
+            usable = [b for b in res if b in (1, 2, 3, 4)]
+            best, best_mix = 0.0, r["melee_dps"] + r["poison_melee"] + sp
+            for size in (2, 3, 4):
+                for combo in itertools.combinations(usable, size):
+                    for runs in itertools.product((1, 2), repeat=size):
+                        seq = [b for b, m in zip(combo, runs) for _ in range(m)]
+                        rs = [rot[b] for b in seq]
+                        if sum(x["cast"] for x in rs) <= 0:
+                            continue
+                        net = (sum(x["cost"] / mm - x["mana_gained"] for x in rs) + wh.repeat_extra_mana(seq) / mm) / len(seq)
+                        best = max(best, wh.rotation_dps(rs, 3.0 if net <= 0 else min(3.0, inc / net)))
+                        denom, rmax = net + ms / 3, 3.0
+                        if denom > 0:
+                            rmax = min(3.0, max(0.0, (inc + ms) / denom))
+                        elif rmax * denom > inc + ms:
+                            rmax = 0.0
+                        for rt in [rmax] + wh.rotation_breaks(rs, rmax):
+                            share = max(0.0, 1 - rt / 3)
+                            best_mix = max(best_mix, wh.rotation_dps(rs, rt) + r["melee_dps"] * share + rest
+                                           + max(r["poison_spell"], r["poison_melee"] if share > 0 else 0.0))
+            seen += 1
+            doubled += bool(r["rotation"]) and len(set(r["rotation"])) < len(r["rotation"])
+            if abs(best - r["spell_dps"]) > 1e-9 * max(1.0, best):
+                bad.append(f"{cls} L{lvl}: {r['spell_dps']:.1f} vs every order {best:.1f}")
+            if abs(best_mix - r["goal_values"]["mixed"]) > 1e-9 * max(1.0, best_mix):
+                bad.append(f"{cls} L{lvl} any style: {r['goal_values']['mixed']:.1f} vs every order {best_mix:.1f}")
+    check("casting the same spell again: in-game costs; best of every cast order", ok and not bad and doubled > 0,
+          f"({seen} builds, {doubled} with a spell cast twice)" + (" " + "; ".join(bad[:2]) if bad else ""))
 
     # 4c. life steal / mana steal minimums: a bracelet with negative life steal misses "no negative life steal"
     kb = d.find_item("Knucklebones")[0]

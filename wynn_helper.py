@@ -2587,6 +2587,9 @@ def _cast_groups(rs):
     return order, [counts[id(r)] for r in order]
 
 
+_ONES = {k: (1,) * k for k in range(1, 5)}
+
+
 def _group_dps(rs, ms, n, rate: float) -> float:
     each = rate / n
     tot = 0.0
@@ -2625,18 +2628,28 @@ def rotation_breaks(rs, rate_max: float) -> list:
     return _group_breaks(g, ms, len(rs), rate_max)
 
 
-# Casting the same spell again (forum reports, 2022 and 2024; the wiki only says "the cost of mana increases"): the
-# 2nd cast in a row costs the same, each one after that 5 more, and the cast right after a repeated run still carries
-# the last increase ("after two Ice Snakes, Meteor costs its normal cost plus 5"); a different spell resets it.
-# Modeled conservatively: a run of m casts of one spell adds 5 x (1 + 2 + ... + (m-1)) mana to the rotation (the
-# increase lands on the casts after the 2nd, and on the next spell), flat (not lowered by spell cost % or
-# Intelligence), and on top of the 1-mana floor. No time-based reset is assumed. Rotations alternate different spells
-# (no extra cost) or cast one spell twice before switching (owner's idea, Oct 2026: "1 damage spell, 1 damage spell,
-# 1 reset spell"): runs of 3+ cost 15+ extra mana for one more cast and aren't tried.
+# Casting the same spell again (owner tested in game, Oct 2026; matches forum reports from 2022/2024): the 2nd cast in
+# a row costs the same, each one after that 5 more, and the spell cast right after a repeated run carries the last
+# increase; switching spells starts a new count. Owner's test: Escape 15, Escape 15, Arrow Shield 30 (25 + 5),
+# Arrow Shield 25, Arrow Shield 30 (third in a row); Escape, Arrow Shield, Escape, Arrow Shield all at their normal cost.
+# So a run of m casts of one spell adds 5 x (1 + 2 + ... + (m-1)) mana per cycle, flat (not lowered by spell cost % or
+# Intelligence; on top of the 1-mana floor). No time-based reset is assumed. Rotations alternate different spells (no
+# extra cost) or cast a spell twice before switching (owner's idea: "1 damage spell, 1 damage spell, 1 reset spell"):
+# runs of 3+ cost 15+ extra mana for one more cast and aren't tried.
 REPEAT_EXTRA_MANA = 5.0
-MAX_SPELL_RUN = 2
-HEAL_ONE_SPELL = False     # before 1.13.0 healing could repeat one spell (max 1 cast/s) at its normal cost
+MAX_SPELL_RUN = 2          # 1 = each spell once (as before 1.13.0); 2 = a spell may be cast twice in a row
+HEAL_ONE_SPELL = True      # one heal spell on repeat (max 1 cast/s) at its normal cost, as before 1.13.0, until
+#                             we know whether waiting resets the repeated-cast cost (owner to test in game)
 _PATTERNS = {}
+
+
+def repeated_cast_costs(seq, costs) -> list:
+    """Mana of each cast of `seq` in order, starting fresh (costs: spell -> normal cost)."""
+    out, run, prev = [], 0, None
+    for b in seq:
+        out.append(costs[b] + REPEAT_EXTRA_MANA * max(0, run - 1))
+        run, prev = (run + 1 if b == prev else 1), b
+    return out
 
 
 def repeat_extra_mana(seq) -> float:
@@ -2656,23 +2669,70 @@ def repeat_extra_mana(seq) -> float:
     return extra
 
 
-def rotation_patterns(usable, max_run=None) -> list:
-    """Rotations to try, per set of 2-4 different spells: [(spells, [(cast order, counts, extra mana per cycle), ...])],
-    each spell cast 1..max_run times in a row; the all-once order comes first in each list."""
-    max_run = MAX_SPELL_RUN if max_run is None else max_run
-    key = (tuple(usable), max_run)
-    pats = _PATTERNS.get(key)
-    if pats is None:
-        pats = []
-        for size in (2, 3, 4):
-            for combo in itertools.combinations(usable, size):
-                opts = []
-                for runs in itertools.product(range(1, max_run + 1), repeat=size):
-                    seq = tuple(b for b, m in zip(combo, runs) for _ in range(m))
-                    opts.append((seq, runs, REPEAT_EXTRA_MANA * sum(m * (m - 1) // 2 for m in runs)))
-                pats.append((combo, opts))
-        _PATTERNS[key] = pats
-    return pats
+def rotation_combos(usable) -> list:
+    """Sets of 2-4 different spells to build rotations from, in the order tried (smallest first)."""
+    key = tuple(usable)
+    out = _PATTERNS.get(key)
+    if out is None:
+        out = [c for size in (2, 3, 4) for c in itertools.combinations(usable, size)]
+        _PATTERNS[key] = out
+    return out
+
+
+_DOUBLES = {}
+
+
+def double_entries(usable) -> list:
+    """Every rotation with some spells cast twice in a row, as flat numbers for fast scoring: (spells, mask of the
+    ones cast twice (bit i = spells[i]), bits of the spells (1 << spell), bits of the doubled ones, casts per cycle of
+    spells 1-4, casts per cycle, doubles)."""
+    key = tuple(usable)
+    out = _DOUBLES.get(key)
+    if out is None:
+        out = []
+        for combo in rotation_combos(usable):
+            k = len(combo)
+            for mask in range(1, 1 << k):
+                m = [0, 0, 0, 0, 0]
+                dbits = cbits = 0
+                for i, b in enumerate(combo):
+                    m[b] = 2 if mask >> i & 1 else 1
+                    cbits |= 1 << b
+                    if mask >> i & 1:
+                        dbits |= 1 << b
+                pc = bin(mask).count("1")
+                out.append((combo, mask, cbits, dbits, m[1], m[2], m[3], m[4], k + pc, pc))
+        _DOUBLES[key] = out
+    return out
+
+
+_DOUBLE_LISTS = {}
+
+
+def double_list(usable, allowed_bits, lasting_bits, max_size=4) -> list:
+    """double_entries kept to those whose doubled spells are all in allowed_bits and with at most max_size different
+    spells: (spells, mask, casts of spells 1-4, casts per cycle, doubles, bits of its lasting spells, bits of its
+    spells)."""
+    key = (tuple(usable), allowed_bits, lasting_bits, max_size)
+    out = _DOUBLE_LISTS.get(key)
+    if out is None:
+        out = [(combo, mask, m1, m2, m3, m4, n, pc, cbits & lasting_bits, cbits)
+               for combo, mask, cbits, dbits, m1, m2, m3, m4, n, pc in double_entries(usable)
+               if not dbits & ~allowed_bits and len(combo) <= max_size]
+        if len(_DOUBLE_LISTS) > 4096:
+            _DOUBLE_LISTS.clear()
+        _DOUBLE_LISTS[key] = out
+    return out
+
+
+_POPCOUNT = [bin(m).count("1") for m in range(16)]
+_BITS_TO_SPELLS = [tuple(b for b in range(1, 5) if bits >> b & 1) for bits in range(32)]
+_LOWBIT = {1 << i: i for i in range(4)}
+
+
+def cast_order(combo, mask) -> tuple:
+    """The cast order for a set of spells where the spells in `mask` (bit i = combo[i]) are cast twice in a row."""
+    return tuple(b for i, b in enumerate(combo) for _ in range(2 if mask >> i & 1 else 1))
 
 
 def cast_order_text(seq, name) -> str:
@@ -2811,6 +2871,9 @@ def mana_lines(m) -> list:
     head = (f"Mana: at full speed ({m['full_rate']:.0f} casts/s) the rotation uses {m['used']:.1f}/s; you get "
             f"{m['regen']:.1f}/s back from regen" + (f" and {m['from_spells']:.1f}/s from spells" if m["from_spells"] > 0 else "")
             + f". Mana bar {m['bar']:.0f}.")
+    if m.get("repeat_extra"):
+        head += (f" (Includes {m['repeat_extra']:.0f} extra mana per round: the spell after a spell cast twice in a row "
+                 "costs 5 more.)")
     if m.get("steal", 0) > 0:
         head += (f" (Mana steal {m['steal']:.0f}/3s isn't counted here: it only works on main attack hits, "
                  "so it refills mana only while you main-attack.)")
@@ -2862,60 +2925,133 @@ def score_build(results: dict, stats: dict, weapon, goal: str, ult_spells=frozen
     # Mana refunds like Mage's Paradox ("refunding 25% of your spent mana"): Wynnbuilder's mana calculator divides
     # spell costs by these (manaMult, +34% for Paradox) when checking a rotation; the same here.
     mana_mult = mana_refund_mult(stats)
-    # Best rotation of 2-4 different spells, each cast once or twice in a row (casting one again right away costs 5 more
-    # mana on the cast after it: REPEAT_EXTRA_MANA): casts/s limited by clicks and by mana. All-once rotations first
-    # (in the order used before 1.13.0, so ties go to them); a set of spells is then tried with repeats only when an
-    # upper bound on what it could reach beats the best so far (faster, same result).
-    best_rot, best_rot_dps, best_extra = None, 0.0, 0.0
+    # Best rotation of 2-4 different spells, each cast once or twice in a row (a third cast in a row costs 5 more mana,
+    # and so does the next spell after a double: REPEAT_EXTRA_MANA): casts/s limited by clicks and by mana. All-once
+    # rotations are tried first, exactly as before 1.13.0 (so ties go to them); then each set of spells with some cast
+    # twice (bit masks; sums built up one spell at a time).
     usable = [bs for bs, r in results.items() if bs in (1, 2, 3, 4)]
     # Spells whose damage only hits enemies that come up to you (Arrow Shield: "enemies that get too close") aren't
     # damage you can keep up from range: spell rotations count them as 0 (they can still be cast); burst counts them.
     rot_res = {b: (dict(r, cast=0.0) if r.get("name") in CONTACT_SPELLS else r) for b, r in results.items()}
-    pats = rotation_patterns(usable) if len(usable) >= 2 else []
-    # per spell: (damage per cast, net mana per cast, could be cast twice usefully)
-    sp_net = {b: rot_res[b]["cost"] / mana_mult - rot_res[b]["mana_gained"] for b in usable}
+    combos = rotation_combos(usable) if len(usable) >= 2 else []
     clicks_rate = CLICKS_PER_SECOND / 3
+    rep_mana = REPEAT_EXTRA_MANA / mana_mult        # the extra 5 is spent mana too (refunds like Paradox apply)
+    poison_any = max(poison_spell, poison_melee)
 
-    def _bound(combo, value_key, income_now):
-        """Most a rotation of these spells could give per second: never more than the best value per cast at full
-        speed, nor (when every spell costs mana) more than income x the best value per mana."""
-        vals = [rot_res[b][value_key] if value_key == "cast" else results[b].get(value_key, 0) for b in combo]
-        top = clicks_rate * max(vals)
-        if all(sp_net[b] > 0 for b in combo):
-            top = min(top, max(0.0, income_now) * max(v / sp_net[b] for v, b in zip(vals, combo)))
-        return top
-
-    def _net(rs, combo, runs, n, extra):
-        if extra:
-            return (sum(sp_net[b] * m for b, m in zip(combo, runs)) + extra / mana_mult) / n
-        return sum(r["cost"] / mana_mult - r["mana_gained"] for r in rs) / n
-
-    def _useless_repeat(rs, runs, key):
-        return any(m > 1 and (r[key] if key == "cast" else r.get(key, 0)) <= 0 and r["mana_gained"] <= 0
-                   for r, m in zip(rs, runs))
-
-    for phase in (0, 1):
-        for combo, opts in pats:
-            rs = [rot_res[b] for b in combo]
-            if sum(r["cast"] for r in rs) <= 0:
+    dv, cv, hv, capv = [0.0] * 5, [0.0] * 5, [0.0] * 5, [0.0] * 5
+    ok_dmg = ok_heal = lasting_bits = 0
+    for b in usable:
+        r = rot_res[b]
+        dv[b], cv[b], hv[b] = r["cast"], r["cost"] / mana_mult - r["mana_gained"], results[b].get("heal", 0)
+        if r["cast"] > 0 or r["mana_gained"] > 0:     # casting a spell that adds nothing twice only costs mana
+            ok_dmg |= 1 << b
+        if hv[b] > 0 or r["mana_gained"] > 0:
+            ok_heal |= 1 << b
+        if r.get("is_dps") and r.get("damage", 0) > 0:
+            lasting_bits |= 1 << b
+            capv[b] = r["damage"]
+    _, d1, d2, d3, d4 = dv
+    _, c1, c2, c3, c4 = cv
+    _, h1, h2, h3, h4 = hv
+    use_doubles = MAX_SPELL_RUN >= 2 and len(usable) >= 2
+    ms_click = 3 * ms_ps / CLICKS_PER_SECOND
+    # each spell once (the rotations used before 1.13.0): spells only, and spells + main attacks
+    best_rot, best_rot_dps, best_extra = None, 0.0, 0.0
+    best_key = None
+    for combo in combos:
+        rs = [rot_res[b] for b in combo]
+        if sum(r["cast"] for r in rs) <= 0:
+            continue
+        n = len(combo)
+        net_cost = sum(r["cost"] / mana_mult - r["mana_gained"] for r in rs) / n
+        cast_rate = clicks_rate
+        if net_cost > 0:
+            cast_rate = min(cast_rate, income / net_cost)
+        dps = _group_dps(rs, _ONES[n], n, cast_rate)
+        if dps > best_rot_dps:
+            best_rot_dps, best_key = dps, (combo, 0)
+    # Spells and main attacks together (the helper's own estimate; Wynnbuilder has none). A cast is 3 clicks at
+    # Wynnbuilder's 9 clicks a second, so casting r spells a second takes r/3 of the time; main attacks fill the
+    # rest at the weapon's attack speed. Damage is straight-line in r, so the best is either no spells or the
+    # fastest rate your clicks and mana allow, for whichever rotation is best. Poison counts once (the larger).
+    # (Main attacks in between are assumed not to reset the repeated-spell cost.)
+    mixed_goal, mixed_info = melee_dps + poison_melee + special_dps, {"rotation": None, "rate": 0.0, "melee_share": 1.0}
+    mixed_key = None
+    for combo in combos:
+        rs = [rot_res[b] for b in combo]
+        if sum(r["cast"] for r in rs) <= 0:
+            continue
+        size = len(combo)
+        net_cost = sum(r["cost"] / mana_mult - r["mana_gained"] for r in rs) / size
+        rmax = CLICKS_PER_SECOND / 3
+        # mana: r casts/s cost r x net; income + mana steal x the main-attack share (1 - 3r/clicks)
+        denom = net_cost + 3 * ms_ps / CLICKS_PER_SECOND
+        if denom > 0:
+            rmax = min(rmax, max(0.0, (income + ms_ps) / denom))
+        elif rmax * denom > income + ms_ps:     # (spells that give mana back can outpace a draining steal)
+            rmax = 0.0
+        # spell damage only grows straight with the cast rate until a lasting spell is up all the time, so the
+        # best mix is at the fastest rate or at one of those points
+        for rate in [rmax] + _group_breaks(rs, _ONES[size], size, rmax):
+            share = max(0.0, 1 - rate * 3 / CLICKS_PER_SECOND)
+            sp_part = _group_dps(rs, _ONES[size], size, rate)
+            tot = (sp_part + melee_dps * share + max(poison_spell, poison_melee if share > 0 else 0.0)
+                   + sustained_extra + special_dps)
+            if tot > mixed_goal:
+                mixed_goal, mixed_info = tot, {"rotation": combo, "rate": rate, "melee_share": share,
+                                               "spell_part": sp_part, "melee_part": melee_dps * share}
+    # then with some spells cast twice in a row, both goals in one pass over the same orders
+    if use_doubles:
+        mixed_base = sustained_extra + special_dps
+        for combo, mask, m1, m2, m3, m4, n, pc, lasting, _ in double_list(usable, ok_dmg, lasting_bits):
+            dsum = d1 * m1 + d2 * m2 + d3 * m3 + d4 * m4
+            if dsum <= 0:
                 continue
-            if phase == 1:
-                if len(opts) == 1 or _bound(combo, "cast", income) <= best_rot_dps:
-                    continue
-                opts = opts[1:]
-            else:
-                opts = opts[:1]
-            for seq, runs, extra in opts:
-                if extra and _useless_repeat(rs, runs, "cast"):
-                    continue            # casting a spell that adds nothing twice only costs mana
-                n = len(seq)
-                net_cost = _net(rs, combo, runs, n, extra)
-                cast_rate = clicks_rate
-                if net_cost > 0:
-                    cast_rate = min(cast_rate, income / net_cost)
-                dps = _group_dps(rs, runs, n, cast_rate)
+            net_total = c1 * m1 + c2 * m2 + c3 * m3 + c4 * m4 + rep_mana * pc
+            cast_rate = clicks_rate
+            if net_total > 0:
+                cast_rate = min(cast_rate, income * n / net_total)
+            net_cost = net_total / n
+            rmax = clicks_rate
+            denom = net_cost + ms_click
+            if denom > 0:
+                rmax = min(rmax, max(0.0, (income + ms_ps) / denom))
+            elif rmax * denom > income + ms_ps:
+                rmax = 0.0
+            if lasting:
+                # lasting spells count at most their damage per second (one copy up), the rest in a straight line
+                mv = (0, m1, m2, m3, m4)
+                lst = [(dv[b] * mv[b], capv[b]) for b in _BITS_TO_SPELLS[lasting]]
+                flat = dsum - sum(x for x, _ in lst)
+                dps = cast_rate * flat / n + sum(min(x * cast_rate / n, cap) for x, cap in lst)
                 if dps > best_rot_dps:
-                    best_rot_dps, best_rot, best_extra = dps, seq, extra
+                    best_rot_dps, best_key = dps, (combo, mask)
+                rates = [rmax] + [cap * n / x for x, cap in lst if x > 0 and 0 < cap * n / x < rmax]
+                for rate in rates:
+                    share = max(0.0, 1 - rate * 3 / CLICKS_PER_SECOND)
+                    sp_part = rate * flat / n + sum(min(x * rate / n, cap) for x, cap in lst)
+                    tot = sp_part + melee_dps * share + (poison_any if share > 0 else poison_spell) + mixed_base
+                    if tot > mixed_goal:
+                        mixed_goal, mixed_info = tot, {"rotation": combo, "rate": rate, "melee_share": share,
+                                                       "spell_part": sp_part, "melee_part": melee_dps * share}
+                        mixed_key = mask
+            else:
+                dps = cast_rate * dsum / n
+                if dps > best_rot_dps:
+                    best_rot_dps, best_key = dps, (combo, mask)
+                share = max(0.0, 1 - rmax * 3 / CLICKS_PER_SECOND)
+                sp_part = rmax * dsum / n
+                tot = sp_part + melee_dps * share + (poison_any if share > 0 else poison_spell) + mixed_base
+                if tot > mixed_goal:
+                    mixed_goal, mixed_info = tot, {"rotation": combo, "rate": rmax, "melee_share": share,
+                                                   "spell_part": sp_part, "melee_part": melee_dps * share}
+                    mixed_key = mask
+    if mixed_key is not None and mixed_info.get("rotation"):
+        mixed_info["rotation"] = cast_order(mixed_info["rotation"], mixed_key)
+        mixed_info["repeat_extra"] = REPEAT_EXTRA_MANA * _POPCOUNT[mixed_key]
+    if best_key:
+        best_rot = cast_order(*best_key)
+        best_extra = REPEAT_EXTRA_MANA * _POPCOUNT[best_key[1]]
     # Mana check for that rotation (3 casts/s at 9 clicks/s, mana income 5 + mr/5 (mana steal needs main attacks),
     # mana bar 100 + max mana bonus + Intelligence %): how long full speed lasts.
     mana = None
@@ -2941,37 +3077,36 @@ def score_build(results: dict, stats: dict, weapon, goal: str, ult_spells=frozen
     heal_ps, heal_rot = 0.0, None
     healers = [bs for bs, r in results.items() if bs in (1, 2, 3, 4) and r.get("heal", 0) > 0]
     if healers:
-        hpats = [((b,), [((b,), (1,), 0.0)]) for b in usable] if HEAL_ONE_SPELL else []
-        hpats += [p for p in pats if len(p[0]) <= 3]
-        for phase in (0, 1):
-            for combo, opts in hpats:
-                if not any(b in healers for b in combo):
+        heal_key = None
+        hcombos = ([(b,) for b in usable] if HEAL_ONE_SPELL else []) + [cb for cb in combos if len(cb) <= 3]
+        for combo in hcombos:
+            if not any(b in healers for b in combo):
+                continue
+            rs = [results[b] for b in combo]
+            size = len(combo)
+            heal = sum(r.get("heal", 0) for r in rs) / size
+            net_cost = sum(r["cost"] / mana_mult - r["mana_gained"] for r in rs) / size
+            rate = CLICKS_PER_SECOND / 3
+            if net_cost > 0:
+                rate = min(rate, income / net_cost)
+            if size == 1:
+                rate = min(rate, 1.0)     # one spell on its own, back-to-back (see HEAL_ONE_SPELL)
+            if rate * heal > heal_ps:
+                heal_ps, heal_key = rate * heal, (combo, 0)
+        if use_doubles:
+            hbits = sum(1 << b for b in healers)
+            for combo, mask, m1, m2, m3, m4, n, pc, _, cbits in double_list(usable, ok_heal, 0, 3):
+                if not cbits & hbits:
                     continue
-                rs = [results[b] for b in combo]
-                if phase == 1:
-                    if len(opts) == 1 or _bound(combo, "heal", income) <= heal_ps:
-                        continue
-                    opts = opts[1:]
-                else:
-                    opts = opts[:1]
-                for seq, runs, extra in opts:
-                    if extra and _useless_repeat(rs, runs, "heal"):
-                        continue
-                    n = len(seq)
-                    if extra:
-                        heal = sum(r.get("heal", 0) * m for r, m in zip(rs, runs)) / n
-                        net_cost = (sum((r["cost"] / mana_mult - r["mana_gained"]) * m for r, m in zip(rs, runs))
-                                    + extra / mana_mult) / n
-                    else:
-                        heal = sum(r.get("heal", 0) for r in rs) / n
-                        net_cost = sum(r["cost"] / mana_mult - r["mana_gained"] for r in rs) / n
-                    rate = CLICKS_PER_SECOND / 3
-                    if net_cost > 0:
-                        rate = min(rate, income / net_cost)
-                    if n == 1:
-                        rate = min(rate, 1.0)     # repeating one spell back-to-back (see HEAL_ONE_SPELL)
-                    if rate * heal > heal_ps:
-                        heal_ps, heal_rot = rate * heal, seq
+                net_total = c1 * m1 + c2 * m2 + c3 * m3 + c4 * m4 + rep_mana * pc
+                rate = clicks_rate
+                if net_total > 0:
+                    rate = min(rate, income * n / net_total)
+                v = rate * (h1 * m1 + h2 * m2 + h3 * m3 + h4 * m4) / n
+                if v > heal_ps:
+                    heal_ps, heal_key = v, (combo, mask)
+        if heal_key:
+            heal_rot = cast_order(*heal_key)
     defense = defense or {}
     # With an enemy hit entered (--enemy), effective HP is measured against that hit (elemental defenses count).
     ehp = defense.get("ehp_enemy") or defense.get("ehp_agi", 0.0)
@@ -2979,52 +3114,6 @@ def score_build(results: dict, stats: dict, weapon, goal: str, ult_spells=frozen
     melee_total = melee_dps + (poison_melee if melee_dps > 0 else 0.0)
     spell_goal = spell_total + sustained_extra + special_dps
     melee_goal = melee_dps          # Wynnbuilder's "Average DPS": per-hit average x attack speed, nothing added
-    # Spells and main attacks together (the helper's own estimate; Wynnbuilder has none). A cast is 3 clicks at
-    # Wynnbuilder's 9 clicks a second, so casting r spells a second takes r/3 of the time; main attacks fill the
-    # rest at the weapon's attack speed. Damage is straight-line in r, so the best is either no spells or the
-    # fastest rate your clicks and mana allow, for whichever rotation is best. Poison counts once (the larger).
-    # (Main attacks in between are assumed not to reset the repeated-spell cost.)
-    mixed_goal, mixed_info = melee_dps + poison_melee + special_dps, {"rotation": None, "rate": 0.0, "melee_share": 1.0}
-    k_const = max(poison_spell, poison_melee) + sustained_extra + special_dps
-    for phase in (0, 1):
-        for combo, opts in pats:
-            rs = [rot_res[b] for b in combo]
-            if sum(r["cast"] for r in rs) <= 0:
-                continue
-            if phase == 1:
-                # tot = spells + melee x (1 - rate/3) + the rest <= melee + the rest + what spells add over the
-                # main attacks they replace (at most the full-speed or mana-limited spell bound)
-                if len(opts) == 1 or (k_const + melee_dps + max(0.0, min(
-                        clicks_rate * max(r["cast"] for r in rs) - melee_dps,
-                        _bound(combo, "cast", income + max(ms_ps, 0.0))))) <= mixed_goal:
-                    continue
-                opts = opts[1:]
-            else:
-                opts = opts[:1]
-            for seq, runs, extra in opts:
-                if extra and _useless_repeat(rs, runs, "cast"):
-                    continue
-                n = len(seq)
-                net_cost = _net(rs, combo, runs, n, extra)
-                rmax = CLICKS_PER_SECOND / 3
-                # mana: r casts/s cost r x net; income + mana steal x the main-attack share (1 - 3r/clicks)
-                denom = net_cost + 3 * ms_ps / CLICKS_PER_SECOND
-                if denom > 0:
-                    rmax = min(rmax, max(0.0, (income + ms_ps) / denom))
-                elif rmax * denom > income + ms_ps:     # (spells that give mana back can outpace a draining steal)
-                    rmax = 0.0
-                # spell damage only grows straight with the cast rate until a lasting spell is up all the time, so
-                # the best mix is at the fastest rate or at one of those points
-                for rate in [rmax] + _group_breaks(rs, runs, n, rmax):
-                    share = max(0.0, 1 - rate * 3 / CLICKS_PER_SECOND)
-                    sp_part = _group_dps(rs, runs, n, rate)
-                    tot = (sp_part + melee_dps * share + max(poison_spell, poison_melee if share > 0 else 0.0)
-                           + sustained_extra + special_dps)
-                    if tot > mixed_goal:
-                        mixed_goal, mixed_info = tot, {"rotation": seq, "rate": rate, "melee_share": share,
-                                                       "spell_part": sp_part, "melee_part": melee_dps * share}
-                        if extra:
-                            mixed_info["repeat_extra"] = extra
     best_damage = max(spell_goal, melee_total + special_dps)
     # Life steal only heals on main attack hits (wiki), like mana steal, so it counts for the share of time the build
     # spends main-attacking: all of it for main attacks, none for spells, the main-attack share between casts for most
@@ -4288,13 +4377,13 @@ def mixed_lines(ev, goal) -> list:
     res = ev.get("results") or {}
     out = [f"  Most damage, any style: {fmt_num(mx)}/s (the helper's own estimate; Wynnbuilder has no such number)."]
     if mi.get("rotation"):
-        names = " + ".join(res[b]["name"] for b in mi["rotation"] if b in res)
+        names = ", ".join(res[b]["name"] for b in mi["rotation"] if b in res)
         if mi["melee_share"] <= 1e-9:
-            out.append(f"     Best style: spells. Cast {names} at full speed ({mi['rate']:.1f} a second, "
+            out.append(f"     Best style: spells. Cast {names} in turn at full speed ({mi['rate']:.1f} a second, "
                        f"{fmt_num(mi.get('spell_part', 0))}/s); there's no time left for main attacks.")
         else:
-            out.append(f"     Best style: spells and main attacks together. Cast {names} about {mi['rate']:.1f} times a "
-                       f"second ({fmt_num(mi.get('spell_part', 0))}/s), main attack the rest of the time "
+            out.append(f"     Best style: spells and main attacks together. Cast {names} in turn, about "
+                       f"{mi['rate']:.1f} times a second ({fmt_num(mi.get('spell_part', 0))}/s), main attack the rest of the time "
                        f"({mi['melee_share'] * 100:.0f}%: {fmt_num(mi.get('melee_part', 0))}/s).")
         out.append("     A cast takes 3 clicks at 9 clicks a second, like Wynnbuilder's mana model; summons, poison (once) "
                    "and the weapon special are added like for spells.")
@@ -4338,19 +4427,26 @@ def how_to_play(build: "Build", owned, armor, weapon, fin: dict) -> list:
         m = fin.get("mana") or {}
         if goal != "mixed":
             rate = m.get("sustained_rate") or 0.0
+        twice = list(dict.fromkeys(name(b) for i, b in enumerate(rot) if rot[i - 1] == b and len(rot) > 1))
+        order = "in this order, over and over" if twice else "in turn"
         if share > 1e-9:
-            out.append(f"Mix spells and main attacks: cast {names} in turn (about {rate:.1f} casts a second) and "
+            out.append(f"Mix spells and main attacks: cast {names} {order} (about {rate:.1f} casts a second) and "
                        f"main-attack in between, about {share * 100:.0f}% of the time.")
         else:
-            out.append(f"Spell build: cast {names} in turn" + (f", about {rate:.1f} a second" if rate else "") +
-                       ". Alternate them: casting the same spell back-to-back costs more mana in Wynncraft.")
+            out.append(f"Spell build: cast {names} {order}" + (f", about {rate:.1f} a second" if rate else "") + ".")
+        if twice:
+            out.append(f"Casting {', '.join(twice)} twice in a row costs the same both times; a third time in a row would "
+                       "cost 5 more mana, so switch after two. The spell you cast right after a double costs 5 more "
+                       "mana (counted in the numbers).")
+        elif share <= 1e-9:
+            out.append("Alternating them costs nothing extra; casting the same spell 3 times in a row costs 5 more mana.")
         if m:
             if m.get("seconds") is None:
                 out.append("Mana: you can keep that up forever at full speed (3 casts a second).")
             elif goal != "mixed":
                 out.append(f"Mana: at full speed (3 casts a second) a full bar lasts about {m['seconds']:.0f}s; after that "
                            f"slow down to about {m['sustained_rate']:.1f} casts a second (the damage shown assumes that pace).")
-        lasting = [name(b) for b in rot if b in res and res[b].get("is_dps")]
+        lasting = list(dict.fromkeys(name(b) for b in rot if b in res and res[b].get("is_dps")))
         if lasting:
             out.append(f"{', '.join(lasting)} keep{'s' if len(lasting) == 1 else ''} dealing damage while up: recast just "
                        "before it runs out. Recasting refreshes it; it doesn't add a second copy.")
