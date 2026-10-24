@@ -299,7 +299,8 @@ Measured deep search on the owner's PC (1.6 -> 1.7): Warrior L106 7.0 -> 4.1 min
 - 1.13.0: Warrior survival: War Scream's own resistance, Emboldening Cry, Counter, Second Chance, Rejuvenating Skin,
   Judgement's buff now counted; War Scream + Emboldening Cry party boosts and the Potion/Strength damage boost max match
   Wynnbuilder. Repeated-spell rotations built and tested but held (MAX_SPELL_RUN = 1) because assassin L50 balanced
-  fell 1.8% with them on.
+  fell 1.8% with them on. PC build check: warrior L50 melee 7,339 -> 7,523 and no-crafts 7,000 -> 7,174 (Emboldening
+  Cry's +8%), everything else identical; 43.7 min.
 - 1.12.1: "mana regen" goal (mix it in, e.g. 70% survival + 30% mana).
 - 1.12.0: archetype starts (the search also starts from a tree built around each archetype for spell-type goals):
   shaman L60 spells +22%, mage L40 spells +13%, assassin L55 +1.3%; never worse; about 2x time for spell builds.
