@@ -1,4 +1,4 @@
 {
-  "version": "1.11.3",
-  "notes": "New: a Pause button next to Stop while a build is being searched. It waits until you press Resume and finds exactly the same build. The search runs on your computer, so it doesn't need WiFi: if your connection drops during a chat build, the search keeps going and the finished build is shown and saved in History (the bot can talk about it once you're back online). Crafted-item searches are a little faster (same builds)."
+  "version": "1.12.0",
+  "notes": "Better spell builds: the search now also starts from an ability tree built around each archetype (when you don't pick one yourself), because the strongest spell builds often commit fully to one archetype and a single search tends to stop at a mix. In our tests: Shaman level 60 spells +22%, Mage level 40 spells +13%. It can't make a build worse (the normal search still runs and the best wins), but builds where spells count take about twice as long."
 }

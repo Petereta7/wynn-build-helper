@@ -248,10 +248,20 @@ Measured deep search on the owner's PC (1.6 -> 1.7): Warrior L106 7.0 -> 4.1 min
   "pause / resume" (same build, it waited). The search never needs internet; if Claude can't be reached after a chat
   search, chat_turn keeps the report (shown + in History) and records it in the chat as an assistant note.
 - Crafts-first chain (5b) starts alongside the top builds' craft stages (needs only tops[0]); same builds.
+- Archetype starts (1.12.0; owner chose "always on", Oct 2026): for goals where spells count (`archetype_runs_on`:
+  spells, burst, ability, mixed, healing, balanced, or as goal2) and no main archetype chosen, run() also searches once
+  per archetype (not avoided) with `floor_build.copy_with(archetype=a)` from best_tree planned with that archetype,
+  crafted=False; builds go in as extra_finals (scored with no archetype rule, crafts on top of the usual tops). Why it
+  helps: the plain search stops at a mix (archetype payoffs sit behind steps that add little). Experiment
+  (tests/exp_arch.py, dev repo): shaman L60 spells 52,097 -> 63,766 (Acolyte), mage L40 spells 9,985 -> 11,259
+  (Arcanist), assassin L55 none better alone, shaman L60 mixed none better. Release run: those +22.4% / +12.8%,
+  assassin L55 +1.3% (66,401), every other case unchanged. Time: about 2x for spell goals (PC run_all 26 -> 42 min).
 - CI build check runs in 4 parallel parts (`build_check.py --shard k/4`, matrix in checks.yml, 150 min each).
 
 ## History (newest first)
 
+- 1.12.0: archetype starts (the search also starts from a tree built around each archetype for spell-type goals):
+  shaman L60 spells +22%, mage L40 spells +13%, assassin L55 +1.3%; never worse; about 2x time for spell builds.
 - 1.11.3: Pause / Resume for a running search (same build); a chat build is kept if the connection drops; crafted-item
   step overlaps more (same builds, faster).
 - 1.11.2: main archetype / archetype to leave out (form, bot, CLI); Arrow Shield no longer counted as damage per second
@@ -300,8 +310,8 @@ Measured deep search on the owner's PC (1.6 -> 1.7): Warrior L106 7.0 -> 4.1 min
 - New item alerts: after a game data update, re-check saved builds.
 - Report-a-problem button (pack build, settings and report into a file).
 - Faster search / faster CI build check (currently ~20 min on GitHub).
-- Search gap left (see best_known.json): shaman spells cases still below builds found from other starting points;
-  archetype-guided starting trees for spell goals (like style trees, one per archetype) are the next idea.
+- Search gaps left (best_known.json): archer Trapper case (35,776 vs 35,927 known), assassin L50 balanced (a 16,564
+  build existed before the life steal fix).
 - Speed up high-level deep searches again (see KNOWN PROBLEM above) without losing the better builds.
 - Warrior's Generalist (every 4th spell costs 1 mana) isn't counted in mana checks yet (conservative).
 - Tree planner robustness: beyond the per-archetype states (1.10.5), guided runs toward archetype payoff nodes (like
