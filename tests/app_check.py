@@ -715,10 +715,19 @@ def check_pause():
         a = wynn_app.run_report(dict(params))
         plain_t, best_a = _t.time() - t0, wh.LAST_RESULT.get("best")
 
+        counts = []
+
+        def scored():                     # builds scored so far (here and, during the weapon searches, in the workers)
+            return wh.EVAL_STATS["n"] + ws.LIVE.get("worker_evals", 0)
+
         def pauser():
             _t.sleep(1.5)
+            counts.append(scored())
             call("/api/pause", {"on": True})
-            _t.sleep(6)
+            _t.sleep(1.5)                 # (work already under way finishes its current batch)
+            counts.append(scored())
+            _t.sleep(4.5)
+            counts.append(scored())
             call("/api/pause", {"on": False})
         th = threading.Thread(target=pauser, daemon=True)
         t0 = _t.time()
@@ -729,9 +738,12 @@ def check_pause():
         same = (a["ok"] and b["ok"] and best_a and best_b and best_a["eval"]["main"] == best_b["eval"]["main"]
                 and [x.name if x else None for x in best_a["armor"]] == [x.name if x else None for x in best_b["armor"]]
                 and best_a["weapon"].name == best_b["weapon"].name and best_a["owned"] == best_b["owned"])
-        waited = paused_t > plain_t + 3 or plain_t < 1.5      # (a search shorter than the wait can't show it)
+        # it waited: nothing was scored in the 4.5 s in the middle of the pause (timing alone is unreliable when the
+        # computer is busy with other checks)
+        waited = len(counts) == 3 and counts[2] == counts[1]
         check("pause / resume: same build, and it waited", same and waited and not ws.PAUSE["flag"],
-              f"({plain_t:.0f}s plain, {paused_t:.0f}s with a 6s pause)")
+              f"({plain_t:.0f}s plain, {paused_t:.0f}s with a 6s pause; builds scored during the pause: "
+              f"{counts[2] - counts[1] if len(counts) == 3 else '?'})")
     finally:
         ws.remembered_starts, ws.remember, wynn_app.save_history = saved
         ws.set_pause(False)
