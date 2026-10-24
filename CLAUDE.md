@@ -318,6 +318,10 @@ Measured deep search on the owner's PC (1.6 -> 1.7): Warrior L106 7.0 -> 4.1 min
   build existed before the life steal fix).
 - Speed up high-level deep searches again (see KNOWN PROBLEM above) without losing the better builds.
 - Warrior's Generalist (every 4th spell costs 1 mana) isn't counted in mana checks yet (conservative).
+- Healing goal: a single heal spell on repeat (size-1 rotation, max 1 cast/s) uses its base cost, but in game the same
+  spell costs +5 per cast after the 2nd until a different spell is cast (forum, 2022/2024; no timer reset documented).
+  Waiting for the owner's in-game test (does waiting reset it?) before changing. Mechanics notes: Project doc
+  claude/wynncraft_mechanics.md (dev repo docs/).
 - Tree planner robustness: beyond the per-archetype states (1.10.5), guided runs toward archetype payoff nodes (like
   the ultimate runs in best_tree) could find more; costs tree-planning time.
 - Later, when the owner has them: aspects (from raids) and guild tomes (tomes from level 55 are done, guild ones not).
