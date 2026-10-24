@@ -2692,7 +2692,8 @@ REPEAT_EXTRA_MANA = 5.0
 # higher (archer Trapper +19.8%, assassin L55 +28%) except assassin L50 balanced, whose search took another path and
 # ended 1.8% lower (15,151 vs 15,430; the old best build is still valid and scores ~16,557 with 2). Turn on once the
 # search reaches it (owner's rule: never worse).
-MAX_SPELL_RUN = 1
+MAX_SPELL_RUN = 2
+ALT_FINALS = 2             # next-best builds each extra search hands on (see run(), keep_final)
 HEAL_ONE_SPELL = True      # one heal spell on repeat (max 1 cast/s) at its normal cost, as before 1.13.0, until
 #                             we know whether waiting resets the repeated-cast cost (owner to test in game)
 _PATTERNS = {}
@@ -6205,6 +6206,11 @@ def run(args):
         def keep_final(wg):
             finals_in.append((wg["armor"], wg.get("base_weapon") or wg["weapon"], wg["weapon"], frozenset(wg["owned"]),
                               list(wg["extra"])))
+            # and the next best builds with other gear from that search: one scoring a bit lower before crafting can
+            # end higher with crafts (assassin L50 balanced's best crafted build grew from the Trickster search's
+            # second-best build)
+            for f in (wg.get("alt_finals") or [])[1:1 + ALT_FINALS]:
+                finals_in.append((f[1], f[3], f[2], frozenset(f[4]), list(f[5]), True))     # (True: handed-on build)
         # Most damage in any style: first the best spell-only and main-attack-only builds, each searched as deeply as
         # the main search (owner: nothing sacrificed), and the main search starts from those too, so it can only end
         # at or above them (in any-style damage).

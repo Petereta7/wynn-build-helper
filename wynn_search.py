@@ -460,20 +460,20 @@ EFFORT = {
         "craft": 1, "craft_kicks": 12},
     2: {"name": "Normal", "weapons": 6, "random_starts": 0, "short": 6, "triple": 0, "kicks": 0, "polish": 2,
         "extra_weapons": 12, "promote": 2, "depth": 1, "depth_kicks": 3, "extra_polish": 2, "regear": 2, "regear_polish": 1,
-        "craft": 2, "craft_rounds": 1, "tree_wide": 120, "craft_kicks": 24},
+        "craft": 2, "craft_rounds": 1, "tree_wide": 120, "craft_diverse": 2, "craft_kicks": 24},
     3: {"name": "Thorough", "weapons": 10, "random_starts": 3, "short": 7, "triple": 3, "kicks": 6, "polish": 3,
         "extra_weapons": 20, "promote": 3, "depth": 2, "depth_kicks": 4, "extra_polish": 3, "regear": 3, "regear_polish": 2,
-        "craft": 2, "craft_rounds": 2, "tree_wide": 120, "craft_kicks": 30},
+        "craft": 2, "craft_rounds": 2, "tree_wide": 120, "craft_diverse": 2, "craft_kicks": 30},
     # Deep search. 30 weapons (was 16): the best weapon is sometimes ranked outside the top 16 (Warrior L106 +11%,
     # Archer L100 +9%, Assassin L106 +6% on the owner's PC, about 30% more time). Crafts for the best 6 builds with
     # 150 shake-ups (was 3 and 40): up to +2.6% more when crafted items are asked for. Every class ended at least as
     # high as with the old settings (tests/headroom.py runs, October 2026).
     4: {"name": "Very thorough", "weapons": 30, "random_starts": 6, "short": 8, "triple": 4, "kicks": 15, "polish": 4,
         "extra_weapons": 60, "promote": 4, "depth": 2, "depth_kicks": 6, "extra_polish": 3, "regear": 4, "regear_polish": 2,
-        "craft": 6, "craft_rounds": 2, "tree_wide": 120, "craft_kicks": 150},
+        "craft": 6, "craft_rounds": 2, "tree_wide": 120, "craft_diverse": 3, "craft_kicks": 150},
     5: {"name": "Maximum", "weapons": 50, "random_starts": 10, "short": 10, "triple": 5, "kicks": 40, "polish": 6,
         "extra_weapons": 100, "promote": 6, "depth": 3, "depth_kicks": 10, "extra_polish": 4, "regear": 6, "regear_polish": 3,
-        "craft": 8, "craft_rounds": 3, "tree_wide": 160, "craft_kicks": 200},
+        "craft": 8, "craft_rounds": 3, "tree_wide": 160, "craft_diverse": 4, "craft_kicks": 200},
 }
 
 STOP = {"flag": False}          # set STOP["flag"] = True to stop a running search (keeps the best so far)
@@ -1667,6 +1667,10 @@ def _search_best_build(build, owned, armor0, weapon0, base_weapon0, keep=(), ap_
     # so the answer can only stay the same or get better)
     bonus = {"weapons": 0, "deeper": 0, "before": main_best, "after": main_best, "found_by": None}
     regear_ids = set()       # finished builds added by step 4c and extra_finals: crafts on top of the usual ones
+    # Builds that only exist since 1.13.1 (other searches' next-best builds, crafts for builds on other trees, and
+    # what grows from them): every choice below is first made exactly as before without them, then extra work is
+    # added for them on top, so they can't push out a build that used to be worked on.
+    new_ids = set()
     if extra_on and not out_of_time():
         _PHASE[:] = [0.72 * top, top]
         extra_results, regear_results = [], []
@@ -1798,9 +1802,11 @@ def _search_best_build(build, owned, armor0, weapon0, base_weapon0, keep=(), ap_
     # 4d. finished builds from other searches (e.g. with a tree planned for another style): fine-tuned for this
     # goal and added to the builds to choose from.
     if extra_finals and not out_of_time():
-        jobs = []
-        for a, wpn, wp, own, e in extra_finals:
-            if wpn is None or wpn.level > level or any(x is not None and x.level > level for x in a):
+        jobs, alt = [], []
+        ordered = [x for x in extra_finals if len(x) < 6 or not x[5]] + [x for x in extra_finals if len(x) >= 6 and x[5]]
+        for x in ordered:
+            a, wpn, wp, own, e = x[:5]
+            if wpn is None or wpn.level > level or any(y is not None and y.level > level for y in a):
                 continue
             key = (tuple(it.name if it else None for it in a), wpn.name)
             if key in polished:
@@ -1809,11 +1815,14 @@ def _search_best_build(build, owned, armor0, weapon0, base_weapon0, keep=(), ap_
             a = list(a)
             jobs.append((build.evaluate(frozenset(own), a, wp, list(e), fast=True)["value"], a, wpn, wp, list(e),
                          frozenset(own)))
+            alt.append(len(x) >= 6 and bool(x[5]))
         if jobs:
             _report(0.9, "Fine-tuning the builds found with other ability trees")
             was, added = finals[0][0], set()
-            for f in polish_many(jobs):
+            for f, is_alt in zip(polish_many(jobs), alt):
                 regear_ids.add(id(f))
+                if is_alt:
+                    new_ids.add(id(f))
                 added.add(id(f))
                 finals.append(f)
                 _live_offer(f[0], f[7]["main"], *_names(f[1], f[3]))
@@ -1831,18 +1840,35 @@ def _search_best_build(build, owned, armor0, weapon0, base_weapon0, keep=(), ap_
         LIVE["phase"] = len(PHASES)                 # "Designing crafted items"
         _PHASE[:] = [top, 1.0]
         _live_craft_start(build)
-        tops, names = [], set()
-        for f in sorted(finals, key=lambda x: -x[0]):
-            key = (tuple(it.name if it else None for it in f[1]), f[3].name)
-            if key not in names:
-                names.add(key)
-                tops.append(f)
+        def _dedup(fs):
+            out, names = [], set()
+            for f in sorted(fs, key=lambda x: -x[0]):
+                key = (tuple(it.name if it else None for it in f[1]), f[3].name)
+                if key not in names:
+                    names.add(key)
+                    out.append(f)
+            return out
+        tops = _dedup(finals)
         # Builds from step 4c get crafts on top of the usual best few (never in place of them), so adding that
         # step can't take crafts away from a build that had them before.
         n_craft = P.get("craft", 1)
-        usual = [f for f in tops if id(f) not in regear_ids][:n_craft]
-        extra = [f for f in tops[:n_craft] if id(f) in regear_ids]
-        tops = [f for f in tops if any(f is x for x in usual + extra)]
+        old_tops = _dedup([f for f in finals if id(f) not in new_ids])
+        usual = [f for f in old_tops if id(f) not in regear_ids][:n_craft]
+        extra = [f for f in old_tops[:n_craft] if id(f) in regear_ids]
+        # Also a few builds on an ability tree none of those has (best first): a build that scores a bit lower before
+        # crafting can end higher with crafts, and it tends to sit on another tree. Only adds crafted builds.
+        chosen = usual + extra
+        trees = {frozenset(f[4]) for f in chosen}
+        diverse = []
+        for f in tops:
+            if len(diverse) >= P.get("craft_diverse", 0):
+                break
+            if any(f is x for x in chosen) or frozenset(f[4]) in trees:
+                continue
+            diverse.append(f)
+            trees.add(frozenset(f[4]))
+        tops = sorted(chosen + diverse, key=lambda x: -x[0])
+        diverse_ids = {id(f) for f in diverse}
         new_finals, gots = [], []
         runner = _CraftRunner(build)
         # 5b (set up here). Crafts change what suits the rest of the build. Search the gear again around the best
@@ -1903,7 +1929,8 @@ def _search_best_build(build, owned, armor0, weapon0, base_weapon0, keep=(), ap_
         try:
             # The crafts-first chain needs only the best build, so it runs alongside the top builds' crafts below
             # (each is worked out on its own: the same builds as one after another).
-            f0 = tops[0] if tops else None
+            olds = [f for f in tops if id(f) not in diverse_ids]
+            f0 = olds[0] if olds else None
             early = bg.submit(chain, 1, f0) if (n_rounds and f0 is not None and not out_of_time()) else None
             _report(0.0, "Designing crafted items for the best builds")
             infos = [{"designed": 0} for _ in tops]
@@ -1921,24 +1948,36 @@ def _search_best_build(build, owned, armor0, weapon0, base_weapon0, keep=(), ap_
                         break
                     got_all.append(_craft_stage(build, f, kicks, out_of_time, inf, runner, live=f is tops[0]))
             gots = [g for g in got_all if g is not None]
+            got_new = [id(f) in diverse_ids for f, g in zip(tops, got_all) if g is not None]
             craft_info["designed"] += sum(i["designed"] for i in infos)
             # 5b. the rounds around the best crafted build, then the crafts-first chain's result
             t_rounds = time.time()
             outs = []
-            if n_rounds and gots and not out_of_time():
-                outs.append(chain(0, max(gots, key=lambda x: x[0])))
+            old_gots = [g for g, nw in zip(gots, got_new) if not nw]
+            new_gots = [g for g, nw in zip(gots, got_new) if nw]
+            if n_rounds and old_gots and not out_of_time():
+                outs.append((chain(0, max(old_gots, key=lambda x: x[0])), False))
             if early is not None:
-                outs.append(early.result())
-            for add, inf in outs:          # (not "keep": that's the abilities you asked to keep)
+                outs.append((early.result(), False))
+            # and around the best crafted build of the new ones, when it beats the old best
+            if n_rounds and new_gots and not out_of_time():
+                bn = max(new_gots, key=lambda x: x[0])
+                if not old_gots or bn[0] > max(g[0] for g in old_gots):
+                    outs.append((chain(0, bn), True))
+            for (add, inf), nw in outs:          # (not "keep": that's the abilities you asked to keep)
                 craft_info["designed"] += inf["designed"]
                 if add is not None:
                     gots.append(add)
+                    got_new.append(nw)
             timings["of which craft rounds (after the top builds' crafts)"] = round(time.time() - t_rounds, 2)
         finally:
             bg.shutdown(wait=True)
             runner.close()
         if gots:                                  # then fine-tune around the crafts (side by side)
-            for pf in polish_many([(v2, a2, wpn2, wp2, e2, own2) for v2, a2, wpn2, wp2, e2, own2 in gots]):
+            for pf, nw in zip(polish_many([(v2, a2, wpn2, wp2, e2, own2) for v2, a2, wpn2, wp2, e2, own2 in gots]),
+                              got_new):
+                if nw:
+                    new_ids.add(id(pf))
                 new_finals.append(pf)
                 _live_offer(pf[0], pf[7]["main"], *_names(pf[1], pf[3]))
         best_before = finals[0][0]
@@ -1958,7 +1997,12 @@ def _search_best_build(build, owned, armor0, weapon0, base_weapon0, keep=(), ap_
             if key not in names:
                 names.add(key)
                 tops.append(f)
-        tops = tops[: P.get("polish", 2)]
+        n_wide = P.get("polish", 2)
+        old_w = [f for f in tops if id(f) not in new_ids][:n_wide]
+        new_w = [f for f in tops if id(f) in new_ids][:1]
+        if new_w and (len(old_w) < n_wide or new_w[0][0] > old_w[-1][0]):
+            old_w = old_w + new_w           # the best new build too, when it would have been among them
+        tops = old_w
         _report(0.97, "Trying wider ability tree plans for the best builds")
         outs = _run_side_by_side(build, "_wide_one", [(pools, ap_budget, keep, f[0], f[1], f[2], f[3], f[4], f[5],
                                                        width, P) for f in tops])
@@ -2024,7 +2068,22 @@ def _search_best_build(build, owned, armor0, weapon0, base_weapon0, keep=(), ap_
             "final": fin, "start": start, "start_val": start["value"], "filter": fstats,
             "stopped": STOP["flag"], "seconds": time.time() - t_start, "effort": effort,
             "effort_name": P["name"], "agree": agree, "attempts": n_attempts, "bonus_search": bonus,
-            "crafted": craft_info, "timings": timings, "tree_ideas": tree_ideas}
+            "crafted": craft_info, "timings": timings, "tree_ideas": tree_ideas,
+            "alt_finals": _distinct_finals(finals, 6)}
+
+
+def _distinct_finals(finals, n):
+    """The best n finished builds with different gear (items and weapon), best first."""
+    out, seen = [], set()
+    for f in finals:
+        key = (tuple(it.name if it else None for it in f[1]), f[3].name, frozenset(f[4]))
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(f)
+        if len(out) >= n:
+            break
+    return out
 
 
 # ============================================================================== time estimate
