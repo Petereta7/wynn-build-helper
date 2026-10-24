@@ -149,6 +149,10 @@ def main():
             ("melee", "spells"): True, ("burst", "melee"): True, ("healing", None): False, ("ability", None): False}
     ok = sum(1 for (g, g2), v in want.items() if wh.style_open(g, g2) == v)
     report("goals that try other ability trees", ok, len(want))
+    want = {("spells", None): True, ("melee", None): False, ("mixed", None): True, ("survival", None): False,
+            ("survival", "spells"): True, ("healing", None): True, ("balanced", None): True, ("melee", "survival"): False}
+    ok = sum(1 for (g, g2), v in want.items() if wh.archetype_runs_on(g, g2) == v)
+    report("goals that also start from each archetype", ok, len(want))
 
     # ---- weapon powders
     cases = golden("powder_cases.json")

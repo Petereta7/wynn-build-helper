@@ -2641,6 +2641,11 @@ GOAL_WORDS = {"spells": "spell damage", "burst": "burst combo", "melee": "main a
               "mixed": "most damage (any style)"}
 
 
+def archetype_runs_on(goal, goal2=None) -> bool:
+    """True for goals where spells count (the search then also starts from a tree built around each archetype)."""
+    return bool({goal, goal2} & {"spells", "burst", "ability", "mixed", "healing", "balanced"})
+
+
 def style_open(goal, goal2=None) -> bool:
     """True when the goal's damage can come from spells or main attacks (so the best build may use either style's
     ability tree): most damage in any style, damage and survival, or a mix that has both kinds."""
@@ -5838,8 +5843,21 @@ def run(args):
             for g in ("spells", "melee"):
                 t_g, _ = best_tree(build.copy_with(goal=g, goal2=None), armor, weapon, budget, keep=keep_ids,
                                    extra_points=extra, beam_width=args.beam)
-                if frozenset(t_g) != frozenset(search_start) and all(frozenset(t_g) != frozenset(t) for _g, t in style_runs):
-                    style_runs.append((g, t_g))
+                if frozenset(t_g) != frozenset(search_start) and all(frozenset(t_g) != frozenset(t) for _g, t, _b in style_runs):
+                    style_runs.append((GOAL_WORDS[g], t_g, floor_build))
+        # Archetype starts (owner chose "always on", Oct 2026): a search built around each archetype in turn (its
+        # abilities kept the most, like choosing it as your main archetype) found much stronger spell builds than one
+        # search from a single tree (shaman L60 spells 52,097 -> 63,766 with Acolyte, mage L40 spells 9,985 -> 11,259
+        # with Arcanist). Their builds are added to the ones to choose from (with no archetype rule), so the answer can
+        # only get better. For goals where spells count; skipped if you chose a main archetype yourself.
+        if archetype_runs_on(floor_build.goal, getattr(floor_build, "goal2", None)) and not floor_build.archetype:
+            for a in tree_archetypes(tree):
+                if a in floor_build.avoid_archetypes:
+                    continue
+                ab = floor_build.copy_with(archetype=a)
+                t_a, _ = best_tree(build.copy_with(archetype=a), armor, weapon, budget, keep=keep_ids,
+                                   extra_points=extra, beam_width=args.beam)
+                style_runs.append((f"the {a} archetype", t_a, ab))   # (even if the tree matches: the search keeps to it)
         n_runs = (2 if goal == "mixed" else 0) + len(style_runs) + 1
         tl = getattr(args, "time_limit", None)
 
@@ -5867,11 +5885,11 @@ def run(args):
                     break
             print("  Most damage in any style: the search also starts from the best spell-only and main-attack-only builds.")
         done_runs = 2 if goal == "mixed" else 0
-        for g, t_g in style_runs:
+        for g, t_g, b_g in style_runs:
             if stopped:
                 break
-            ws.PROGRESS["cb"] = (lambda lo, g: lambda f, m: orig_cb(lo + f / n_runs, f"Searching with a tree planned for {GOAL_WORDS[g]}: {m}"))(done_runs / n_runs, g)
-            wg = ws.search_best_build(floor_build, t_g, armor, weapon, base_weapon, keep=keep_ids, ap_budget=budget,
+            ws.PROGRESS["cb"] = (lambda lo, g: lambda f, m: orig_cb(lo + f / n_runs, f"Searching with a tree planned for {g}: {m}"))(done_runs / n_runs, g)
+            wg = ws.search_best_build(b_g, t_g, armor, weapon, base_weapon, keep=keep_ids, ap_budget=budget,
                                       include_never=include_never, min_level=min_lvl, deep=getattr(args, "deep", False),
                                       time_limit=(tl / n_runs if tl else None), log=None, crafted=False, only=only)
             keep_final(wg)
@@ -5880,7 +5898,7 @@ def run(args):
                 stopped = True
         if style_runs:
             print(f"  The search also ran from {len(style_runs)} other ability tree(s), planned for "
-                  + " and ".join(GOAL_WORDS[g] for g, _t in style_runs) + ".")
+                  + ", ".join(g for g, _t, _b in style_runs) + ".")
         ws.PROGRESS["cb"] = (lambda lo: lambda f, m: orig_cb(lo + f / n_runs, m))(done_runs / n_runs)
         try:
             wb = ws.search_best_build(floor_build, search_start, armor, weapon, base_weapon, keep=keep_ids, ap_budget=budget,
