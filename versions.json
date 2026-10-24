@@ -1,6 +1,12 @@
 {
   "versions": [
     {
+      "version": "1.13.1",
+      "date": "2026-10-24",
+      "notes": "Spell builds can now cast a spell twice in a row before switching (for example Arrow Bomb, Arrow Bomb, Escape), using the repeat rule you tested in game: the second cast in a row costs the same, a third would cost 5 more mana, and the spell right after a double costs 5 more. \"How to play\" tells you the exact order. Crafted builds also got better: each extra search now hands on its next-best builds too, and crafted items are also designed for builds on other ability trees. In our tests: Archer Trapper spells +20%, Assassin level 55 spells +28%, Assassin level 50 balanced +14%, Warrior level 50 melee +10%; nothing got worse. Searches where spells count take a bit longer.",
+      "warning": ""
+    },
+    {
       "version": "1.13.0",
       "date": "2026-10-24",
       "notes": "Warrior survival builds now count what the Paladin side of the tree really does for you: War Scream's own 20% resistance (recast it every 30s), Emboldening Cry (+5% more and +8% damage), Counter and Riposte (always-on damage reduction), Second Chance (survive one fatal blow at 30% health), Rejuvenating Skin (part of the damage you take heals back) and Judgement's buff, so the search picks them when they help. Wynnbuilder's War Scream + Emboldening Cry party buttons now add up to 25% like on the site, and party damage buffs that don't stack in Wynnbuilder no longer stack here. Casting a spell twice in a row in rotations is ready but switched off until it's tested to never make a build worse.",

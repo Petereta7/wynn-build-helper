@@ -10,19 +10,19 @@
   "score": 15366.932965305314
  },
  "archer L60 spells, Trapper, no Boltslinger": {
-  "found_by": "search with the stricter leave-out rule (no Boltslinger abilities at all); valid under today's rule too",
-  "link": "https://wynnbuilder.github.io/builder/#CZ0FrmdFKR3g+WW64q0n16x0jbX+UUpOcX8CJ0O60oJxniEYH304",
-  "score": 35927.001473421034
+  "found_by": "current search",
+  "link": "https://wynnbuilder.github.io/builder/#CZ0FrmdFKR3g+mM7sw0n16x0jbX+UUpOcX8CJ0e5GI0oJxDlrHW0",
+  "score": 42861.45792814456
  },
  "assassin L50 balanced": {
-  "found_by": "current search (reset after the mana/life steal fix)",
-  "link": null,
-  "score": 15430.287550564713
+  "found_by": "current search",
+  "link": "https://wynnbuilder.github.io/builder/#CZG4eZmhCc4UmhOFCK819y8G7PC9y8ymU8yucG2IuiwBX71w8l5X7X7X7s3h4IG2F2cDcDqCqCEJEJkAa0Mc41p6p6Q6Q6d9d9p4I0U0YW3a3a3aect2daT2918ep00eCjNuRc90",
+  "score": 17635.3740432371
  },
  "assassin L55 spells, Aerial Ace 50%": {
-  "found_by": "current search (archetype starts)",
-  "link": "https://wynnbuilder.github.io/builder/#CZG4eZ4U4U4U4U4UKK81WY7MzX07Y0k4k4kaPZPZmai2982uIuIcDUEcDuIoAaW8WBXBPsuvOsWBfcG2Y0k4kaPZdZP3k4b29822F2F2F2F2Fezx9a4WXEb0WtqUolP60",
-  "score": 66401.41401530865
+  "found_by": "current search",
+  "link": "https://wynnbuilder.github.io/builder/#CZG44U4U4U4U4U4UKK81Y0TamZmZmZmZmZS290h+41w8l5X7X7X7X7j4IW8WBXBXBPsOsuv8hG2OPI4CRCRmbmbmbySKJ81Hmini1N2N2NopXIX441E9E9l5X7r+l5z4I2mGd20Q5mRQlmtCp00",
+  "score": 85087.42768945344
  },
  "mage L40 spells": {
   "found_by": "current search (archetype starts)",
@@ -40,19 +40,19 @@
   "score": 55527.76840926551
  },
  "shaman L60 spells": {
-  "found_by": "current search (archetype starts)",
-  "link": "https://wynnbuilder.github.io/builder/#CZG4eZ4U4U4U4U4UuN81YWmZmZmZmZmZm3w29G4eZ4U4U4U4U4UWO81GsW8WBXBXBXDvvuvOoG2YWe4s4p4k4p4KW93982YIOJCJuICJG1WBaW88AXDnCXBnC15OmG2YWVbVbbaVbVbV59391OeldtCcP82p40x1WyqUBz1RN0",
-  "score": 63766.16434122452
+  "found_by": "current search",
+  "link": "https://wynnbuilder.github.io/builder/#CZG4eZ4U4U4U4U4UuN81Y0TamZmZmZmZm3w29G4eZ4U4U4U4U4UWO81Gs0Ay41p6S9S9S9S9S4J6IG4CRmbmbmbmbmH0N81Hmi1N2N2N2N27nWX441-A-AB9F8-A-AI6I2mGVFlPCpG4c90s20vfzMw3sk0",
+  "score": 64617.6214298103
  },
  "shaman L70 spells 70% + survival 30%": {
-  "found_by": "current search (reset after the mana/life steal fix)",
-  "link": null,
-  "score": 72389.01185040618
+  "found_by": "current search",
+  "link": "https://wynnbuilder.github.io/builder/#CZG4eZWc0caD4U4UiR81Du03e1F2qH2M2M2M2M0JCEaW6y8G79O9O9O9O1CPqG2QmZ0H2H2k4k4H2HYd39824949uIuI4949UEaW88AXDnCXBnCHp8rG2Y0H2H2H2k4k4HYV3982WKGQ2MMIWK2MMEa4WYytidnC3HOc0iHjdbVWjt8",
+  "score": 72465.78042844689
  },
  "warrior L50 melee": {
   "found_by": "current search",
-  "link": "https://wynnbuilder.github.io/builder/#CZ0A10i4H0K3K3K3K3K3KZKX40v5YW7Y7Y7Y7Y7Y7Yh2982U8U8U8U8U8U8kAa0+w51F4F4F4F4F4F475I08OGYW41eCjlmk70",
-  "score": 7523.45793651293
+  "link": "https://wynnbuilder.github.io/builder/#CZG48K8K8K8K8K8KCK810rd80g1g1g1g1g1gHgG241GDGDGDGDGDGDh4IW8WBXBXBXBXBvXugG20z4Vzui701kqdZ0GPQVjx14",
+  "score": 8252.710053467492
  },
  "warrior L50 melee, no crafted items": {
   "found_by": "current search",

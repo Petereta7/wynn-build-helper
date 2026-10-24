@@ -268,7 +268,7 @@ Measured deep search on the owner's PC (1.6 -> 1.7): Warrior L106 7.0 -> 4.1 min
   `double_list`: flat bit-mask entries, spells and mixed in one pass, lasting spells capped inline). Rotation tuples are
   now the cast order with repeats (e.g. (3, 3, 2)); `rotation_dps` / `rotation_breaks` take one entry per cast.
   `MAX_SPELL_RUN = 1` + `HEAL_ONE_SPELL = True` reproduce the 1.12.1 numbers exactly (same_numbers verified).
-  HELD (MAX_SPELL_RUN = 1 in 1.13.0): with 2, PC build check: archer Trapper 35,776 -> 42,861, assassin L55 66,401 ->
+  ON since 1.13.1 (see Handed-on builds below). Before that it was HELD (MAX_SPELL_RUN = 1 in 1.13.0): with 2, PC build check: archer Trapper 35,776 -> 42,861, assassin L55 66,401 ->
   85,087, shaman L60 spells 63,766 -> 64,618, shaman L70 mix 72,465, others equal, but assassin L50 balanced 15,430 ->
   15,151. Diagnosis (tests/exp_craft.py, dev repo): the Trickster archetype search now ends at a higher-scoring
   uncrafted build whose crafts reach less; the old route's best (crafted rings/bracelet/necklace, 22-node tree) scores
@@ -292,10 +292,26 @@ Measured deep search on the owner's PC (1.6 -> 1.7): Warrior L106 7.0 -> 4.1 min
   effects. Party boosts fixed to Wynnbuilder: War Scream + Emboldening Cry = 25% (was max 20) and damMult.Strength 8.
   same_numbers: reverting HELPER_NODE_EFFECTS to {} and the boost fix reproduces the reference exactly (401 builds
   differ). Other classes' trees haven't been audited the same way yet (open idea).
+- Handed-on builds and craft diversity (1.13.1, to turn repeated spells on without assassin L50 balanced falling):
+  each search run() starts besides the main one (style trees, archetypes, mixed seeds) hands on its best and its
+  next ALT_FINALS (2) best builds with other gear (`alt_finals`, `_distinct_finals`; flagged True in extra_finals).
+  Diagnosis: the build that crafts best was the Trickster search's second-best (Solar Sailers/Reminiscence/Erhu,
+  10,954 uncrafted -> 16,105 crafted); it never reached the craft stage. Crafts are also designed for up to
+  `craft_diverse` builds whose ability tree none of the usual ones has. Displacement guard (`new_ids` in
+  _search_best_build): the first try showed new builds can push out old work (shaman L60 spells 58,639, mage L45
+  65,231): every limited choice (4d polish order, which builds get crafts, the craft-round seed, the crafts-first
+  seed, 5c wider trees) is made exactly as before over the old builds only, and the new ones get extra work on top
+  (crafts; a craft round only if their best crafted build beats the old best; a 5c run only if it would have made
+  the cut). Result: every case at or above its baseline.
 - CI build check runs in 4 parallel parts (`build_check.py --shard k/4`, matrix in checks.yml, 150 min each).
 
 ## History (newest first)
 
+- 1.13.1: repeated-spell rotations on (MAX_SPELL_RUN = 2); other searches hand on their next-best builds (ALT_FINALS)
+  and crafts are also designed for builds on other trees (craft_diverse), with every old choice kept exactly
+  (new_ids). PC build check: archer Trapper 35,776 -> 42,861, assassin L50 balanced 15,430 -> 17,635, assassin L55
+  66,401 -> 85,087, warrior L50 melee 7,523 -> 8,253, shaman L60 spells 63,766 -> 64,618, shaman L70 mix 72,389 ->
+  72,466, others equal; 56.9 min (was 43.7).
 - 1.13.0: Warrior survival: War Scream's own resistance, Emboldening Cry, Counter, Second Chance, Rejuvenating Skin,
   Judgement's buff now counted; War Scream + Emboldening Cry party boosts and the Potion/Strength damage boost max match
   Wynnbuilder. Repeated-spell rotations built and tested but held (MAX_SPELL_RUN = 1) because assassin L50 balanced
@@ -355,7 +371,6 @@ Measured deep search on the owner's PC (1.6 -> 1.7): Warrior L106 7.0 -> 4.1 min
 - Search gaps left (best_known.json): archer Trapper case (35,776 vs 35,927 known), assassin L50 balanced (a 16,564
   build existed before the life steal fix).
 - Speed up high-level deep searches again (see KNOWN PROBLEM above) without losing the better builds.
-- Turn on repeated-spell rotations (MAX_SPELL_RUN = 2) once assassin L50 balanced doesn't fall (see Repeated spells).
 - Warrior's Generalist (every 4th spell costs 1 mana) isn't counted in mana checks yet (conservative).
 - Audit the other classes' trees like the Warrior one (effects the game states exactly that Wynnbuilder's data leaves
   out, own survival first). Fallen: Corrupted stops healing (not modeled), Brink of Madness.
@@ -366,7 +381,9 @@ Measured deep search on the owner's PC (1.6 -> 1.7): Warrior L106 7.0 -> 4.1 min
 - Tree planner robustness: beyond the per-archetype states (1.10.5), guided runs toward archetype payoff nodes (like
   the ultimate runs in best_tree) could find more; costs tree-planning time.
 - Later, when the owner has them: aspects (from raids) and guild tomes (tomes from level 55 are done, guild ones not).
-- Skipped by the owner (don't propose again unless asked): bank auto-organizer (against Wynncraft rules; a
+- Skipped by the owner (don't propose again unless asked): counting abilities that need you to be hit (Mantle,
+  Manachism, hit-rate settings; owner: "leave that the way it is now"), Fallen's Corrupted no-healing (only the
+  helper's survival score), ultimate charge maths (for now), a click-speed setting (keep 9 like Wynnbuilder), bank auto-organizer (against Wynncraft rules; a
   planner version was also declined), instant small edits without re-searching.
 
 ## Working environment notes
