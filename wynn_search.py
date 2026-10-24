@@ -1289,6 +1289,7 @@ def _craft_stage(build, f, kicks, out_of_time, info, runner=None, live=False):
             lc["pass"] = _pass + 1
             for sl in lc["slots"]:
                 sl.update(grid=None, state="designing", gain=None)
+        start_a, start_wpn = list(a), wpn
         designs = runner.run([(own, list(a), wp, list(e), slot, kicks) for slot in CRAFT_SLOTS])
         info["designed"] += len(CRAFT_SLOTS)
         if lc is not None:
@@ -1314,6 +1315,34 @@ def _craft_stage(build, f, kicks, out_of_time, info, runner=None, live=False):
                     changed = kept = True
             if lc is not None and lc["slots"][k]["state"] == "trying":
                 lc["slots"][k]["state"] = "not better"
+        # The designs were all made for the same build, one slot at a time; together they can pay off where none does
+        # on its own (skill points, several crafted accessories). So also try the accessory designs together, the
+        # armor designs together, and all of them, on the build this pass started from; kept only when better than
+        # what trying them one at a time reached (1.13.0: assassin L50 balanced's best build has crafted rings,
+        # bracelet and necklace that the one-at-a-time pass stopped finding).
+        own_design = {}
+        for slot, found in zip(CRAFT_SLOTS, designs):
+            for where, it in found:
+                if where == slot:
+                    own_design[slot] = it
+                    break
+        for group in ((4, 5, 6, 7), (0, 1, 2, 3), tuple(CRAFT_SLOTS)):
+            use = [sl for sl in group if sl in own_design]
+            if len(use) < 2:
+                continue
+            a2, wpn2 = list(start_a), start_wpn
+            for sl in use:
+                if sl == "weapon":
+                    wpn2 = own_design[sl]
+                else:
+                    a2[sl] = own_design[sl]
+            if a2 == a and wpn2 is wpn:
+                continue
+            got = full(a2, wpn2)
+            if got is not None and better(got[0], v, 1.000001):
+                v, e, wp = got
+                a, wpn = a2, wpn2
+                changed = kept = True
         if not changed:
             break
     if not kept:

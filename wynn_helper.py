@@ -2444,11 +2444,20 @@ def spell_part_damage(stats, weapon, conversions, use_spell, ignore_speed, ignor
     str_boost = 1 if ignore_str else 1 + skill_boost[1]
     mult = 1.0
     elem_mult = [1.0] * 6
+    # Wynnbuilder: "War scream bonuses stack additively with each other, but still compete for the highest value
+    # against other buffs": the Potion and Strength boosts give only the larger of the two, applied last
+    potion_boost = strength_boost = 0
     for k, v, part, tag in (plan if plan is not None else mult_plan(dmg_mult)):
-        if part is not None and part != part_filter:
-            continue                      # multiplier for one specific spell part
         if k in ignored_mults:
             continue
+        if k == "Potion":
+            potion_boost = v
+            continue
+        if k == "Strength":
+            strength_boost = v
+            continue
+        if part is not None and part != part_filter:
+            continue                      # multiplier for one specific spell part
         if tag is not None:               # element-specific (or 'm' = main attack only)
             if tag == "m" and not use_spell:
                 mult *= 1 + v / 100
@@ -2456,6 +2465,8 @@ def spell_part_damage(stats, weapon, conversions, use_spell, ignore_speed, ignor
                 elem_mult[ELEM_PREFIX.index(tag)] *= 1 + v / 100
         else:
             mult *= 1 + v / 100
+    if potion_boost or strength_boost:
+        mult *= 1 + max(potion_boost, strength_boost) / 100
     crit_mult = 0 if ignore_str else 1 + get("critDamPct", 0) / 100
     norm = crit = 0.0
     for i, (lo, hi) in enumerate(damages):
