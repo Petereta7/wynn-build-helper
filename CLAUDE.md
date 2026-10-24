@@ -273,12 +273,25 @@ Measured deep search on the owner's PC (1.6 -> 1.7): Warrior L106 7.0 -> 4.1 min
   (`HEAL_ONE_SPELL`, max 1 cast/s, normal cost) until we know whether waiting resets the count (owner to test).
   toggle_check: a damage-only buff at a share is scaled, so each spell's damage is exactly half way, but the score may
   pick another rotation, so the score only has to lie between off and on.
+- Warrior tree effects Wynnbuilder's data leaves out (1.13.0; owner: "research the paladin tree ... incorporate them",
+  "for survival builds prioritise your own survival, don't worry about teammates"): `HELPER_NODE_EFFECTS` adds them to
+  the node in Wynnbuilder's effect format (`_with_helper_effects` in Tree): War Scream's own 20% resistance (+5% and
+  +8% damage with Emboldening Cry; toggle "War Scream Resistance", TOGGLE_RULES "on": recast every 30s, no cooldown;
+  TOGGLE_NEEDS: not with Bak'al's Grasp; party boosts warscream/emboldeningcry ignored when it's on), Second Chance
+  (stat lastStandPct 30: survival + 30% health once), Rejuvenating Skin (rejuvPct 30: survival / (1 - 30% x 5/15)),
+  Judgement's buff (ult share). Counter/Riposte ("Activate Counter") counted on by default: owner says it's a passive
+  always-on resistance node (cooldown is the counter-attack's). Not counted (hit-rate / Holy Power dependent): Mantle,
+  Manachism, Luster Purge, Heavenly Trumpet, Radiance (ID effectiveness, Wynnbuilder doesn't model either), ally-only
+  effects. Party boosts fixed to Wynnbuilder: War Scream + Emboldening Cry = 25% (was max 20) and damMult.Strength 8.
+  same_numbers: reverting HELPER_NODE_EFFECTS to {} and the boost fix reproduces the reference exactly (401 builds
+  differ). Other classes' trees haven't been audited the same way yet (open idea).
 - CI build check runs in 4 parallel parts (`build_check.py --shard k/4`, matrix in checks.yml, 150 min each).
 
 ## History (newest first)
 
 - 1.13.0: spell rotations may cast a spell twice before switching (repeat rule tested in game); How to play gives the
-  exact order; the bot knows the rule.
+  exact order; the bot knows the rule. Warrior survival: War Scream's own resistance, Emboldening Cry, Counter, Second
+  Chance, Rejuvenating Skin, Judgement's buff now counted; War Scream + Emboldening Cry party boosts match Wynnbuilder.
 - 1.12.1: "mana regen" goal (mix it in, e.g. 70% survival + 30% mana).
 - 1.12.0: archetype starts (the search also starts from a tree built around each archetype for spell-type goals):
   shaman L60 spells +22%, mage L40 spells +13%, assassin L55 +1.3%; never worse; about 2x time for spell builds.
@@ -334,6 +347,8 @@ Measured deep search on the owner's PC (1.6 -> 1.7): Warrior L106 7.0 -> 4.1 min
   build existed before the life steal fix).
 - Speed up high-level deep searches again (see KNOWN PROBLEM above) without losing the better builds.
 - Warrior's Generalist (every 4th spell costs 1 mana) isn't counted in mana checks yet (conservative).
+- Audit the other classes' trees like the Warrior one (effects the game states exactly that Wynnbuilder's data leaves
+  out, own survival first). Fallen: Corrupted stops healing (not modeled), Brink of Madness.
 - Healing goal: a single heal spell on repeat (HEAL_ONE_SPELL, max 1 cast/s) still uses its normal cost, but in game the
   3rd cast in a row costs +5 and so on (owner confirmed) unless waiting resets it. Waiting for the owner's test (cast
   Heal ~4 times about 3 s apart) before turning HEAL_ONE_SPELL off. Mechanics notes: Project doc

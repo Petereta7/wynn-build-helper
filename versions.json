@@ -3,7 +3,7 @@
     {
       "version": "1.13.0",
       "date": "2026-10-24",
-      "notes": "Spell rotations can now cast a spell twice in a row before switching (for example Arrow Bomb, Arrow Bomb, Escape), using the repeat rule tested in game: the second cast in a row costs the same, a third would cost 5 more mana, and the spell right after a double costs 5 more. Spell builds and \"most damage\" builds get higher, honest numbers when that order pays off (in our tests usually a few percent, up to about 40% for some builds), and \"How to play\" tells you the exact order. Nothing gets worse: the old alternating rotations are still tried and the best wins.",
+      "notes": "Spell rotations can now cast a spell twice in a row before switching (for example Arrow Bomb, Arrow Bomb, Escape), using the repeat rule tested in game: the second cast in a row costs the same, a third would cost 5 more mana, and the spell right after a double costs 5 more. Spell builds and \"most damage\" builds get higher, honest numbers when that order pays off (in our tests usually a few percent, up to about 40% for some builds), and \"How to play\" tells you the exact order. Nothing gets worse: the old alternating rotations are still tried and the best wins. Warrior survival builds now count War Scream's own resistance (recast it every 30s), Emboldening Cry, Counter, Second Chance, Rejuvenating Skin and Judgement's buff, so the helper picks them when they help.",
       "warning": ""
     },
     {

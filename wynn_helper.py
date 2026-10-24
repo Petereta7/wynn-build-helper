@@ -114,7 +114,7 @@ BUFFS = {
     "fortitude": ({"Potion": 30}, {}),              # Mage Fortitude
     "chantlunatic": ({"Potion": 20}, {}),           # Shaman Chant of the Lunatic
     "warscream": ({}, {"Potion": 20}),              # Warrior War Scream (defense)
-    "emboldeningcry": ({}, {"Potion": 5}),
+    "emboldeningcry": ({"Strength": 8}, {"Potion": 5}),   # adds to War Scream's 20 (see buff_mults)
     "hauntingfanatic": ({"Vulnerability": 12}, {}),
     "hauntinglunatic": ({}, {"AbilityWeaken": 15}),
     "eldritchcall": ({}, {"AbilityWeaken": 20}),
@@ -134,6 +134,9 @@ def buff_mults(buffs, kind: int = 0) -> dict:
                 out[k] = max(out.get(k, 0), v)
             else:
                 out[k] = out.get(k, 0) + v
+    # Wynnbuilder's boosts add Emboldening Cry's +5 resistance to War Scream's 20 (one 25% potion-type bonus)
+    if kind == 1 and "warscream" in buffs and "emboldeningcry" in buffs:
+        out["Potion"] = max(out.get("Potion", 0), 25)
     return out
 
 
@@ -591,6 +594,43 @@ HELPER_MAJIDS = {
         {"type": "add_spell_prop", "base_spell": 3, "target_part": "Single Wave", "multipliers": [0, 0, 0, 0, 0, -30]}]}],
 }
 HELPER_SPECIAL = {"SELFSUFFICIENT"}      # counted outside the ability format
+
+# Ability tree effects the game states exactly but Wynnbuilder's tree data leaves out (owner, Oct 2026: "research the
+# paladin tree ... so you can incorporate them"; "for survival builds prioritise your own survival"). Added to the node
+# in Wynnbuilder's own effect format, so they apply only while you own the node. Only your own survival and damage:
+# effects on allies only (Devout Union's redirect, Heavenly Trumpet, Provoke) aren't counted.
+#  - War Scream: "gives you and nearby players resistance": 20% for 30s, no cooldown, so recasting keeps it up;
+#    Emboldening Cry adds +5% resistance and +8% damage. Same numbers as Wynnbuilder's party boosts (War Scream 20,
+#    + Emboldening Cry 5 and damMult.Strength 8), which it only offers as buttons. Bak'al's Grasp removes it.
+#  - Second Chance: a fatal blow leaves you at 30% health instead (once per 10 minutes, so once in a fight): the
+#    survival goal counts 30% of your health more. (Brink of Madness only works while Corrupted: not counted.)
+#  - Rejuvenating Skin: 30% of damage taken comes back over 15s; within the survival goal's 10s window a hit returns on
+#    average 30% x 5/15 = 10% of its damage (see score_build).
+#  - Judgement (ultimate): +20% damage and +20% resistance for 15s, at the ultimates' share of the time.
+HELPER_NODE_EFFECTS = {
+    "Warrior": {
+        "War Scream": [{"type": "raw_stat", "toggle": "War Scream Resistance",
+                        "bonuses": [{"type": "stat", "name": "defMult.Potion", "value": 20}]}],
+        "Emboldening Cry": [{"type": "raw_stat", "toggle": "War Scream Resistance",
+                             "bonuses": [{"type": "stat", "name": "defMult.Potion", "value": 5},
+                                         {"type": "stat", "name": "damMult.Strength", "value": 8}]}],
+        "Second Chance": [{"type": "raw_stat", "bonuses": [{"type": "stat", "name": "lastStandPct", "value": 30}]}],
+        "Rejuvenating Skin": [{"type": "raw_stat", "bonuses": [{"type": "stat", "name": "rejuvPct", "value": 30}]}],
+        "Judgement": [{"type": "raw_stat", "toggle": "Judgement Buff",
+                       "bonuses": [{"type": "stat", "name": "damMult.Judgement", "value": 20},
+                                   {"type": "stat", "name": "defMult.Judgement", "value": 20}]}],
+    },
+}
+REJUV_SECONDS = 15.0
+
+
+def _with_helper_effects(cls_title: str, raw: dict) -> dict:
+    add = HELPER_NODE_EFFECTS.get(cls_title, {}).get(raw.get("display_name"))
+    if not add:
+        return raw
+    raw = dict(raw)
+    raw["effects"] = list(raw.get("effects", [])) + [dict(e) for e in add]
+    return raw
 
 
 def majid_abilities(data, mid) -> list:
@@ -1910,7 +1950,7 @@ def _jcopy(x):
 class Tree:
     def __init__(self, data: GameData, cls: str):
         self.cls = cls
-        self.nodes = [Node(r) for r in data.atree[CLASS_TITLE[cls]]]
+        self.nodes = [Node(_with_helper_effects(CLASS_TITLE[cls], r)) for r in data.atree[CLASS_TITLE[cls]]]
         self.by_id = {n.id: n for n in self.nodes}
         self.by_name = {n.name.lower(): n for n in self.nodes}
         self.order = {n.id: i for i, n in enumerate(self.nodes)}
@@ -3129,9 +3169,14 @@ def score_build(results: dict, stats: dict, weapon, goal: str, ult_spells=frozen
     else:
         ls_share = 1.0 if melee_total + special_dps >= spell_goal else 0.0
     self_heal = SURVIVAL_HEAL_SECONDS * (heal_ps + life_steal_ps * ls_share) + 2 * max(defense.get("hpr", 0), 0)
+    # Second Chance: a fatal blow leaves you at 30% health (once per 10 minutes, so once in the fight)
+    self_heal += max(defense.get("hp", 0), 0) * stats.get("lastStandPct", 0) / 100
+    # Rejuvenating Skin: 30% of damage taken heals back over 15 s; a hit at a random moment of the 10 s window returns
+    # 30% x (time left) / 15 s, on average 30% x 5/15 = 10%, so you can take 1 / (1 - 10%) times as much
+    rejuv = stats.get("rejuvPct", 0) / 100 * min(1.0, (SURVIVAL_HEAL_SECONDS / 2) / REJUV_SECONDS)
     focus_val = results.get(focus_bs, {}).get("damage", 0.0) if focus_bs is not None else 0.0
     goals = {"ability": focus_val, "spells": spell_goal, "burst": burst, "melee": melee_goal, "mixed": mixed_goal,
-             "survival": ehp + (ehp / max(defense.get("hp", 1), 1)) * self_heal,
+             "survival": (ehp + (ehp / max(defense.get("hp", 1), 1)) * self_heal) / (1 - min(rejuv, 0.9)),
              "balanced": math.sqrt(max(best_damage, 0) * max(ehp, 0)),
              "healing": heal_ps, "mana": income}
     main = goals[goal]
@@ -3166,6 +3211,14 @@ MASKS = ("Mask of the Lunatic", "Mask of the Fanatic", "Mask of the Heretic")
 # Pool, Corrupted, "next hit" effects) stay off; the report shows what each would add.
 TOGGLE_RULES = {
     "Activate Bullwhip": ("on", "you keep enemies Whipped by hitting them with Uproot or Haunting Memory at least every 10s"),
+    # Counter (+ Riposte): a passive resistance node, always on with nothing to activate; the 2 s cooldown per enemy is
+    # on its counter-attack (owner, Oct 2026: "it's a resistance node, and it's always on ... it just has a 2 second
+    # cooldown per enemy"). Wynnbuilder has it as a tick box, off by default.
+    "War Scream Resistance": ("on", "you recast War Scream at least every 30s (it lasts 30s and has no cooldown; about 1 "
+                                    "mana a second)"),
+    "Judgement Buff": ("ult", "ultimate buff (+20% damage and resistance for 15s), up about {pct:.0f}% of the time"),
+    "Activate Counter": ("on", "a passive resistance node: always on, nothing to activate (its 2s cooldown per enemy is "
+                               "on the counter-attack)"),
     "Coursing Restraints": ("uptime", "Shocking Bomb's shock lasts {dur:g}s and can be reapplied every {cd:g}s"),
     "Activate Angelic Ascension": ("ult", "ultimate, active about {pct:.0f}% of the time"),
     "Activate Gravitational Collapse": ("ult", "ultimate, active about {pct:.0f}% of the time"),
@@ -3228,6 +3281,8 @@ def _owns(tree, owned, name) -> bool:
 
 # A default buff that can't be kept up with some trees: (condition, why it's off when the condition fails)
 TOGGLE_NEEDS = {
+    "War Scream Resistance": (lambda tree, owned: not _owns(tree, owned, "Bak'al's Grasp"),
+                              "Bak'al's Grasp: War Scream no longer grants resistance"),
     "Activate Bullwhip": (lambda tree, owned: not _owns(tree, owned, "Mystic Masks") or _owns(tree, owned, "Haunting Memory"),
                           "with Mystic Masks, Uproot switches masks instead of hitting, so Bullwhip needs Haunting Memory"),
 }
@@ -3668,7 +3723,10 @@ class Build:
             if k not in SKILLS:
                 stats[k] += v
         dmult = dict(dmult)
-        for k, v in buff_mults(self.buffs).items():
+        # your own War Scream (tree) already counts what the War Scream / Emboldening Cry party boosts would add
+        own_ws = tog.get("War Scream Resistance", 0) > 0
+        pbuffs = [b for b in self.buffs if not (own_ws and b in ("warscream", "emboldeningcry"))]
+        for k, v in buff_mults(pbuffs).items():
             if k in NONSTACKING_MULTS and k in dmult:
                 dmult[k] = max(dmult[k], v)
             else:
@@ -3726,7 +3784,7 @@ class Build:
         def_mults = {}
         for k, v in def_items:
             def_mults[k[8:]] = def_mults.get(k[8:], 0) + v
-        for k, v in buff_mults(self.buffs, 1).items():
+        for k, v in buff_mults(pbuffs, 1).items():
             def_mults[k] = max(def_mults.get(k, 0), v) if k in NONSTACKING_MULTS else def_mults.get(k, 0) + v
         defense = defense_stats(stats, weapon, def_mults, self.enemy)
         sc = score_build(res, stats, weapon, self.goal, self.tree.ult_spells, special, defense,
@@ -5997,6 +6055,18 @@ def run(args):
     print_header("Survivability")
     print(f"  Health {fmt_num(dfn['hp'])}   Effective HP {fmt_num(dfn['ehp_agi'])} "
           f"(without Agility dodge: {fmt_num(dfn['ehp'])})   HP regen {dfn['hpr']:.0f}")
+    st_f = final.get("stats") or {}
+    if goal == "survival" or getattr(build, "goal2", None) == "survival":
+        extra_lines = []
+        if st_f.get("lastStandPct"):
+            extra_lines.append(f"Second Chance: a fatal blow leaves you at {st_f['lastStandPct']:.0f}% health (once every 10 "
+                               "minutes), counted once in the survival score")
+        if st_f.get("rejuvPct"):
+            extra_lines.append(f"Rejuvenating Skin: {st_f['rejuvPct']:.0f}% of damage taken heals back over "
+                               f"{REJUV_SECONDS:.0f}s, counted as the part that comes back within the "
+                               f"{SURVIVAL_HEAL_SECONDS:.0f}s the survival score looks at")
+        for line in extra_lines:
+            print("  " + line + ".")
     print(f"  Defense {dfn['def_pct']:.1f}% less damage   Agility {dfn['agi_pct']:.1f}% dodge chance"
           f"   Walk speed {fmt_speed(final['stats'].get('spd', 0))}")
     if floor_build.floors:
