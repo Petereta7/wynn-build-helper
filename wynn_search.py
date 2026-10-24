@@ -53,6 +53,8 @@ def goal_stats(goal: str):
         rel, eq = dmg, {"atkTier"}
     elif goal == "healing":
         rel, eq = HEALING | MANA | {"hp", "hpBonus"}, set()
+    elif goal == "mana":          # mana back per second from regen
+        rel, eq = {"mr"}, set()
     else:                        # balanced: everything; faster attacks can lower poison, so atkTier must match
         rel, eq = dmg | MANA | {"poison"} | DEFENSE | HEALING | {"ls"}, {"atkTier"}
     return rel, eq
@@ -522,7 +524,8 @@ _HOOK = {"best": None}
 
 GOAL_LABELS = {"melee": "Average DPS", "spells": "Spell damage per second", "burst": "Burst combo damage",
                "mixed": "Most damage per second (any style)",
-               "survival": "Survival score", "balanced": "Damage × survival score", "healing": "Healing per second"}
+               "survival": "Survival score", "balanced": "Damage × survival score", "healing": "Healing per second",
+               "mana": "Mana back per second"}
 
 
 def live_reset(label=""):

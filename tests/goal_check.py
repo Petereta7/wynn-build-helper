@@ -47,7 +47,8 @@ def main():
     bad = []
     for cls in wh.CLASSES:
         tree, owned, wpn = setup(d, cls, 80)
-        for g1, g2, w in (("spells", "survival", 0.3), ("melee", "survival", 0.5), ("survival", "spells", 0.2)):
+        for g1, g2, w in (("spells", "survival", 0.3), ("melee", "survival", 0.5), ("survival", "spells", 0.2),
+                          ("survival", "mana", 0.3)):
             e = [0] * 5
             mix = wh.Build(d, tree, 80, g1, goal2=g2, goal2_weight=w).evaluate(owned, [None] * 8, wpn, e)
             a = wh.Build(d, tree, 80, g1).evaluate(owned, [None] * 8, wpn, e)["main"]

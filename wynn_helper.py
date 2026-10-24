@@ -2628,6 +2628,8 @@ GOALS = {
     "survival": "Hardest to kill (effective HP, plus regen and self-healing)",
     "balanced": "Best mix of damage and effective HP",
     "healing": "Most healing per second (support)",
+    "mana": "Most mana regen: mana back per second from regen (5 + mana regen / 5, the mana check's figure; mana steal "
+            "isn't part of it, since it only works on main attack hits)",
     "ability": "Highest damage of one ability you choose (--focus), e.g. puppets, Meteor or Bash",
 }
 
@@ -2635,10 +2637,10 @@ GOALS = {
 # A second goal can be mixed in by weight ("mostly spells, 30% survival"). The score is a weighted geometric
 # mean, main^(1-w) x second^w, like "balanced" (which is damage and effective HP at 50/50): scaling either part
 # doesn't change which build wins, so the two never need to be in the same units.
-SECOND_GOALS = ("spells", "burst", "melee", "mixed", "survival", "healing")
+SECOND_GOALS = ("spells", "burst", "melee", "mixed", "survival", "healing", "mana")
 GOAL_WORDS = {"spells": "spell damage", "burst": "burst combo", "melee": "main attack DPS", "survival": "survival",
               "balanced": "damage and survival", "healing": "healing", "ability": "one ability",
-              "mixed": "most damage (any style)"}
+              "mixed": "most damage (any style)", "mana": "mana regen"}
 
 
 def archetype_runs_on(goal, goal2=None) -> bool:
@@ -2887,7 +2889,7 @@ def score_build(results: dict, stats: dict, weapon, goal: str, ult_spells=frozen
     goals = {"ability": focus_val, "spells": spell_goal, "burst": burst, "melee": melee_goal, "mixed": mixed_goal,
              "survival": ehp + (ehp / max(defense.get("hp", 1), 1)) * self_heal,
              "balanced": math.sqrt(max(best_damage, 0) * max(ehp, 0)),
-             "healing": heal_ps}
+             "healing": heal_ps, "mana": income}
     main = goals[goal]
     parts = None
     if goal2 and goal2_weight > 0:              # main goal mixed with a second one by weight
@@ -4169,7 +4171,10 @@ def how_to_play(build: "Build", owned, armor, weapon, fin: dict) -> list:
         share = 0.0
     elif goal in ("balanced", "survival", "ability") and gv.get("spells", 0) > gv.get("melee", 0) and fin.get("rotation"):
         rot, share = fin.get("rotation"), 0.0
-    if goal == "burst":
+    if goal == "mana":
+        out.append(f"Mana regen build: about {fin.get('mana_income', 0):.1f} mana back per second from regen (5 + mana "
+                   "regen / 5), whatever you do.")
+    elif goal == "burst":
         spells = [b for b in sorted(res) if b in (1, 2, 3, 4) and res[b].get("damage", 0) > 0]
         out.append("Burst: open with every damage spell once (" + ", ".join(name(b) for b in spells) + "), then keep "
                    "main-attacking while your mana comes back.")

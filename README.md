@@ -145,6 +145,7 @@ python3 wynn_helper.py --class warrior --level 60 --goal melee --min "hp=6000, w
 | `balanced` | Damage and effective HP together |
 | `ability` | Highest damage of one ability you choose with `--focus`, e.g. `--focus "puppets"`, `"Meteor"`, `"Bash"`. The tree and gear are chosen for that ability alone. In the chat, just say "maximum puppet damage". |
 | `healing` | Healing per second (support) |
+| `mana` | Most mana regen: mana back per second from regen (5 + mana regen / 5). Mix it in, e.g. 70% survival + 30% mana |
 
 **Mixing two goals:** "mostly spell damage, but I want to survive too" is a main goal plus a second goal with a weight, for example 70% spells + 30% survival (`--goal spells --goal2 survival --goal2-weight 30`, the "Also care about" box in the form, or just say it to the bot). The score is a weighted mix of the two, like `balanced` (damage and effective HP at 50/50), so the best build is the one that's good at both in that proportion. It's softer than a minimum: use a minimum when you have a number in mind ("at least 20,000 health"), a mix when it's a preference. The report shows both parts before and after.
 

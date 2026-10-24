@@ -256,10 +256,14 @@ Measured deep search on the owner's PC (1.6 -> 1.7): Warrior L106 7.0 -> 4.1 min
   (tests/exp_arch.py, dev repo): shaman L60 spells 52,097 -> 63,766 (Acolyte), mage L40 spells 9,985 -> 11,259
   (Arcanist), assassin L55 none better alone, shaman L60 mixed none better. Release run: those +22.4% / +12.8%,
   assassin L55 +1.3% (66,401), every other case unchanged. Time: about 2x for spell goals (PC run_all 26 -> 42 min).
+- Mana goal (owner, Oct 2026: "70 percent survival and 30 percent as much mana regen as possible"): goal "mana" =
+  `income` (5 + mr/5, the mana check's figure; no mana steal, it needs main attacks), also a second goal; search
+  filter rel {"mr"}. same_numbers unaffected (its goal lists are fixed).
 - CI build check runs in 4 parallel parts (`build_check.py --shard k/4`, matrix in checks.yml, 150 min each).
 
 ## History (newest first)
 
+- 1.12.1: "mana regen" goal (mix it in, e.g. 70% survival + 30% mana).
 - 1.12.0: archetype starts (the search also starts from a tree built around each archetype for spell-type goals):
   shaman L60 spells +22%, mage L40 spells +13%, assassin L55 +1.3%; never worse; about 2x time for spell builds.
 - 1.11.3: Pause / Resume for a running search (same build); a chat build is kept if the connection drops; crafted-item

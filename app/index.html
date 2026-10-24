@@ -720,7 +720,7 @@ label.deep input[type=checkbox] { width: auto; flex: 0 0 auto; margin-top: 3px; 
         </div>
         <div class="row">
           <div class="field"><label for="f-goal2">Also care about (optional)</label>
-            <select id="f-goal2"><option value="">Nothing else</option><option value="survival">Survival</option><option value="spells">Spell damage</option><option value="mixed">Most damage (any style)</option><option value="melee">Main attack DPS</option><option value="burst">Biggest combo</option><option value="healing">Healing others</option></select></div>
+            <select id="f-goal2"><option value="">Nothing else</option><option value="survival">Survival</option><option value="spells">Spell damage</option><option value="mixed">Most damage (any style)</option><option value="melee">Main attack DPS</option><option value="burst">Biggest combo</option><option value="healing">Healing others</option><option value="mana">Mana regen</option></select></div>
           <div class="field" id="goal2wField" hidden><label for="f-goal2w">How much: <b id="goal2wVal">30%</b></label>
             <input id="f-goal2w" type="range" min="10" max="90" step="5" value="30" aria-describedby="goal2hint"></div>
         </div>
@@ -2593,7 +2593,7 @@ async function init() {
   await loadMeta();
   $("#f-class").innerHTML = '<option value="" selected disabled>Choose your class</option>' +
     META.classes.map((c) => `<option value="${c}">${c[0].toUpperCase() + c.slice(1)}</option>`).join("");
-  const goalLabels = { ability: "One ability's damage (e.g. puppets)", spells: "Spell damage", burst: "Biggest combo", mixed: "Most damage possible (main attacks, spells or both)", melee: "Main attack DPS only (like Wynnbuilder)", survival: "Survival", balanced: "Damage and survival", healing: "Healing others" };
+  const goalLabels = { ability: "One ability's damage (e.g. puppets)", spells: "Spell damage", burst: "Biggest combo", mixed: "Most damage possible (main attacks, spells or both)", melee: "Main attack DPS only (like Wynnbuilder)", survival: "Survival", balanced: "Damage and survival", healing: "Healing others", mana: "Most mana regen" };
   $("#f-goal").innerHTML = Object.keys(META.goals).map((g) => `<option value="${g}">${goalLabels[g] || g}</option>`).join("");
   const buffNames = { totem: "Totem", fortitude: "Fortitude", chantlunatic: "Chant of the Lunatic", warscream: "War Scream", emboldeningcry: "Emboldening Cry", hauntingfanatic: "Haunting (Fanatic)", hauntinglunatic: "Haunting (Lunatic)", eldritchcall: "Eldritch Call", judgement: "Judgement", chantfanatic: "Chant of the Fanatic", weathering: "Weathering", acidrain: "Acid Rain" };
   $("#buffChips").innerHTML = META.buffs.map((b) => `<button type="button" class="toggle-chip" aria-pressed="false" data-buff="${b}">${buffNames[b] || b}</button>`).join("");

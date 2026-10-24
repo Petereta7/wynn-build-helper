@@ -387,7 +387,8 @@ def autocomplete(q: str, kind: str = "") -> list:
 HISTORY_PATH = os.path.join(wh.DATA_DIR, "build_history.json")
 GOAL_LABELS = {"melee": "Average DPS", "spells": "Spell damage per second", "burst": "Burst combo damage",
                "mixed": "Most damage per second (any style)",
-               "survival": "Survival score", "balanced": "Damage × survival score", "healing": "Healing per second"}
+               "survival": "Survival score", "balanced": "Damage × survival score", "healing": "Healing per second",
+               "mana": "Mana back per second"}
 
 
 def _clean_desc(text: str) -> str:
@@ -1116,7 +1117,7 @@ How to work:
 - The report shows health, effective HP and walk speed for the best build next to the current gear; mention any big drop in health or walk speed so they can set a minimum.
 - If they want the most damage from one specific ability ("maximum puppet damage", "biggest Meteor", "strongest Bash"), use goal ability with focus set to that ability.
 - Damage goals. "Max DPS", "highest DPS", "as much DPS/damage as possible", "most damage" and plain "DPS" or "damage" mean goal mixed: the most damage per second possible in any style (main attacks only, spells, or both together, whichever is highest; it never scores a build below its main-attack or spell-only damage). It's the helper's own estimate (Wynnbuilder has no such number), so say so; the report says which style wins and the rotation. It runs several full searches (spell-only, main-attack-only, searches from ability trees planned for spells, for main attacks and for each archetype, then any style starting from all of them), so it takes several times as long as other goals; mention that in one short line when you start it. Use melee only when they ask specifically for main attacks / a melee or M1 build / Wynnbuilder's Average DPS (main attack damage per hit x attack speed, the number Wynnbuilder shows), and spells only when they want a spell-only build. Mana steal and life steal only work on main attack hits, never on spells: never suggest them to keep a spell-only rotation going (the calculator doesn't count mana steal for spell casting).
-- Other goals from what they say: burst for one big combo, survival (tanky / keeps dying), balanced (damage and survival), healing (support). If they keep dying to a particular boss or element, pass that as the enemy hit.
+- Other goals from what they say: burst for one big combo, survival (tanky / keeps dying), balanced (damage and survival), healing (support), mana (as much mana regen as possible; e.g. "70% survival, 30% as much mana regen as possible" = goal survival, second_goal mana, weight 30). If they keep dying to a particular boss or element, pass that as the enemy hit.
 - Pass item and ability names exactly as the player wrote them; the calculator corrects spelling and says so. "Mana bank" means the Mage ability Arcane Transfer.
 - Crafted items are written as codes starting with CR- (and custom items CI-); pass them as gear.
 - Crafted items are off unless the player asks for them. Set crafted to true only when they say they want crafted items in the build (e.g. "with crafted items", "I can craft", "include crafteds"); otherwise leave it out. With crafted on, the search designs crafted items for the build (recipe, materials and the 6-ingredient grid, following the game's crafting rules) and uses them where they beat normal items, and the report's "Crafted pieces" part says how to make each one and where its ingredients drop. When the best build has crafted pieces, say which and what they add; someone has to craft them (the player, with the profession level the report gives, or a crafter). If they ask whether crafted items would help, you can offer to run it with crafted on.
