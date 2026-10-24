@@ -2688,7 +2688,11 @@ def rotation_breaks(rs, rate_max: float) -> list:
 # extra cost) or cast a spell twice before switching (owner's idea: "1 damage spell, 1 damage spell, 1 reset spell"):
 # runs of 3+ cost 15+ extra mana for one more cast and aren't tried.
 REPEAT_EXTRA_MANA = 5.0
-MAX_SPELL_RUN = 2          # 1 = each spell once (as before 1.13.0); 2 = a spell may be cast twice in a row
+# 1 = each spell once; 2 = a spell may be cast twice in a row. Held at 1 for now: with 2 every case scored the same or
+# higher (archer Trapper +19.8%, assassin L55 +28%) except assassin L50 balanced, whose search took another path and
+# ended 1.8% lower (15,151 vs 15,430; the old best build is still valid and scores ~16,557 with 2). Turn on once the
+# search reaches it (owner's rule: never worse).
+MAX_SPELL_RUN = 1
 HEAL_ONE_SPELL = True      # one heal spell on repeat (max 1 cast/s) at its normal cost, as before 1.13.0, until
 #                             we know whether waiting resets the repeated-cast cost (owner to test in game)
 _PATTERNS = {}

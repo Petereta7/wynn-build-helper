@@ -324,7 +324,7 @@ def main():
             best, best_mix = 0.0, r["melee_dps"] + r["poison_melee"] + sp
             for size in (2, 3, 4):
                 for combo in itertools.combinations(usable, size):
-                    for runs in itertools.product((1, 2), repeat=size):
+                    for runs in itertools.product(range(1, wh.MAX_SPELL_RUN + 1), repeat=size):
                         seq = [b for b, m in zip(combo, runs) for _ in range(m)]
                         rs = [rot[b] for b in seq]
                         if sum(x["cast"] for x in rs) <= 0:
@@ -346,7 +346,8 @@ def main():
                 bad.append(f"{cls} L{lvl}: {r['spell_dps']:.1f} vs every order {best:.1f}")
             if abs(best_mix - r["goal_values"]["mixed"]) > 1e-9 * max(1.0, best_mix):
                 bad.append(f"{cls} L{lvl} any style: {r['goal_values']['mixed']:.1f} vs every order {best_mix:.1f}")
-    check("casting the same spell again: in-game costs; best of every cast order", ok and not bad and doubled > 0,
+    check("casting the same spell again: in-game costs; best of every cast order",
+          ok and not bad and (doubled > 0 or wh.MAX_SPELL_RUN < 2),
           f"({seen} builds, {doubled} with a spell cast twice)" + (" " + "; ".join(bad[:2]) if bad else ""))
 
     # 4c. life steal / mana steal minimums: a bracelet with negative life steal misses "no negative life steal"

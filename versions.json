@@ -3,7 +3,7 @@
     {
       "version": "1.13.0",
       "date": "2026-10-24",
-      "notes": "Spell rotations can now cast a spell twice in a row before switching (for example Arrow Bomb, Arrow Bomb, Escape), using the repeat rule tested in game: the second cast in a row costs the same, a third would cost 5 more mana, and the spell right after a double costs 5 more. Spell builds and \"most damage\" builds get higher, honest numbers when that order pays off (in our tests usually a few percent, up to about 40% for some builds), and \"How to play\" tells you the exact order. Nothing gets worse: the old alternating rotations are still tried and the best wins. Warrior survival builds now count War Scream's own resistance (recast it every 30s), Emboldening Cry, Counter, Second Chance, Rejuvenating Skin and Judgement's buff, so the helper picks them when they help.",
+      "notes": "Warrior survival builds now count what the Paladin side of the tree really does for you: War Scream's own 20% resistance (recast it every 30s), Emboldening Cry (+5% more and +8% damage), Counter and Riposte (always-on damage reduction), Second Chance (survive one fatal blow at 30% health), Rejuvenating Skin (part of the damage you take heals back) and Judgement's buff, so the search picks them when they help. Wynnbuilder's War Scream + Emboldening Cry party buttons now add up to 25% like on the site, and party damage buffs that don't stack in Wynnbuilder no longer stack here. Casting a spell twice in a row in rotations is ready but switched off until it's tested to never make a build worse.",
       "warning": ""
     },
     {

@@ -268,6 +268,13 @@ Measured deep search on the owner's PC (1.6 -> 1.7): Warrior L106 7.0 -> 4.1 min
   `double_list`: flat bit-mask entries, spells and mixed in one pass, lasting spells capped inline). Rotation tuples are
   now the cast order with repeats (e.g. (3, 3, 2)); `rotation_dps` / `rotation_breaks` take one entry per cast.
   `MAX_SPELL_RUN = 1` + `HEAL_ONE_SPELL = True` reproduce the 1.12.1 numbers exactly (same_numbers verified).
+  HELD (MAX_SPELL_RUN = 1 in 1.13.0): with 2, PC build check: archer Trapper 35,776 -> 42,861, assassin L55 66,401 ->
+  85,087, shaman L60 spells 63,766 -> 64,618, shaman L70 mix 72,465, others equal, but assassin L50 balanced 15,430 ->
+  15,151. Diagnosis (tests/exp_craft.py, dev repo): the Trickster archetype search now ends at a higher-scoring
+  uncrafted build whose crafts reach less; the old route's best (crafted rings/bracelet/necklace, 22-node tree) scores
+  ~16,557 under the new rules. Tried, didn't help: trying craft designs together in the craft stage (assassin same,
+  shaman L70 mix fell to 72,257), crafting the remaining accessories one after another (same). Search time with 2:
+  PC run_all 42 -> 52 min.
   goal_check compares spells and any-style numbers with a brute force over every cast order. Scoring cost about +10-25%
   for spell/mixed goals after optimising (first version was +60%). Healing still also allows one heal spell on repeat
   (`HEAL_ONE_SPELL`, max 1 cast/s, normal cost) until we know whether waiting resets the count (owner to test).
@@ -289,9 +296,10 @@ Measured deep search on the owner's PC (1.6 -> 1.7): Warrior L106 7.0 -> 4.1 min
 
 ## History (newest first)
 
-- 1.13.0: spell rotations may cast a spell twice before switching (repeat rule tested in game); How to play gives the
-  exact order; the bot knows the rule. Warrior survival: War Scream's own resistance, Emboldening Cry, Counter, Second
-  Chance, Rejuvenating Skin, Judgement's buff now counted; War Scream + Emboldening Cry party boosts match Wynnbuilder.
+- 1.13.0: Warrior survival: War Scream's own resistance, Emboldening Cry, Counter, Second Chance, Rejuvenating Skin,
+  Judgement's buff now counted; War Scream + Emboldening Cry party boosts and the Potion/Strength damage boost max match
+  Wynnbuilder. Repeated-spell rotations built and tested but held (MAX_SPELL_RUN = 1) because assassin L50 balanced
+  fell 1.8% with them on.
 - 1.12.1: "mana regen" goal (mix it in, e.g. 70% survival + 30% mana).
 - 1.12.0: archetype starts (the search also starts from a tree built around each archetype for spell-type goals):
   shaman L60 spells +22%, mage L40 spells +13%, assassin L55 +1.3%; never worse; about 2x time for spell builds.
@@ -346,6 +354,7 @@ Measured deep search on the owner's PC (1.6 -> 1.7): Warrior L106 7.0 -> 4.1 min
 - Search gaps left (best_known.json): archer Trapper case (35,776 vs 35,927 known), assassin L50 balanced (a 16,564
   build existed before the life steal fix).
 - Speed up high-level deep searches again (see KNOWN PROBLEM above) without losing the better builds.
+- Turn on repeated-spell rotations (MAX_SPELL_RUN = 2) once assassin L50 balanced doesn't fall (see Repeated spells).
 - Warrior's Generalist (every 4th spell costs 1 mana) isn't counted in mana checks yet (conservative).
 - Audit the other classes' trees like the Warrior one (effects the game states exactly that Wynnbuilder's data leaves
   out, own survival first). Fallen: Corrupted stops healing (not modeled), Brink of Madness.
